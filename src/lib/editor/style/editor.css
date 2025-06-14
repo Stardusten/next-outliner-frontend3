@@ -1,0 +1,219 @@
+/**
+ * CSS Variables:
+ * --color-text: 主文字颜色
+ * --color-text-muted: 次要文字颜色
+ * --color-bg: 主背景色
+ * --color-bg-muted: 次要背景色
+ * --color-bg-hover: 悬停背景色
+ * --color-block-ref: 块引用颜色
+ * --border-color: 主边框颜色
+ * --border-color-muted: 次要边框颜色
+ * --editor-font-family: 编辑器字体
+ */
+
+.ProseMirror {
+  outline: none;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--editor-font-family);
+}
+
+div.list-item {
+  position: relative;
+  margin-left: calc(var(--level) * 32px + 36px);
+  line-height: 24px;
+  padding: 2px;
+}
+
+/* 行间距变体 - 由父容器的类名控制 */
+.spacing-compact div.list-item {
+  padding: 1px 0 !important;
+  line-height: 24px !important;
+}
+
+.spacing-normal div.list-item {
+  padding: 2px 0 !important;
+  line-height: 24px !important;
+}
+
+.spacing-loose div.list-item {
+  padding: 4px 0 !important;
+  line-height: 24px !important;
+}
+
+/** 纯 CSS 实现的引导线 */
+div.list-item[data-level="1"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item[data-level="2"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item[data-level="3"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item[data-level="4"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 4 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item[data-level="5"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 4 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 5 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 5 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item[data-level="6"] {
+  box-shadow:
+    calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 4 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 5 * 32px) 0px 0px var(--color-bg),
+    calc(-12px - 6 * 32px) 0px 0px var(--color-guide-line),
+    calc(-12px - 6 * 32px) 0px 0px var(--color-guide-line);
+}
+
+div.list-item > div.list-item-left {
+  position: absolute;
+  height: 24px;
+  left: -32px;
+  user-select: none;
+  padding: 2px 0;
+}
+
+/** bullet 和折叠按钮 */
+div.list-item > div.list-item-left > svg {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: color 0.2s ease;
+}
+
+/* 折叠且有子块时，bullet 周围加一个背景色 */
+div.list-item[data-folded="true"][data-has-children="true"] > div.list-item-left > svg.bullet {
+  background-color: var(--bullet-bg-collapsed);
+  border-radius: 50%;
+}
+
+div.list-item > div.list-item-left > svg:hover {
+  color: var(--color-text);
+}
+
+div.list-item[data-has-children="false"] > div.list-item-left > svg.fold-btn {
+  visibility: hidden;
+}
+
+div.list-item[data-folded="true"] > div.list-item-left > svg.fold-btn {
+  transform: rotate(-90deg);
+}
+
+div.list-item span.block-ref {
+  color: var(--color-block-ref);
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+div.list-item pre {
+  margin: 0;
+}
+
+div.list-item pre code {
+  font-family: var(--editor-codeblock-font-family);
+  font-size: var(--editor-codeblock-font-size);
+  line-height: var(--editor-codeblock-line-height);
+}
+
+/* 语法高亮样式 */
+div.list-item pre code .hljs-comment,
+div.list-item pre code .hljs-quote {
+  color: var(--color-syntax-comment, #6a737d);
+  font-style: italic;
+}
+
+div.list-item pre code .hljs-keyword,
+div.list-item pre code .hljs-selector-tag,
+div.list-item pre code .hljs-literal,
+div.list-item pre code .hljs-section,
+div.list-item pre code .hljs-link {
+  color: var(--color-syntax-keyword, #d73a49);
+}
+
+div.list-item pre code .hljs-string,
+div.list-item pre code .hljs-title,
+div.list-item pre code .hljs-name,
+div.list-item pre code .hljs-type,
+div.list-item pre code .hljs-attribute,
+div.list-item pre code .hljs-symbol,
+div.list-item pre code .hljs-bullet,
+div.list-item pre code .hljs-addition,
+div.list-item pre code .hljs-variable,
+div.list-item pre code .hljs-template-tag,
+div.list-item pre code .hljs-template-variable {
+  color: var(--color-syntax-string, #032f62);
+}
+
+div.list-item pre code .hljs-number,
+div.list-item pre code .hljs-built_in,
+div.list-item pre code .hljs-builtin-name,
+div.list-item pre code .hljs-class .hljs-title,
+div.list-item pre code .hljs-function .hljs-title {
+  color: var(--color-syntax-number, #005cc5);
+}
+
+div.list-item pre code .hljs-tag,
+div.list-item pre code .hljs-tag .hljs-name,
+div.list-item pre code .hljs-tag .hljs-attr {
+  color: var(--color-syntax-tag, #22863a);
+}
+
+div.list-item pre code .hljs-deletion,
+div.list-item pre code .hljs-meta {
+  color: var(--color-syntax-meta, #e36209);
+}
+
+div.list-item pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+div.list-item pre code .hljs-strong {
+  font-weight: bold;
+}

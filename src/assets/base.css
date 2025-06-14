@@ -1,0 +1,53 @@
+/* 清除默认样式的代码 */
+/* 去除常见标签默认的 margin 和 padding */
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+ul,
+ol,
+li,
+dl,
+dt,
+dd,
+input {
+  margin: 0;
+  padding: 0;
+}
+
+/* 內减模式 */
+* {
+  box-sizing: border-box;
+}
+
+/* 去除列表默认样式 */
+ul,
+ol {
+  list-style: none;
+}
+
+/* 去除a标签默认下划线 */
+a {
+  text-decoration: none;
+}
+
+/* 设置img的垂直对齐方式为居中对齐，去除img默认下间隙 */
+img {
+  vertical-align: middle;
+}
+
+/* 去除input默认样式 */
+input {
+  border: none;
+  outline: none;
+}
+
+/*版心居中*/
+.wrapper {
+  /*width: 1240px;*/
+  margin: 0 auto;
+}
