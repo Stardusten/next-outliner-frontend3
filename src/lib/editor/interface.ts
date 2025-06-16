@@ -48,15 +48,16 @@ export interface Editor {
   removeEventListener<T extends EditorEvent>(listener: EventListener<T>): void;
   destroy(): void;
   getMarkdown(): string;
-  // commands
-  coordAtPos: (
+  getFocusedBlockId(): BlockId | null;
+  coordAtPos(
     pos: number,
-    side?: number,
-  ) => {
+    side?: number
+  ): {
     left: number;
     right: number;
     top: number;
     bottom: number;
   };
-  executeComplete: (blockId: BlockId) => void;
+  executeComplete(blockId: BlockId): void;
+  locateBlock(blockId: BlockId): void;
 }

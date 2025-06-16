@@ -14,7 +14,12 @@
 
     <div class="option-group">
       <label class="option-item">
-        <input type="radio" name="conflictResolution" value="skip" v-model="selectedStrategy" />
+        <input
+          type="radio"
+          name="conflictResolution"
+          value="skip"
+          v-model="selectedStrategy"
+        />
         <div class="option-content">
           <div class="option-title">跳过冲突块</div>
           <div class="option-desc">保留现有数据，不导入冲突的块</div>
@@ -68,7 +73,8 @@ const emit = defineEmits<{
 }>();
 
 // 选中的策略
-const selectedStrategy = ref<ImportOptions["conflictResolution"]>("generateNewId");
+const selectedStrategy =
+  ref<ImportOptions["conflictResolution"]>("generateNewId");
 
 // 处理确认
 const handleConfirm = () => {
@@ -85,13 +91,13 @@ const handleCancel = () => {
 .conflict-message {
   margin: 0 0 8px 0;
   color: var(--menu-text);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
 }
 
 .conflict-description {
   margin: 0 0 20px 0;
   color: var(--menu-text-muted);
-  font-size: 13px;
+  font-size: var(--ui-font-size);
 }
 
 .option-group {
@@ -128,14 +134,14 @@ const handleCancel = () => {
 }
 
 .option-title {
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   font-weight: 500;
   color: var(--menu-text);
   margin-bottom: 4px;
 }
 
 .option-desc {
-  font-size: 12px;
+  font-size: var(--ui-font-size-small);
   color: var(--menu-text-muted);
   line-height: 1.4;
 }

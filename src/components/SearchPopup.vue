@@ -28,16 +28,29 @@
         :class="{ active: index === activeIndex }"
         @click="selectResult(result)"
       >
-        <div class="block-content">{{ getBlockPreview(result.block) }}</div>
+        <div class="search-item-content">
+          <SearchResultItem
+            :block="result.block"
+            :storage="storage"
+            :search-query="searchQuery"
+          />
+        </div>
         <div class="block-meta">
           <span class="block-id">{{ result.block.id.slice(0, 8) }}</span>
-          <span class="block-score" v-if="result.score">{{ result.score.toFixed(2) }}</span>
+          <span class="block-score" v-if="result.score">{{
+            result.score.toFixed(2)
+          }}</span>
         </div>
       </div>
-      <div v-if="searchQuery && searchResults.length === 0" class="search-empty">
+      <div
+        v-if="searchQuery && searchResults.length === 0"
+        class="search-empty"
+      >
         没有找到匹配的块
       </div>
-      <div v-if="!searchQuery" class="search-placeholder">输入关键词开始搜索</div>
+      <div v-if="!searchQuery" class="search-placeholder">
+        输入关键词开始搜索
+      </div>
     </div>
   </div>
 </template>
@@ -45,7 +58,9 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from "vue";
 import { Search } from "lucide-vue-next";
+import SearchResultItem from "./SearchResultItem.vue";
 import type { Block } from "../lib/blocks/types";
+import type { BlockStorage } from "@/lib/storage/interface";
 
 interface SearchResult {
   block: Block;
@@ -58,6 +73,7 @@ interface Props {
   searchResults: SearchResult[];
   activeIndex: number;
   searchQuery: string;
+  storage: BlockStorage;
 }
 
 interface Emits {
@@ -117,7 +133,10 @@ const handleKeyDown = (e: KeyboardEvent) => {
     case "ArrowDown":
       e.preventDefault();
       if (props.searchResults.length > 0) {
-        const nextIndex = Math.min(props.activeIndex + 1, props.searchResults.length - 1);
+        const nextIndex = Math.min(
+          props.activeIndex + 1,
+          props.searchResults.length - 1
+        );
         emit("select", { type: "navigate", index: nextIndex } as any);
       }
       break;
@@ -163,11 +182,6 @@ const selectResult = (result: SearchResult) => {
   emit("select", result);
 };
 
-// 获取块的预览文本
-const getBlockPreview = (block: Block): string => {
-  return block.textContent || "空白块";
-};
-
 // 监听 activeIndex 变化，自动滚动
 watch(() => props.activeIndex, scrollToActiveItem);
 
@@ -181,7 +195,7 @@ watch(
         scrollToActiveItem();
       });
     }
-  },
+  }
 );
 
 // 同步外部搜索查询
@@ -191,7 +205,7 @@ watch(
     if (searchQuery.value !== newQuery) {
       searchQuery.value = newQuery;
     }
-  },
+  }
 );
 
 onMounted(() => {
@@ -214,6 +228,7 @@ onMounted(() => {
   width: 400px;
   max-height: 500px;
   overflow: hidden;
+  font-size: var(--ui-font-size);
 }
 
 .search-input-container {
@@ -235,7 +250,7 @@ onMounted(() => {
   outline: none;
   background: transparent;
   color: var(--menu-text);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   padding: 8px 0;
   font-family: inherit;
 }
@@ -265,20 +280,18 @@ onMounted(() => {
   background-color: var(--menu-item-hover);
 }
 
-.block-content {
-  font-size: 14px;
+.search-item-content {
+  font-size: var(--ui-font-size);
   color: var(--menu-text);
-  margin-bottom: 4px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 移除 text-overflow 和 white-space，允许换行 */
 }
 
 .block-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--ui-font-size-tiny);
   color: var(--menu-text-muted);
 }
 
@@ -287,7 +300,7 @@ onMounted(() => {
 }
 
 .block-score {
-  font-size: 12px;
+  font-size: var(--ui-font-size-small);
   color: var(--color-block-ref);
   background: var(--color-bg-hover);
   padding: 2px 6px;
@@ -300,7 +313,7 @@ onMounted(() => {
   padding: 20px 12px;
   text-align: center;
   color: var(--menu-text-muted);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
 }
 
 .search-placeholder {

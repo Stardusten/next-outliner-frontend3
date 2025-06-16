@@ -1,6 +1,11 @@
 <template>
   <div class="more-menu-container">
-    <button class="action-btn" :class="{ active: showMenu }" @click="toggleMenu" ref="moreButton">
+    <button
+      class="action-btn"
+      :class="{ active: showMenu }"
+      @click="toggleMenu"
+      ref="moreButton"
+    >
       <MoreHorizontal :size="18" />
     </button>
 
@@ -213,6 +218,7 @@ onUnmounted(() => {
   z-index: 1000;
   animation: menuFadeIn 0.15s ease-out;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--ui-font-size);
 }
 
 @keyframes menuFadeIn {
@@ -231,7 +237,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: var(--ui-font-size);
   color: var(--menu-text);
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -257,7 +263,7 @@ onUnmounted(() => {
 
 /* 快捷键 */
 .menu-shortcut {
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   color: var(--menu-text-muted);
   font-family: "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", monospace;
 }

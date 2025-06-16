@@ -1,11 +1,19 @@
 import { nanoid } from "nanoid";
-import { TextSelection, type Command, type EditorState } from "prosemirror-state";
+import {
+  TextSelection,
+  type Command,
+  type EditorState,
+} from "prosemirror-state";
 import type { BlockStorage, EventMetadata } from "../storage/interface";
 import type { BlockId } from "@/lib/blocks/types";
-import { buildBlockRefStr, getSelectedListItemInfo, oldSerialize, oldDeserialize } from "./utils";
+import {
+  buildBlockRefStr,
+  getSelectedListItemInfo,
+  oldSerialize,
+  oldDeserialize,
+} from "./utils";
 import { outlinerSchema } from "./schema";
-
-const EDITOR_COMMAND_SOURCE = "editor-command";
+import { UpdateSources } from "./update-source";
 
 export function findCurrListItem(state: EditorState) {
   const { $from } = state.selection;
@@ -34,7 +42,11 @@ export function promoteSelected(storage: BlockStorage): Command {
     const metadata: EventMetadata = {
       selection: { blockId, offset },
     };
-    storage.promoteBlock(blockId, EDITOR_COMMAND_SOURCE, metadata);
+    storage.promoteBlock(
+      blockId,
+      UpdateSources.localEditorStructural,
+      metadata
+    );
     return true;
   };
 }
@@ -55,7 +67,7 @@ export function demoteSelected(storage: BlockStorage): Command {
     const metadata: EventMetadata = {
       selection: { blockId, offset },
     };
-    storage.demoteBlock(blockId, EDITOR_COMMAND_SOURCE, metadata);
+    storage.demoteBlock(blockId, UpdateSources.localEditorStructural, metadata);
     return true;
   };
 }
@@ -95,7 +107,9 @@ export function splitListItem(storage: BlockStorage): Command {
 
     // 计算新块的分数索引
     const parentBlock = currentBlock.get().parentBlock;
-    const siblings = parentBlock ? parentBlock.get().childrenBlocks : storage.getRootBlocks();
+    const siblings = parentBlock
+      ? parentBlock.get().childrenBlocks
+      : storage.getRootBlocks();
     const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
 
     const currentFractionalIndex = currentBlock.get().fractionalIndex;
@@ -108,23 +122,25 @@ export function splitListItem(storage: BlockStorage): Command {
       const prevSiblingFractionalIndex = prevSibling
         ? prevSibling.get().fractionalIndex
         : currentFractionalIndex - 2;
-      newFractionalIndex = (prevSiblingFractionalIndex + currentFractionalIndex) / 2;
+      newFractionalIndex =
+        (prevSiblingFractionalIndex + currentFractionalIndex) / 2;
     } else {
       // 否则，新块在当前块之后
       const nextSibling =
-        currentIndex > -1 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
+        currentIndex > -1 && currentIndex < siblings.length - 1
+          ? siblings[currentIndex + 1]
+          : null;
       const nextSiblingFractionalIndex = nextSibling
         ? nextSibling.get().fractionalIndex
         : currentFractionalIndex + 2;
-      newFractionalIndex = (currentFractionalIndex + nextSiblingFractionalIndex) / 2;
+      newFractionalIndex =
+        (currentFractionalIndex + nextSiblingFractionalIndex) / 2;
     }
 
     // 决定更新哪个块的内容和创建哪个块
     let updateBlockId: string;
     let updateContent: string;
-    let updateTextContent: string;
     let newBlockContent: string;
-    let newBlockTextContent: string;
     let focusBlockId: string;
     let focusOffset: number;
 
@@ -132,18 +148,14 @@ export function splitListItem(storage: BlockStorage): Command {
       // 在开头分割：创建空的新块，保持当前块内容不变
       updateBlockId = blockId;
       updateContent = oldSerialize(paragraphNode); // 保持原内容
-      updateTextContent = paragraphNode.textContent;
       newBlockContent = oldSerialize(outlinerSchema.nodes.paragraph.create()); // 创建空段落
-      newBlockTextContent = "";
       focusBlockId = blockId; // 焦点保持在原块
       focusOffset = 0; // 光标在开头
     } else {
       // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
       updateBlockId = blockId;
       updateContent = beforeSerialized;
-      updateTextContent = beforeText;
       newBlockContent = afterSerialized;
-      newBlockTextContent = afterText;
       focusBlockId = newBlockId; // 焦点移到新块
       focusOffset = 0; // 光标在新块开头
     }
@@ -153,13 +165,14 @@ export function splitListItem(storage: BlockStorage): Command {
       updateBlockId,
       {
         content: updateContent,
-        textContent: updateTextContent,
       },
-      EDITOR_COMMAND_SOURCE,
+      UpdateSources.localEditorStructural
     );
 
     // 2. 添加新块
-    const metadata: EventMetadata = { selection: { blockId: focusBlockId, offset: focusOffset } };
+    const metadata: EventMetadata = {
+      selection: { blockId: focusBlockId, offset: focusOffset },
+    };
     storage.addBlock(
       {
         id: newBlockId,
@@ -168,10 +181,9 @@ export function splitListItem(storage: BlockStorage): Command {
         parentId: currentBlock.get().parentId,
         fractionalIndex: newFractionalIndex,
         content: newBlockContent,
-        textContent: newBlockTextContent,
       },
-      EDITOR_COMMAND_SOURCE,
-      metadata,
+      UpdateSources.localEditorStructural,
+      metadata
     );
 
     return true;
@@ -180,7 +192,7 @@ export function splitListItem(storage: BlockStorage): Command {
 
 export function deleteEmptyListItem(
   storage: BlockStorage,
-  direction: "backward" | "forward" = "backward",
+  direction: "backward" | "forward" = "backward"
 ): Command {
   return function (state, dispatch) {
     const { $from, empty } = state.selection;
@@ -250,7 +262,7 @@ export function deleteEmptyListItem(
           const prevBlockId = prevListItem.attrs.blockId as string;
           const prevBlockData = storage.getBlock(prevBlockId);
           if (prevBlockData) {
-            const content = prevBlockData.get().textContent || "";
+            const content = storage.getTextContent(prevBlockId);
             focusTarget = { blockId: prevBlockId, offset: content.length };
           }
         }
@@ -263,7 +275,7 @@ export function deleteEmptyListItem(
     }
 
     const metadata: EventMetadata = { selection: focusTarget };
-    storage.deleteBlock(blockId, EDITOR_COMMAND_SOURCE, metadata);
+    storage.deleteBlock(blockId, UpdateSources.localEditorStructural, metadata);
 
     return true;
   };
@@ -333,7 +345,11 @@ export function deleteSelected(): Command {
     // 因为默认行为会直接删掉这个块
     if (from <= paraContentStartPos && to >= paraContentEndPos) {
       if (dispatch) {
-        const tr = state.tr.replaceWith(paraContentStartPos, paraContentEndPos, []);
+        const tr = state.tr.replaceWith(
+          paraContentStartPos,
+          paraContentEndPos,
+          []
+        );
         dispatch(tr);
       }
       return true;
@@ -347,7 +363,7 @@ export function deleteSelected(): Command {
 export function toggleFocusedFoldState(
   storage: BlockStorage,
   targetState?: boolean,
-  blockId?: BlockId,
+  blockId?: BlockId
 ): Command {
   return function (state, dispatch) {
     const listItemInfo = findCurrListItem(state);
@@ -384,7 +400,12 @@ export function toggleFocusedFoldState(
       return false;
     }
 
-    storage.updateBlock(blockId2, { folded: targetState }, EDITOR_COMMAND_SOURCE, metadata);
+    storage.updateBlock(
+      blockId2,
+      { folded: targetState },
+      UpdateSources.localEditorStructural,
+      metadata
+    );
     return true;
   };
 }
@@ -433,7 +454,9 @@ export function moveBlockUp(storage: BlockStorage): Command {
 
     const currentBlockData = currentBlock.get();
     const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock ? parentBlock.get().childrenBlocks : storage.getRootBlocks();
+    const siblings = parentBlock
+      ? parentBlock.get().childrenBlocks
+      : storage.getRootBlocks();
     const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
 
     // 如果已经是第一个块，无法上移
@@ -445,7 +468,8 @@ export function moveBlockUp(storage: BlockStorage): Command {
     const prevSiblingData = prevSibling.get();
 
     // 计算新的 fractionalIndex，将当前块移到前一个兄弟块的位置
-    const beforePrevSibling = currentIndex > 1 ? siblings[currentIndex - 2] : null;
+    const beforePrevSibling =
+      currentIndex > 1 ? siblings[currentIndex - 2] : null;
     const beforePrevSiblingFractionalIndex = beforePrevSibling
       ? beforePrevSibling.get().fractionalIndex
       : prevSiblingData.fractionalIndex - 2;
@@ -463,8 +487,8 @@ export function moveBlockUp(storage: BlockStorage): Command {
     storage.updateBlock(
       blockId,
       { fractionalIndex: newFractionalIndex },
-      EDITOR_COMMAND_SOURCE,
-      metadata,
+      UpdateSources.localEditorStructural,
+      metadata
     );
 
     return true;
@@ -491,7 +515,9 @@ export function moveBlockDown(storage: BlockStorage): Command {
 
     const currentBlockData = currentBlock.get();
     const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock ? parentBlock.get().childrenBlocks : storage.getRootBlocks();
+    const siblings = parentBlock
+      ? parentBlock.get().childrenBlocks
+      : storage.getRootBlocks();
     const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
 
     // 如果已经是最后一个块，无法下移
@@ -503,7 +529,8 @@ export function moveBlockDown(storage: BlockStorage): Command {
     const nextSiblingData = nextSibling.get();
 
     // 计算新的 fractionalIndex，将当前块移到下一个兄弟块的位置
-    const afterNextSibling = currentIndex + 2 < siblings.length ? siblings[currentIndex + 2] : null;
+    const afterNextSibling =
+      currentIndex + 2 < siblings.length ? siblings[currentIndex + 2] : null;
     const afterNextSiblingFractionalIndex = afterNextSibling
       ? afterNextSibling.get().fractionalIndex
       : nextSiblingData.fractionalIndex + 2;
@@ -521,8 +548,8 @@ export function moveBlockDown(storage: BlockStorage): Command {
     storage.updateBlock(
       blockId,
       { fractionalIndex: newFractionalIndex },
-      EDITOR_COMMAND_SOURCE,
-      metadata,
+      UpdateSources.localEditorStructural,
+      metadata
     );
 
     return true;
@@ -563,8 +590,12 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
 
     // 找到前一个可以合并的块
     const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock ? parentBlock.get().childrenBlocks : storage.getRootBlocks();
-    const currentIndex = siblings.findIndex((b) => b.get().id === currentBlockId);
+    const siblings = parentBlock
+      ? parentBlock.get().childrenBlocks
+      : storage.getRootBlocks();
+    const currentIndex = siblings.findIndex(
+      (b) => b.get().id === currentBlockId
+    );
 
     // 如果是第一个块，无法合并
     if (currentIndex <= 0) {
@@ -610,10 +641,10 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
       }
     } catch (error) {
       // 如果解析失败，创建包含纯文本的段落
-      const prevTextContent = prevBlockLoaded.get().textContent || "";
+      const prevTextContent = storage.getTextContent(prevBlockId);
       prevParagraphNode = outlinerSchema.nodes.paragraph.create(
         null,
-        prevTextContent ? [outlinerSchema.text(prevTextContent)] : [],
+        prevTextContent ? [outlinerSchema.text(prevTextContent)] : []
       );
     }
 
@@ -629,13 +660,17 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
       mergedParagraphNode = prevParagraphNode;
     } else {
       // 两个块都有内容，需要合并
-      const mergedContent = prevParagraphNode.content.append(currentParagraphNode.content);
-      mergedParagraphNode = outlinerSchema.nodes.paragraph.create(null, mergedContent);
+      const mergedContent = prevParagraphNode.content.append(
+        currentParagraphNode.content
+      );
+      mergedParagraphNode = outlinerSchema.nodes.paragraph.create(
+        null,
+        mergedContent
+      );
     }
 
     // 序列化合并后的内容
     const mergedSerialized = oldSerialize(mergedParagraphNode);
-    const mergedTextContent = mergedParagraphNode.textContent;
 
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
@@ -648,14 +683,13 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
       prevBlockId,
       {
         content: mergedSerialized,
-        textContent: mergedTextContent,
       },
-      EDITOR_COMMAND_SOURCE,
-      metadata,
+      UpdateSources.localEditorStructural,
+      metadata
     );
 
     // 2. 删除当前块
-    storage.deleteBlock(currentBlockId, EDITOR_COMMAND_SOURCE);
+    storage.deleteBlock(currentBlockId, UpdateSources.localEditorStructural);
 
     return true;
   };
@@ -673,7 +707,10 @@ export function codeblockInsertLineBreak(): Command {
     const $from = doc.resolve(from);
 
     // 找到当前行的开始位置
-    const textBefore = $from.parent.textContent.substring(0, $from.parentOffset);
+    const textBefore = $from.parent.textContent.substring(
+      0,
+      $from.parentOffset
+    );
     const lastNewlineIndex = textBefore.lastIndexOf("\n");
     const lineStart = lastNewlineIndex === -1 ? 0 : lastNewlineIndex + 1;
 
@@ -760,7 +797,10 @@ export function codeblockOutdent(): Command {
       const $from = doc.resolve(from);
 
       // 找到当前行的开始位置
-      const textBefore = $from.parent.textContent.substring(0, $from.parentOffset);
+      const textBefore = $from.parent.textContent.substring(
+        0,
+        $from.parentOffset
+      );
       const lastNewlineIndex = textBefore.lastIndexOf("\n");
       const lineStart = lastNewlineIndex === -1 ? 0 : lastNewlineIndex + 1;
       const lineStartPos = from - $from.parentOffset + lineStart;
@@ -842,7 +882,10 @@ export function codeblockMoveToLineStart(): Command {
     const $from = doc.resolve(from);
 
     // 找到当前行的开始位置
-    const textBefore = $from.parent.textContent.substring(0, $from.parentOffset);
+    const textBefore = $from.parent.textContent.substring(
+      0,
+      $from.parentOffset
+    );
     const lastNewlineIndex = textBefore.lastIndexOf("\n");
 
     if (lastNewlineIndex === -1) {

@@ -15,7 +15,6 @@ export function initializeBlockStorage(storage: BlockStorage) {
           type: "paragraph",
           content: [{ type: "text", text: "第一个项目" }],
         }),
-        textContent: "第一个项目",
         folded: false,
       },
       {
@@ -27,7 +26,6 @@ export function initializeBlockStorage(storage: BlockStorage) {
           type: "paragraph",
           content: [{ type: "text", text: "子项目 1" }],
         }),
-        textContent: "子项目 1",
         folded: false,
       },
       {
@@ -39,7 +37,6 @@ export function initializeBlockStorage(storage: BlockStorage) {
           type: "paragraph",
           content: [{ type: "text", text: "子项目 2" }],
         }),
-        textContent: "子项目 2",
         folded: false,
       },
       {
@@ -51,7 +48,6 @@ export function initializeBlockStorage(storage: BlockStorage) {
           type: "paragraph",
           content: [{ type: "text", text: "嵌套子项目" }],
         }),
-        textContent: "嵌套子项目",
         folded: false,
       },
       {
@@ -63,7 +59,6 @@ export function initializeBlockStorage(storage: BlockStorage) {
           type: "paragraph",
           content: [{ type: "text", text: "第二个项目" }],
         }),
-        textContent: "第二个项目",
         folded: false,
       },
     ];

@@ -16,6 +16,7 @@
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--editor-font-family);
+  font-size: var(--editor-font-size);
 }
 
 div.list-item {
@@ -27,25 +28,31 @@ div.list-item {
 
 /* 行间距变体 - 由父容器的类名控制 */
 .spacing-compact div.list-item {
-  padding: 1px 0 !important;
-  line-height: 24px !important;
+  padding: 1px 0;
+  line-height: 24px;
 }
 
 .spacing-normal div.list-item {
-  padding: 2px 0 !important;
-  line-height: 24px !important;
+  padding: 2px 0;
+  line-height: 24px;
 }
 
 .spacing-loose div.list-item {
-  padding: 4px 0 !important;
-  line-height: 24px !important;
+  padding: 4px 0;
+  line-height: 24px;
 }
 
 /** 纯 CSS 实现的引导线 */
+div.list-item[data-level="0"] {
+  /** 这一部分 shadow 用于遮掉选区，下同 */
+  box-shadow: calc(-11px - 1 * 32px) 0px 0px var(--color-bg);
+}
+
 div.list-item[data-level="1"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
-    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 2 * 32px) 0px 0px var(--color-bg);
 }
 
 div.list-item[data-level="2"] {
@@ -53,7 +60,8 @@ div.list-item[data-level="2"] {
     calc(-11px - 1 * 32px) 0px 0px var(--color-bg),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
-    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 3 * 32px) 0px 0px var(--color-bg);
 }
 
 div.list-item[data-level="3"] {
@@ -63,7 +71,8 @@ div.list-item[data-level="3"] {
     calc(-11px - 2 * 32px) 0px 0px var(--color-bg),
     calc(-12px - 2 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
-    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 4 * 32px) 0px 0px var(--color-bg);
 }
 
 div.list-item[data-level="4"] {
@@ -75,7 +84,8 @@ div.list-item[data-level="4"] {
     calc(-11px - 3 * 32px) 0px 0px var(--color-bg),
     calc(-12px - 3 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 4 * 32px) 0px 0px var(--color-bg),
-    calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 5 * 32px) 0px 0px var(--color-bg);
 }
 
 div.list-item[data-level="5"] {
@@ -89,7 +99,8 @@ div.list-item[data-level="5"] {
     calc(-11px - 4 * 32px) 0px 0px var(--color-bg),
     calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 5 * 32px) 0px 0px var(--color-bg),
-    calc(-12px - 5 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 5 * 32px) 0px 0px var(--color-guide-line),
+    calc(-11px - 6 * 32px) 0px 0px var(--color-bg);
 }
 
 div.list-item[data-level="6"] {
@@ -104,7 +115,8 @@ div.list-item[data-level="6"] {
     calc(-12px - 4 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 5 * 32px) 0px 0px var(--color-bg),
     calc(-12px - 6 * 32px) 0px 0px var(--color-guide-line),
-    calc(-12px - 6 * 32px) 0px 0px var(--color-guide-line);
+    calc(-12px - 6 * 32px) 0px 0px var(--color-guide-line),
+    calc(-12px - 7 * 32px) 0px 0px var(--color-guide-line);
 }
 
 div.list-item > div.list-item-left {
@@ -125,7 +137,9 @@ div.list-item > div.list-item-left > svg {
 }
 
 /* 折叠且有子块时，bullet 周围加一个背景色 */
-div.list-item[data-folded="true"][data-has-children="true"] > div.list-item-left > svg.bullet {
+div.list-item[data-folded="true"][data-has-children="true"]
+  > div.list-item-left
+  > svg.bullet {
   background-color: var(--bullet-bg-collapsed);
   border-radius: 50%;
 }
@@ -144,6 +158,7 @@ div.list-item[data-folded="true"] > div.list-item-left > svg.fold-btn {
 
 div.list-item span.block-ref {
   color: var(--color-block-ref);
+  cursor: pointer;
 }
 
 a {
@@ -216,4 +231,24 @@ div.list-item pre code .hljs-emphasis {
 
 div.list-item pre code .hljs-strong {
   font-weight: bold;
+}
+
+div.list-item > div.ref-counter {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: var(--ref-counter-font-size);
+  background-color: var(--color-bg-muted);
+  min-width: 24px;
+  text-align: center;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+div.list-item.has-in-refs {
+  padding-right: 24px;
+}
+
+div.list-item > div.ref-counter[data-nref="0"] {
+  display: none;
 }

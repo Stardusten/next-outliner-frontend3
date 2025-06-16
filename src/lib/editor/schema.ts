@@ -1,40 +1,9 @@
-import { Schema, type NodeSpec, type Node, type MarkSpec } from "prosemirror-model";
-
-function getTriangleDiv(className?: string) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 15 15");
-
-  const triangle = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-  triangle.setAttribute("points", "5,5 10,5 7.5,10");
-  triangle.setAttribute("fill", "currentColor");
-
-  svg.appendChild(triangle);
-
-  if (className) {
-    svg.classList.add(className);
-  }
-
-  return svg;
-}
-
-function getDotDiv(className?: string) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 15 15");
-
-  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  circle.setAttribute("cx", "7.5");
-  circle.setAttribute("cy", "7.5");
-  circle.setAttribute("r", "2.5");
-  circle.setAttribute("fill", "currentColor");
-
-  svg.appendChild(circle);
-
-  if (className) {
-    svg.classList.add(className);
-  }
-
-  return svg;
-}
+import {
+  Schema,
+  type NodeSpec,
+  type Node,
+  type MarkSpec,
+} from "prosemirror-model";
 
 const text: NodeSpec = {
   group: "inline",
@@ -111,29 +80,6 @@ const listItem: NodeSpec = {
     // 类型
     type: {},
   },
-  toDOM(node: Node) {
-    const el = document.createElement("div");
-    el.classList.add("list-item");
-    el.dataset.level = node.attrs.level;
-    el.dataset.blockId = node.attrs.blockId;
-    el.dataset.folded = String(node.attrs.folded);
-    el.dataset.hasChildren = String(node.attrs.hasChildren);
-    el.dataset.type = node.attrs.type;
-    el.style.setProperty("--level", node.attrs.level);
-
-    const left = document.createElement("div");
-    left.classList.add("list-item-left");
-    left.appendChild(getTriangleDiv("fold-btn"));
-    left.appendChild(getDotDiv("bullet"));
-
-    const content = document.createElement("div");
-    content.classList.add("list-item-content");
-
-    el.appendChild(left);
-    el.appendChild(content);
-
-    return { dom: el, contentDOM: content };
-  },
   parseDOM: [
     {
       tag: "div.list-item",
@@ -204,12 +150,14 @@ const bold: MarkSpec = {
     { tag: "strong" },
     {
       tag: "b",
-      getAttrs: (node: HTMLElement) => node.style.fontWeight != "normal" && null,
+      getAttrs: (node: HTMLElement) =>
+        node.style.fontWeight != "normal" && null,
     },
     { style: "font-weight=400", clearMark: (m) => m.type.name == "strong" },
     {
       style: "font-weight",
-      getAttrs: (value: string) => /^(bold(er)?|[5-9]\d{2,})$/.test(value) && null,
+      getAttrs: (value: string) =>
+        /^(bold(er)?|[5-9]\d{2,})$/.test(value) && null,
     },
   ],
   toDOM: () => {
@@ -218,7 +166,11 @@ const bold: MarkSpec = {
 };
 
 const strikethrough: MarkSpec = {
-  parseDOM: [{ tag: "s" }, { tag: "del" }, { style: "text-decoration: line-through" }],
+  parseDOM: [
+    { tag: "s" },
+    { tag: "del" },
+    { style: "text-decoration: line-through" },
+  ],
   toDOM: () => {
     return ["s", 0];
   },

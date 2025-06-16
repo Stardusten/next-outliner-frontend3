@@ -6,7 +6,11 @@
           <slot name="header">
             <h3 class="modal-title">{{ title }}</h3>
           </slot>
-          <button v-if="showCloseButton" class="modal-close" @click="handleClose">
+          <button
+            v-if="showCloseButton"
+            class="modal-close"
+            @click="handleClose"
+          >
             <X :size="16" />
           </button>
         </div>
@@ -152,7 +156,7 @@ const handleOverlayClick = () => {
 
 .modal-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--editor-font-size);
   font-weight: 600;
   color: var(--menu-text);
 }
@@ -197,7 +201,7 @@ const handleOverlayClick = () => {
 .modal-btn {
   padding: 5px 16px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   font-weight: 500;
   cursor: pointer;
   border: 1px solid;

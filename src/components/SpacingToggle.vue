@@ -43,7 +43,7 @@ const lineSpacing = useLineSpacing();
 
 .spacing-option {
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-tiny);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;

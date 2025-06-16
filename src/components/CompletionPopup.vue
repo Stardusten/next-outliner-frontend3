@@ -17,10 +17,18 @@
         :class="{ active: index === activeIndex }"
         @click="selectBlock(block)"
       >
-        <div class="block-content">{{ getBlockPreview(block) }}</div>
+        <div class="completion-item-content">
+          <SearchResultItem
+            :block="block"
+            :storage="storage"
+            :search-query="query"
+          />
+        </div>
         <div class="block-meta">{{ block.id.slice(0, 8) }}</div>
       </div>
-      <div v-if="filteredBlocks.length === 0" class="completion-empty">没有找到匹配的块</div>
+      <div v-if="filteredBlocks.length === 0" class="completion-empty">
+        没有找到匹配的块
+      </div>
     </div>
   </div>
 </template>
@@ -28,6 +36,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
 import type { Block } from "../lib/blocks/types";
+import SearchResultItem from "./SearchResultItem.vue";
+import type { BlockStorage } from "@/lib/storage/interface";
 
 interface Props {
   visible: boolean;
@@ -35,6 +45,7 @@ interface Props {
   position: { x: number; y: number };
   blocks: Block[];
   activeIndex: number;
+  storage: BlockStorage;
 }
 
 interface Emits {
@@ -89,7 +100,7 @@ watch(
     if (visible) {
       scrollToActiveItem();
     }
-  },
+  }
 );
 
 // 弹窗尺寸常量
@@ -153,7 +164,8 @@ const adjustedPosition = computed(() => {
   } else {
     // 右侧空间不够，将弹窗往左移动，确保完全显示
     // 计算需要往左移动多少才能完全显示
-    const overflowAmount = x + POPUP_WIDTH - (viewportWidth + scrollX - minPadding);
+    const overflowAmount =
+      x + POPUP_WIDTH - (viewportWidth + scrollX - minPadding);
     adjustedX = x - overflowAmount;
 
     // 确保不会移动到左边界之外
@@ -166,16 +178,11 @@ const adjustedPosition = computed(() => {
   // 确保垂直方向不超出边界
   adjustedY = Math.max(
     scrollY + 8,
-    Math.min(adjustedY, viewportHeight + scrollY - fixedHeight - 8),
+    Math.min(adjustedY, viewportHeight + scrollY - fixedHeight - 8)
   );
 
   return { x: adjustedX, y: adjustedY };
 });
-
-// 获取块的预览文本
-function getBlockPreview(block: Block): string {
-  return block.textContent || "空白块";
-}
 
 // 选择块
 function selectBlock(block: Block) {
@@ -194,6 +201,7 @@ function selectBlock(block: Block) {
   width: 350px;
   max-height: 400px;
   overflow: hidden;
+  font-size: var(--ui-font-size);
 }
 
 .completion-header {
@@ -205,13 +213,13 @@ function selectBlock(block: Block) {
 }
 
 .completion-title {
-  font-size: 12px;
+  font-size: var(--ui-font-size-small);
   color: var(--menu-text-muted);
   font-weight: 500;
 }
 
 .completion-query {
-  font-size: 12px;
+  font-size: var(--ui-font-size-small);
   color: var(--color-block-ref);
   background: var(--color-bg-hover);
   padding: 2px 6px;
@@ -225,6 +233,7 @@ function selectBlock(block: Block) {
 }
 
 .completion-item {
+  font-size: var(--ui-font-size);
   padding: 8px 12px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color-muted);
@@ -240,17 +249,13 @@ function selectBlock(block: Block) {
   background-color: var(--menu-item-hover);
 }
 
-.block-content {
-  font-size: 14px;
+.completion-item-content {
   color: var(--menu-text);
-  margin-bottom: 4px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .block-meta {
-  font-size: 11px;
+  font-size: var(--ui-font-size-tiny);
   color: var(--menu-text-muted);
   font-family: monospace;
 }
@@ -259,6 +264,6 @@ function selectBlock(block: Block) {
   padding: 16px 12px;
   text-align: center;
   color: var(--menu-text-muted);
-  font-size: 14px;
+  font-size: var(--ui-font-size);
 }
 </style>

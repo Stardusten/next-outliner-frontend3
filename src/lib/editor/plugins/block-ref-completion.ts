@@ -1,4 +1,4 @@
-import { Plugin } from "prosemirror-state";
+import { EditorState, Plugin } from "prosemirror-state";
 import { parseBlockRefStr } from "../utils";
 import { Fragment, Slice } from "prosemirror-model";
 import { outlinerSchema } from "../schema";
@@ -9,7 +9,7 @@ import type { EditorView } from "prosemirror-view";
 /**
  * 检查当前状态是否应该显示补全
  */
-function checkCompletionStatus(state: any): CompletionStatus | null {
+function checkCompletionStatus(state: EditorState): CompletionStatus | null {
   const { selection } = state;
   const { $from } = selection;
 
@@ -19,7 +19,7 @@ function checkCompletionStatus(state: any): CompletionStatus | null {
   }
 
   // 获取光标位置前的文本
-  const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
+  const textBefore = $from.parent.textBetween(0, $from.parentOffset);
 
   // 检查是否有未完成的块引用模式 - 支持 [[ 和 【【 两种触发方式
   const blockRefMatch = textBefore.match(/(\[\[|【【)([^\]】]*?)$/);
@@ -70,9 +70,9 @@ export function createCompletionHelperPlugin(emit: Emitter) {
         emit({ type: "completion", status });
         return status;
       },
-      apply(tr, prevState, _2, newState) {
+      apply(tr, val, _2, newState) {
         // 如果文档未改变获知 ime 激活，都不更新补全状态
-        if (!tr.docChanged || editorView?.composing) return prevState;
+        if (editorView?.composing) return val;
         const status = checkCompletionStatus(newState);
         emit({ type: "completion", status });
         return status;

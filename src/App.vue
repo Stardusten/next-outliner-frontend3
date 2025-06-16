@@ -16,7 +16,9 @@
           >
             <span
               class="breadcrumb-item"
-              :class="{ current: index === breadcrumb.breadcrumbItems.value.length - 1 }"
+              :class="{
+                current: index === breadcrumb.breadcrumbItems.value.length - 1,
+              }"
               @click="breadcrumb.handleBreadcrumbClick(item)"
             >
               {{ item.title }}
@@ -49,6 +51,7 @@
 
     <!-- 补全弹窗 -->
     <CompletionPopup
+      :storage="blockStorage"
       :visible="completion.completionVisible.value"
       :query="completion.completionQuery.value"
       :position="completion.completionPosition.value"
@@ -60,6 +63,7 @@
 
     <!-- 搜索弹窗 -->
     <SearchPopup
+      :storage="blockStorage"
       :visible="search.searchVisible.value"
       :position="search.searchPosition.value"
       :searchResults="search.searchResults.value"
@@ -89,10 +93,23 @@
       @cancel="importExport.handleClearStorageCancel"
       @close="importExport.handleClearStorageCancel"
     >
-      <p style="margin: 0 0 16px 0; color: var(--menu-text)">
+      <p
+        style="
+          margin: 0 0 16px 0;
+          color: var(--menu-text);
+          font-size: var(--ui-font-size);
+        "
+      >
         此操作将永久删除所有块数据，无法恢复。
       </p>
-      <p style="margin: 0; color: var(--menu-danger); font-weight: 500">
+      <p
+        style="
+          margin: 0;
+          color: var(--menu-danger);
+          font-weight: 500;
+          font-size: var(--ui-font-size);
+        "
+      >
         请谨慎操作，建议在清空前先导出数据备份。
       </p>
     </BaseModal>
@@ -135,18 +152,18 @@ useLineSpacing();
 const completion = useBlockRefCompletion(
   () => editor,
   () => blockStorage,
-  () => fulltextIndex,
+  () => fulltextIndex
 );
 
 const breadcrumb = useBreadcrumb(
   () => editor,
-  () => blockStorage,
+  () => blockStorage
 );
 
 const search = useSearch(
   () => editor,
   () => blockStorage,
-  () => fulltextIndex,
+  () => fulltextIndex
 );
 
 const importExport = useImportExport(() => blockStorage);
@@ -171,6 +188,10 @@ onMounted(() => {
 
   // 创建索引
   fulltextIndex = new FullTextIndex(blockStorage);
+
+  (globalThis as any).editor = editor;
+  (globalThis as any).storage = blockStorage;
+  (globalThis as any).fulltextIndex = fulltextIndex;
 });
 
 onUnmounted(() => {
@@ -210,7 +231,7 @@ onUnmounted(() => {
 .breadcrumb {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   color: var(--color-text);
 }
 
@@ -233,6 +254,7 @@ onUnmounted(() => {
 .breadcrumb-separator {
   margin: 0 8px;
   color: var(--border-color);
+  font-size: var(--ui-font-size);
 }
 
 .header-actions {
@@ -311,9 +333,17 @@ onUnmounted(() => {
   --color-guide-line: #e1e4e8;
   --bullet-bg-collapsed: #ddd;
   --editor-codeblock-font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* 字体大小变量 */
+  --editor-font-size: 16px;
+  --ui-font-size: 14px;
+  --ui-font-size-small: 12px;
+  --ui-font-size-tiny: 11px;
   --editor-codeblock-font-size: 14px;
+  --highlight-keep-bg: #ffe066;
+  --ref-counter-font-size: 14px;
 
   /* 语法高亮颜色 */
   --color-syntax-comment: #6a737d;
@@ -353,10 +383,18 @@ onUnmounted(() => {
   --color-guide-line: #333;
   --bullet-bg-collapsed: #333;
   --editor-codeblock-font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* 字体大小变量 */
+  --editor-font-size: 16px;
+  --ui-font-size: 14px;
+  --ui-font-size-small: 12px;
+  --ui-font-size-tiny: 11px;
   --editor-codeblock-font-size: 14px;
   --editor-codeblock-line-height: 1;
+  --highlight-keep-bg: rgb(0, 102, 153);
+  --ref-counter-font-size: 14px;
 
   /* 语法高亮颜色 - 暗色主题 */
   --color-syntax-comment: #8b949e;
@@ -386,6 +424,7 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--ui-font-size);
 }
 
 ::-webkit-scrollbar {

@@ -12,7 +12,7 @@ export interface SearchResult {
 export function useSearch(
   getEditor: () => Editor,
   getBlockStorage: () => BlockStorage,
-  getFullTextIndex: () => FullTextIndex,
+  getFullTextIndex: () => FullTextIndex
 ) {
   const searchVisible = ref(false);
   const searchQuery = ref("");
@@ -47,14 +47,15 @@ export function useSearch(
     const blockStorage = getBlockStorage();
 
     // 使用全文索引搜索，获取带分数的结果
-    const searchResultsWithScore = fullTextIndex.searchWithScore(query, 50);
+    const searchResultsWithScore = fullTextIndex.searchWithScore(query, 100);
 
     const results: SearchResult[] = [];
     for (const { id, score } of searchResultsWithScore) {
       const blockLoaded = blockStorage.getBlock(id);
       if (blockLoaded) {
         const block = blockLoaded.get();
-        if (block.textContent && block.textContent.trim().length > 0) {
+        const textContent = blockStorage.getTextContent(id);
+        if (textContent && textContent.trim().length > 0) {
           results.push({ block, score });
         }
       }
@@ -82,7 +83,9 @@ export function useSearch(
   };
 
   // 处理搜索结果选择
-  const handleSearchSelect = (result: SearchResult | { type: string; index?: number }) => {
+  const handleSearchSelect = (
+    result: SearchResult | { type: string; index?: number }
+  ) => {
     if ("type" in result) {
       // 处理导航事件
       if (result.type === "navigate" && typeof result.index === "number") {
@@ -91,9 +94,9 @@ export function useSearch(
       return;
     }
 
-    // 处理实际的搜索结果选择
+    // 处理实际的搜索结果选择 - 使用 locateBlock 定位到选择的块
     const editor = getEditor();
-    editor.setRootBlocks([result.block.id]);
+    editor.locateBlock(result.block.id);
     hideSearch();
   };
 

@@ -9,7 +9,11 @@ export function createBlockRefNodeViewClass(storage: BlockStorage) {
     dom: HTMLElement;
     unsubscriber: (() => void) | null = null;
 
-    constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number | undefined) {
+    constructor(
+      node: ProseMirrorNode,
+      view: EditorView,
+      getPos: () => number | undefined
+    ) {
       if (node.type !== outlinerSchema.nodes.blockRef) {
         throw new Error("impossible. block ref nodeview get a node" + node);
       }
@@ -24,9 +28,9 @@ export function createBlockRefNodeViewClass(storage: BlockStorage) {
       if (block) {
         this.unsubscriber = block.subscribe(
           (b) => {
-            this.dom.innerText = b.textContent;
+            this.dom.innerText = storage.getTextContent(blockId);
           },
-          { immediate: true },
+          { immediate: true }
         );
       }
     }

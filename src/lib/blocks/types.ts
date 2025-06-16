@@ -8,7 +8,6 @@ export type Block = {
   parentId: BlockId | null;
   fractionalIndex: number;
   content: string;
-  textContent: string;
   folded: boolean;
 };
 

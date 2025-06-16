@@ -11,8 +11,14 @@ export interface BreadcrumbItem {
   title: string;
 }
 
-export function useBreadcrumb(getEditor: () => Editor, getBlockStorage: () => BlockStorage) {
-  const [rootBlockIds, setRootBlockIds] = useLocalStorage<BlockId[]>(ROOT_BLOCKS_KEY, []);
+export function useBreadcrumb(
+  getEditor: () => Editor,
+  getBlockStorage: () => BlockStorage
+) {
+  const [rootBlockIds, setRootBlockIds] = useLocalStorage<BlockId[]>(
+    ROOT_BLOCKS_KEY,
+    []
+  );
 
   const breadcrumbItems = computed((): BreadcrumbItem[] => {
     const blockStorage = getBlockStorage();
@@ -33,7 +39,9 @@ export function useBreadcrumb(getEditor: () => Editor, getBlockStorage: () => Bl
         path.forEach((blockId) => {
           const block = blockStorage.getBlock(blockId);
           if (block) {
-            const title = block.get().textContent || `块 ${blockId.slice(0, 8)}`;
+            const title =
+              blockStorage.getTextContent(blockId) ||
+              `块 ${blockId.slice(0, 8)}`;
             items.push({ blockId, title });
           }
         });

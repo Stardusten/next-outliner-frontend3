@@ -1,4 +1,7 @@
-import type { BlockStorage } from "../storage/interface";
+import type {
+  BlockStorage,
+  BlockStorageEventBatch,
+} from "../storage/interface";
 // @ts-ignore
 import Document from "@/../node_modules/flexsearch/dist/module/document";
 import { calcMatchScore, hybridTokenize } from "./tokenize";
@@ -31,19 +34,23 @@ export class FullTextIndex {
         store: ["textContent"],
       },
       encode: (str: string) => {
-        const tokens = hybridTokenize(str, { removeDiacritics: this.config.ignoreDiacritics });
+        const tokens = hybridTokenize(str, {
+          removeDiacritics: this.config.ignoreDiacritics,
+        });
         return tokens;
       },
     });
 
     this.initIndex(); // 先初始化索引
 
-    this.storage.addEventListener((e) => {
-      const blockId =
-        e.type === "block-added" || e.type === "block-updated"
-          ? e.newBlock.get().id
-          : e.deleted.get().id;
-      this.dirtySet.add(blockId);
+    this.storage.addEventListener((events: BlockStorageEventBatch) => {
+      for (const e of events) {
+        const blockId =
+          e.type === "block-added" || e.type === "block-updated"
+            ? e.newBlock.get().id
+            : e.deleted.get().id;
+        this.dirtySet.add(blockId);
+      }
     });
   }
 
@@ -65,9 +72,10 @@ export class FullTextIndex {
         this.flexsearch.remove(blockId);
       }
       // 然后添加最新的索引项
+      const textContent = this.storage.getTextContent(blockId);
       this.flexsearch.add(blockId, {
         id: blockId,
-        textContent: block.get().textContent,
+        textContent,
       });
     }
   }
@@ -87,7 +95,8 @@ export class FullTextIndex {
   search(query: string, limit: number = 200): BlockId[] {
     this.updateIndexOfAllDirtyBlocks(); // 先更新索引
 
-    const results = this.flexsearch.search(query, { limit, enrich: true })?.[0]?.result;
+    const results = this.flexsearch.search(query, { limit, enrich: true })?.[0]
+      ?.result;
     if (!results) return [];
 
     const queryTokens = hybridTokenize(query, {
@@ -104,10 +113,14 @@ export class FullTextIndex {
     return idAndScores.map((item: any) => item.id);
   }
 
-  searchWithScore(query: string, limit: number = 200): { id: BlockId; score: number }[] {
+  searchWithScore(
+    query: string,
+    limit: number = 200
+  ): { id: BlockId; score: number }[] {
     this.updateIndexOfAllDirtyBlocks(); // 先更新索引
 
-    const results = this.flexsearch.search(query, { limit, enrich: true })?.[0]?.result;
+    const results = this.flexsearch.search(query, { limit, enrich: true })?.[0]
+      ?.result;
     if (!results) return [];
 
     const queryTokens = hybridTokenize(query, {

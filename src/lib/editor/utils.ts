@@ -1,7 +1,10 @@
 import { keymap } from "prosemirror-keymap";
 import { Node, Schema, type NodeSpec } from "prosemirror-model";
-import type { Command, EditorState } from "prosemirror-state";
-import { EditorState as ProseMirrorState } from "prosemirror-state";
+import type { Command, EditorState, Transaction } from "prosemirror-state";
+import {
+  EditorState as ProseMirrorState,
+  TextSelection,
+} from "prosemirror-state";
 import type { Block, BlockId, BlockLoaded } from "../blocks/types";
 import type { BlockStorage } from "../storage/interface";
 import { outlinerSchema } from "./schema";
@@ -22,7 +25,9 @@ export function toMarkdown(doc: Node): string {
       const content = node.textContent;
       lines.push("  ".repeat(level) + "- " + content);
     } else {
-      throw new Error("Invalid document, unexpected node type: " + node.type.name);
+      throw new Error(
+        "Invalid document, unexpected node type: " + node.type.name
+      );
     }
   });
 
@@ -39,49 +44,45 @@ export function oldDeserialize(repr: string): Node {
     return outlinerSchema.nodeFromJSON(json);
   } catch (error) {
     // 如果反序列化失败，返回一个空的段落节点
-    console.warn("Failed to deserialize content. content=", repr, "error=", error);
+    console.warn(
+      "Failed to deserialize content. content=",
+      repr,
+      "error=",
+      error
+    );
     return outlinerSchema.nodes.paragraph.create();
   }
 }
 
-export function serialize(listItemNode: Node): {
+export function serialize(node: Node): {
   type: Block["type"];
   content: string;
-  textContent: string;
 } {
-  const listItemType = outlinerSchema.nodes.listItem;
-  if (listItemNode.type !== listItemType) {
-    throw new Error("Invalid document, unexpected node type: " + listItemNode.type.name);
+  const paragraphNodeType = outlinerSchema.nodes.paragraph;
+  const codeblockNodeType = outlinerSchema.nodes.codeblock;
+  if (node.type === paragraphNodeType) {
+    return {
+      type: "text",
+      content: JSON.stringify(node.toJSON()),
+    };
+  } else if (node.type === codeblockNodeType) {
+    return {
+      type: "code",
+      // 这里我们不是直接将 codeblockNode.textContent 放到 content
+      // 因为我们希望代码块里不仅有代码，还应该能有 marks 和块引用等东西
+      content: JSON.stringify(node.toJSON()),
+    };
   }
 
-  const type = listItemNode.attrs.type;
-  if (type === "text") {
-    const paragraphNode = listItemNode.firstChild;
-    if (paragraphNode) {
-      return {
-        type: "text",
-        content: JSON.stringify(paragraphNode.toJSON()),
-        textContent: paragraphNode.textContent,
-      };
-    }
-  } else if (type === "code") {
-    const codeblockNode = listItemNode.firstChild;
-    if (codeblockNode) {
-      return {
-        type: "code",
-        // 这里我们不是直接将 codeblockNode.textContent 放到 content
-        // 因为我们希望代码块里不仅有代码，还应该能有 marks 和块引用等东西
-        content: JSON.stringify(codeblockNode.toJSON()),
-        textContent: codeblockNode.textContent,
-      };
-    }
-  }
-
-  console.warn("Invalid listItemNode, unexpected node type: " + listItemNode.type.name);
-  return { type: "text", content: "", textContent: "" };
+  console.warn("Invalid listItemNode, unexpected node type: " + node.type.name);
+  return { type: "text", content: "" };
 }
 
-export function deserialize(block: BlockLoaded, level?: number): Node {
+export function deserialize(
+  block: BlockLoaded,
+  level?: number,
+  storage?: BlockStorage
+): Node {
   // 使用反序列化来创建段落内容
   let listItemNode: Node | null = null;
   const listItemType = outlinerSchema.nodes.listItem;
@@ -97,44 +98,77 @@ export function deserialize(block: BlockLoaded, level?: number): Node {
         const json = JSON.parse(blockData.content);
         const paragraphNode = outlinerSchema.nodeFromJSON(json);
         listItemNode = listItemType.create(
-          { level, blockId: blockData.id, folded: blockData.folded, hasChildren, type: "text" },
-          paragraphNode,
+          {
+            level,
+            blockId: blockData.id,
+            folded: blockData.folded,
+            hasChildren,
+            type: "text",
+          },
+          paragraphNode
         );
       } else if (blockData.type === "code") {
         const json = JSON.parse(blockData.content);
         const codeblockNode = outlinerSchema.nodeFromJSON(json);
         listItemNode = listItemType.create(
-          { level, blockId: blockData.id, folded: blockData.folded, hasChildren, type: "code" },
-          codeblockNode,
+          {
+            level,
+            blockId: blockData.id,
+            folded: blockData.folded,
+            hasChildren,
+            type: "code",
+          },
+          codeblockNode
         );
       }
     }
   } catch (error) {
     // 如果反序列化失败，尝试使用纯文本内容创建段落节点
     console.warn("Failed to deserialize block content");
+    const textContent = storage ? storage.getTextContent(blockData.id) : "";
     const paragraphNode = paragraphType.create(
       null,
-      blockData.textContent ? [outlinerSchema.text(blockData.textContent)] : [],
+      textContent ? [outlinerSchema.text(textContent)] : []
     );
     listItemNode = listItemType.create(
-      { level, blockId: blockData.id, folded: blockData.folded, hasChildren, type: "text" },
-      paragraphNode,
+      {
+        level,
+        blockId: blockData.id,
+        folded: blockData.folded,
+        hasChildren,
+        type: "text",
+      },
+      paragraphNode
     );
   }
 
   // 如果没有内容，创建空段落
   if (!listItemNode) {
     listItemNode = listItemType.create(
-      { level, blockId: blockData.id, folded: blockData.folded, hasChildren, type: "text" },
-      paragraphType.create(null, []),
+      {
+        level,
+        blockId: blockData.id,
+        folded: blockData.folded,
+        hasChildren,
+        type: "text",
+      },
+      paragraphType.create(null, [])
     );
   }
 
   return listItemNode;
 }
 
-export function createStateFromStorage(storage: BlockStorage, rootBlockIds: BlockId[]): Node {
-  const { listItem: listItemType, paragraph: paragraphType, doc: docType } = outlinerSchema.nodes;
+export function createStateFromStorage(
+  storage: BlockStorage,
+  rootBlockIds: BlockId[],
+  rootOnly: boolean = false
+): Node {
+  const {
+    listItem: listItemType,
+    paragraph: paragraphType,
+    doc: docType,
+  } = outlinerSchema.nodes;
 
   // 将嵌套的 block 转换为扁平的 listItem 节点数组
   function flattenBlocks(blocks: BlockLoaded[], level: number): Node[] {
@@ -143,10 +177,10 @@ export function createStateFromStorage(storage: BlockStorage, rootBlockIds: Bloc
     for (const blockLoaded of blocks) {
       const blockData = blockLoaded.get();
       const hasChildren = blockData.childrenBlocks.length > 0;
-      nodes.push(deserialize(blockLoaded, level));
+      nodes.push(deserialize(blockLoaded, level, storage));
 
-      // 如果块有子节点且未被折叠，则递归渲染子节点
-      if (hasChildren && !blockData.folded) {
+      // 如果块有子节点且未被折叠，并且 rootOnly 为 false，则递归渲染子节点
+      if (!rootOnly && hasChildren && !blockData.folded) {
         const childNodes = flattenBlocks(blockData.childrenBlocks, level + 1);
         nodes.push(...childNodes);
       }
@@ -175,7 +209,11 @@ export function createStateFromStorage(storage: BlockStorage, rootBlockIds: Bloc
 /**
  * 将相对位置（块 ID + 块内偏移）转换为绝对位置（相对文档开头的偏移）
  */
-export function getAbsPos(doc: Node, blockId: BlockId, offset: number): number | null {
+export function getAbsPos(
+  doc: Node,
+  blockId: BlockId,
+  offset: number
+): number | null {
   let absolutePos: number | null = null;
   doc.descendants((node, pos) => {
     if (absolutePos !== null) return false; // 已找到，停止搜索
@@ -231,4 +269,69 @@ export function parseBlockRefStr(str: string) {
     return str.slice(prefix.length);
   }
   return null;
+}
+
+/**
+ * 计算从根到指定块的完整路径
+ * @param storage - 块存储接口
+ * @param blockId - 目标块的 ID
+ * @returns 从根到目标块的路径数组，包含目标块本身，如果块不存在则返回 null
+ */
+export function getBlockPath(
+  storage: BlockStorage,
+  blockId: BlockId
+): BlockId[] | null {
+  const targetBlock = storage.getBlock(blockId);
+  if (!targetBlock) {
+    return null;
+  }
+
+  // 从目标块向上遍历，收集所有祖先块的 ID
+  const path: BlockId[] = [blockId];
+  let currentBlock = targetBlock.get().parentBlock;
+
+  while (currentBlock) {
+    path.unshift(currentBlock.get().id);
+    currentBlock = currentBlock.get().parentBlock;
+  }
+
+  return path;
+}
+
+/**
+ * 规范化选区，保证选区选中的都是整个块，不会只选中一个块的某个部分
+ */
+export function normalizeSelection(tr: Transaction): Transaction {
+  const { $anchor, $head, empty } = tr.selection;
+
+  // 空选区不需要标准化
+  if (empty) return tr;
+
+  const anchorListItem = findListItemAtPos(tr.doc, $anchor.pos);
+  const headListItem = findListItemAtPos(tr.doc, $head.pos);
+  if (!anchorListItem || !headListItem) return tr;
+
+  // 选区开始和结束不是同一个 listItem
+  // 正向选择，即从前往后选
+  if (anchorListItem.pos < headListItem.pos) {
+    const newAnchor = anchorListItem.pos + 2;
+    const newHead = headListItem.pos + headListItem.node.nodeSize - 2;
+
+    // 需要改变选区
+    if ($anchor.pos !== newAnchor || $head.pos !== newHead) {
+      const newSelection = TextSelection.create(tr.doc, newAnchor, newHead);
+      return tr.setSelection(newSelection);
+    } else return tr;
+  } else if (anchorListItem.pos > headListItem.pos) {
+    // 逆向选择，即从后往前选
+    const newAnchor = anchorListItem.pos + anchorListItem.node.nodeSize - 2;
+    const newHead = headListItem.pos + 2;
+
+    // 需要改变选区
+    if ($anchor.pos !== newAnchor || $head.pos !== newHead) {
+      const newSelection = TextSelection.create(tr.doc, newAnchor, newHead);
+      return tr.setSelection(newSelection);
+    } else return tr;
+  }
+  return tr;
 }

@@ -1,13 +1,32 @@
-import type { Block } from "@/lib/blocks/types";
+import type { Block, BlockLoaded } from "@/lib/blocks/types";
 import type { FullTextIndex } from "@/lib/index/fulltext";
-import type { CompletionStatus, Editor, EditorEvent } from "@/lib/editor/interface";
+import type {
+  CompletionStatus,
+  Editor,
+  EditorEvent,
+} from "@/lib/editor/interface";
 import type { BlockStorage } from "@/lib/storage/interface";
 import { onMounted, ref } from "vue";
+import { outlinerSchema } from "@/lib/editor/schema";
+
+function isSingleRefBlock(block: BlockLoaded) {
+  const nodeJson = JSON.parse(block.get().content);
+  const node = outlinerSchema.nodeFromJSON(nodeJson);
+  if (!node || node.type !== outlinerSchema.nodes.paragraph) return false;
+
+  if (node.content.size === 1) {
+    const fst = node.firstChild;
+    if (fst && fst.type === outlinerSchema.nodes.blockRef) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function useBlockRefCompletion(
   getEditor: () => Editor,
   getBlockStorage: () => BlockStorage,
-  getFullTextIndex: () => FullTextIndex,
+  getFullTextIndex: () => FullTextIndex
 ) {
   // 补全相关状态
   const completionVisible = ref(false);
@@ -71,14 +90,24 @@ export function useBlockRefCompletion(
     const blocks: Block[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
-      const searchResults = fulltextIndex.search(query, 10);
+      const searchResults = fulltextIndex.search(query, 100);
+
+      const editor = getEditor();
+      const focusedBlockId = editor.getFocusedBlockId();
 
       // 根据搜索结果获取具体的块
       for (const blockId of searchResults) {
         const blockLoaded = blockStorage.getBlock(blockId);
         if (blockLoaded) {
           const block = blockLoaded.get();
-          if (block.textContent && block.textContent.trim().length > 0) {
+          const textContent = blockStorage.getTextContent(blockId);
+          console.log("blockId=" + blockId + " textContent=" + textContent);
+          if (textContent && textContent.trim().length > 0) {
+            // 当前块永远不会成为候选
+            if (focusedBlockId && block.id === focusedBlockId) continue;
+            // 只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种
+            // 因为这会与其原身混淆
+            if (isSingleRefBlock(blockLoaded)) continue;
             blocks.push(block);
           }
         }
@@ -90,7 +119,8 @@ export function useBlockRefCompletion(
         if (count >= 10) return false; // 最多显示10个
 
         const block = blockLoaded.get();
-        if (block.textContent && block.textContent.trim().length > 0) {
+        const textContent = blockStorage.getTextContent(block.id);
+        if (textContent && textContent.trim().length > 0) {
           blocks.push(block);
           count++;
         }
@@ -118,7 +148,7 @@ export function useBlockRefCompletion(
   const handleCompletionNext = () => {
     completionActiveIndex.value = Math.min(
       completionActiveIndex.value + 1,
-      availableBlocks.value.length - 1,
+      availableBlocks.value.length - 1
     );
   };
 
