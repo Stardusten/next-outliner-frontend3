@@ -6,6 +6,7 @@ import type { BlockId } from "../blocks/types";
 import { outlinerSchema } from "./schema";
 import { createStateFromStorage } from "./utils";
 import { createHighlightMatchesPlugin } from "./plugins/highlight-matches";
+import { createListItemNodeViewClass } from "./node-views/list-item";
 
 export class ReadonlyBlockView {
   private blockId: BlockId;
@@ -46,6 +47,10 @@ export class ReadonlyBlockView {
       nodeViews: {
         blockRef(node, view, getPos) {
           const clz = createBlockRefNodeViewClass(storage);
+          return new clz(node, view, getPos);
+        },
+        listItem(node, view, getPos) {
+          const clz = createListItemNodeViewClass(storage);
           return new clz(node, view, getPos);
         },
       },
