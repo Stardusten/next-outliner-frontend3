@@ -10,7 +10,7 @@ import { serialize } from "../utils";
 import type { Block, BlockId } from "@/lib/blocks/types";
 import type { BlockStorage } from "@/lib/storage/interface";
 import { Plugin } from "prosemirror-state";
-import { findCurrListItem } from "../commands";
+import { findCurrListItem, isEmptyListItem } from "../commands";
 import { UpdateSources } from "../update-source";
 
 type TempBlock = Omit<Block, "fractionalIndex"> & {
@@ -241,18 +241,20 @@ export function createPastePlugin(storage: BlockStorage) {
             const lastRootJson = JSON.parse(lastRoot.content);
             const lastRootNode = outlinerSchema.nodeFromJSON(lastRootJson);
 
-            storage.insertAfterWithChildren(
-              currBlockId,
-              allBlocks,
-              UpdateSources.localEditorStructural,
-              // 插入后，将光标移动到插入的最后一个块的末尾
-              {
-                selection: {
-                  blockId: rootBlocks[rootBlocks.length - 1].id,
-                  offset: lastRootNode.nodeSize,
-                },
-              }
-            );
+            const tx = storage.createTransaction();
+
+            // 如果当前块为空，则删除当前块
+            if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+              tx.deleteBlock(currBlockId);
+            }
+
+            // 插入后，将光标移动到插入的最后一个块的末尾
+            tx.metadata.selection = {
+              blockId: rootBlocks[rootBlocks.length - 1].id,
+              offset: lastRootNode.nodeSize,
+            };
+            tx.insertAfterWithChildren(currBlockId, allBlocks);
+            tx.commit();
           }
           return true;
         }
@@ -283,6 +285,13 @@ export function createPastePlugin(storage: BlockStorage) {
             const currBlockId = currListItem?.node.attrs.blockId ?? null;
             if (currBlockId == null) return true;
 
+            const tx = storage.createTransaction();
+
+            // 如果当前块为空，则删除当前块
+            if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+              tx.deleteBlock(currBlockId);
+            }
+
             const blocks: Block[] = [];
             for (const line of lines) {
               const tNode = outlinerSchema.text(line);
@@ -296,11 +305,9 @@ export function createPastePlugin(storage: BlockStorage) {
               };
               blocks.push(block);
             }
-            storage.insertAfterWithChildren(
-              currBlockId,
-              blocks,
-              UpdateSources.localEditorStructural
-            );
+
+            tx.insertAfterWithChildren(currBlockId, blocks);
+            tx.commit();
           }
         }
 

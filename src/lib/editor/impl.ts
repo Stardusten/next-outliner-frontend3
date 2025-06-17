@@ -12,6 +12,7 @@ import type {
   BlockStorage,
   BlockStorageEvent,
   BlockStorageEventBatch,
+  SelectionMetadata,
 } from "../storage/interface";
 import { findCurrListItem, toggleFocusedFoldState } from "./commands";
 import { toCodeblock } from "./input-rules/to-codeblock";
@@ -73,33 +74,28 @@ export class ProseMirrorEditor implements Editor {
     this.storageListener = (events: BlockStorageEventBatch) => {
       if (!this.view) return;
 
-      // 检查是否有需要处理的事件（过滤掉来自当前编辑器实例的事件）
-      const relevantEvents = events.filter(
-        (event) => event.source !== UpdateSources.localEditorContent(this.id)
-      );
-      if (relevantEvents.length === 0) return;
-
-      // 获取最后一个带有选区信息的事件，作为恢复目标
-      let selectionToRestore: { blockId: BlockId; offset: number } | null =
-        null;
-
-      // 从后往前查找第一个包含选区信息的事件
-      for (let i = relevantEvents.length - 1; i >= 0; i--) {
-        const event = relevantEvents[i];
-        if (event.metadata?.selection) {
-          selectionToRestore = event.metadata.selection;
-          break;
+      // 找到是否有需要恢复的选区
+      let selection: SelectionMetadata | null = null;
+      for (const event of events) {
+        if (event.type === "tx-committed") {
+          const res = event.result;
+          if (
+            res.metadata.selection &&
+            res.source !== UpdateSources.localEditorContent(this.id)
+          ) {
+            selection = res.metadata.selection;
+          }
         }
       }
 
       // 如果没有找到指定的选区，则保存当前选区作为回退
-      if (!selectionToRestore) {
-        const { selection } = this.view.state;
+      if (!selection) {
+        const sel = this.view.state.selection;
         const listItemInfo = findCurrListItem(this.view.state);
         if (listItemInfo && listItemInfo.node.attrs.blockId) {
-          selectionToRestore = {
+          selection = {
             blockId: listItemInfo.node.attrs.blockId,
-            offset: selection.from - (listItemInfo.pos + 2),
+            offset: sel.from - (listItemInfo.pos + 2),
           };
         }
       }
@@ -110,12 +106,8 @@ export class ProseMirrorEditor implements Editor {
       const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
 
       // 尝试恢复选区
-      if (selectionToRestore) {
-        const newPos = getAbsPos(
-          tr.doc,
-          selectionToRestore.blockId,
-          selectionToRestore.offset
-        );
+      if (selection) {
+        const newPos = getAbsPos(tr.doc, selection.blockId, selection.offset);
         if (newPos !== null) {
           tr.setSelection(TextSelection.create(tr.doc, newPos));
         }
@@ -376,11 +368,12 @@ export class ProseMirrorEditor implements Editor {
     for (const ancestorId of ancestors) {
       const ancestorBlock = this.storage.getBlock(ancestorId);
       if (ancestorBlock && ancestorBlock.get().folded) {
-        this.storage.updateBlock(
-          ancestorId,
-          { folded: false },
-          UpdateSources.localEditorStructural
-        );
+        const tx = this.storage.createTransaction();
+        tx.updateBlock({
+          id: ancestorId,
+          folded: false,
+        });
+        tx.commit();
       }
     }
 
@@ -495,11 +488,12 @@ export class ProseMirrorEditor implements Editor {
         updatedIds.add(blockId);
 
         const newData = serialize(listItem.node.firstChild!);
-        this.storage.updateBlock(
-          blockId,
-          newData,
-          UpdateSources.localEditorContent(this.id)
-        );
+        const tx = this.storage.createTransaction();
+        tx.updateBlock({
+          id: blockId,
+          ...newData,
+        });
+        tx.commit();
       }
     }
   }

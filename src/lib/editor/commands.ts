@@ -4,7 +4,10 @@ import {
   type Command,
   type EditorState,
 } from "prosemirror-state";
-import type { BlockStorage, EventMetadata } from "../storage/interface";
+import type {
+  BlockStorage,
+  BlockTransactionMetadata,
+} from "../storage/interface";
 import type { BlockId } from "@/lib/blocks/types";
 import {
   buildBlockRefStr,
@@ -13,7 +16,7 @@ import {
   oldDeserialize,
 } from "./utils";
 import { outlinerSchema } from "./schema";
-import { UpdateSources } from "./update-source";
+import { Node } from "prosemirror-model";
 
 export function findCurrListItem(state: EditorState) {
   const { $from } = state.selection;
@@ -24,6 +27,12 @@ export function findCurrListItem(state: EditorState) {
     }
   }
   return null;
+}
+
+export function isEmptyListItem(node: Node): boolean {
+  const pNode = node.firstChild;
+  if (!pNode) return true;
+  return pNode.content.size === 0;
 }
 
 export function promoteSelected(storage: BlockStorage): Command {
@@ -39,14 +48,11 @@ export function promoteSelected(storage: BlockStorage): Command {
 
     // 缩进后，光标位置仍然保持在当前块的相同位置
     const offset = state.selection.from - (pos + 2);
-    const metadata: EventMetadata = {
-      selection: { blockId, offset },
-    };
-    storage.promoteBlock(
-      blockId,
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId, offset };
+    tx.promoteBlock(blockId);
+    tx.commit();
     return true;
   };
 }
@@ -64,10 +70,11 @@ export function demoteSelected(storage: BlockStorage): Command {
 
     // 反缩进后，光标位置仍然保持在当前块的相同位置
     const offset = state.selection.from - (pos + 2);
-    const metadata: EventMetadata = {
-      selection: { blockId, offset },
-    };
-    storage.demoteBlock(blockId, UpdateSources.localEditorStructural, metadata);
+
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId, offset };
+    tx.demoteBlock(blockId);
+    tx.commit();
     return true;
   };
 }
@@ -160,32 +167,27 @@ export function splitListItem(storage: BlockStorage): Command {
       focusOffset = 0; // 光标在新块开头
     }
 
+    // 创建事务
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId: focusBlockId, offset: focusOffset };
+
     // 1. 更新当前块的内容
-    storage.updateBlock(
-      updateBlockId,
-      {
-        content: updateContent,
-      },
-      UpdateSources.localEditorStructural
-    );
+    tx.updateBlock({
+      id: updateBlockId,
+      content: updateContent,
+    });
 
     // 2. 添加新块
-    const metadata: EventMetadata = {
-      selection: { blockId: focusBlockId, offset: focusOffset },
-    };
-    storage.addBlock(
-      {
-        id: newBlockId,
-        type: "text",
-        folded: false,
-        parentId: currentBlock.get().parentId,
-        fractionalIndex: newFractionalIndex,
-        content: newBlockContent,
-      },
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+    tx.addBlock({
+      id: newBlockId,
+      type: "text",
+      folded: false,
+      parentId: currentBlock.get().parentId,
+      fractionalIndex: newFractionalIndex,
+      content: newBlockContent,
+    });
 
+    tx.commit();
     return true;
   };
 }
@@ -274,8 +276,10 @@ export function deleteEmptyListItem(
       return false;
     }
 
-    const metadata: EventMetadata = { selection: focusTarget };
-    storage.deleteBlock(blockId, UpdateSources.localEditorStructural, metadata);
+    const tx = storage.createTransaction();
+    tx.metadata.selection = focusTarget;
+    tx.deleteBlock(blockId);
+    tx.commit();
 
     return true;
   };
@@ -390,9 +394,6 @@ export function toggleFocusedFoldState(
     const currentFoldedState = currentBlock.get().folded;
     // 保留光标位置
     const offset = state.selection.from - (pos + 2);
-    const metadata: EventMetadata = {
-      selection: { blockId: blockId2, offset },
-    };
 
     targetState ??= !currentFoldedState;
 
@@ -400,12 +401,13 @@ export function toggleFocusedFoldState(
       return false;
     }
 
-    storage.updateBlock(
-      blockId2,
-      { folded: targetState },
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId: blockId2, offset };
+    tx.updateBlock({
+      id: blockId2,
+      folded: targetState,
+    });
+    tx.commit();
     return true;
   };
 }
@@ -479,17 +481,14 @@ export function moveBlockUp(storage: BlockStorage): Command {
 
     // 保留光标位置
     const offset = state.selection.from - (pos + 2);
-    const metadata: EventMetadata = {
-      selection: { blockId, offset },
-    };
 
-    // 更新当前块的 fractionalIndex
-    storage.updateBlock(
-      blockId,
-      { fractionalIndex: newFractionalIndex },
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId, offset };
+    tx.updateBlock({
+      id: blockId,
+      fractionalIndex: newFractionalIndex,
+    });
+    tx.commit();
 
     return true;
   };
@@ -540,17 +539,14 @@ export function moveBlockDown(storage: BlockStorage): Command {
 
     // 保留光标位置
     const offset = state.selection.from - (pos + 2);
-    const metadata: EventMetadata = {
-      selection: { blockId, offset },
-    };
 
-    // 更新当前块的 fractionalIndex
-    storage.updateBlock(
-      blockId,
-      { fractionalIndex: newFractionalIndex },
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId, offset };
+    tx.updateBlock({
+      id: blockId,
+      fractionalIndex: newFractionalIndex,
+    });
+    tx.commit();
 
     return true;
   };
@@ -674,22 +670,20 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
 
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
-    const metadata: EventMetadata = {
-      selection: { blockId: prevBlockId, offset: mergePoint },
-    };
+
+    const tx = storage.createTransaction();
+    tx.metadata.selection = { blockId: prevBlockId, offset: mergePoint };
 
     // 1. 更新前一个块的内容为合并后的内容
-    storage.updateBlock(
-      prevBlockId,
-      {
-        content: mergedSerialized,
-      },
-      UpdateSources.localEditorStructural,
-      metadata
-    );
+    tx.updateBlock({
+      id: prevBlockId,
+      content: mergedSerialized,
+    });
 
     // 2. 删除当前块
-    storage.deleteBlock(currentBlockId, UpdateSources.localEditorStructural);
+    tx.deleteBlock(currentBlockId);
+
+    tx.commit();
 
     return true;
   };

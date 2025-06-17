@@ -5,15 +5,19 @@ import { UpdateSources } from "../editor/update-source";
 import { Observable } from "../reactivity/observable";
 import type {
   BlockStorage,
+  BlockTransaction,
+  BlockTransactionResult,
   BlockStorageEvent,
   BlockStorageEventListener,
+  BlockOp,
+  FinishedBlockOp,
   AddBlockParams,
   UpdateBlockParams,
   UpdateSource,
-  EventMetadata,
+  BlockTransactionMetadata,
   ImportOptions,
   ImportResult,
-  ImportPrecheck,
+  PreCheckImportResult,
 } from "./interface";
 import { Node as ProseMirrorNode } from "prosemirror-model";
 
@@ -48,6 +52,15 @@ function generateNewBlockId(): string {
 }
 
 /**
+ * 生成事务ID
+ */
+function generateTransactionId(): string {
+  return (
+    "tx_" + Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+  );
+}
+
+/**
  * 验证块数据格式
  */
 function isValidBlock(obj: any): obj is Block {
@@ -75,6 +88,186 @@ function getBlockRefs(node: ProseMirrorNode): BlockId[] {
     }
   });
   return res;
+}
+
+/**
+ * 块事务实现
+ */
+class BlockTransactionImpl implements BlockTransaction {
+  public readonly txId: string;
+  public readonly ops: BlockOp[] = [];
+  public readonly source: UpdateSource;
+  public readonly metadata: BlockTransactionMetadata;
+
+  private storage: BaseBlockStorage;
+
+  constructor(
+    storage: BaseBlockStorage,
+    source: UpdateSource,
+    metadata: BlockTransactionMetadata = {}
+  ) {
+    this.txId = generateTransactionId();
+    this.storage = storage;
+    this.source = source;
+    this.metadata = metadata;
+  }
+
+  addBlock(params: AddBlockParams): BlockTransaction {
+    this.ops.push({ type: "add", params });
+    return this;
+  }
+
+  updateBlock(params: UpdateBlockParams): BlockTransaction {
+    this.ops.push({ type: "update", params });
+    return this;
+  }
+
+  deleteBlock(blockId: BlockId): BlockTransaction {
+    this.ops.push({ type: "delete", blockId });
+    return this;
+  }
+
+  demoteBlock(blockId: BlockId): BlockTransaction {
+    // 获取块和其兄弟块
+    const blockToDemote = this.storage.getBlock(blockId);
+    if (!blockToDemote) return this;
+
+    const parent = blockToDemote.get().parentBlock;
+    const siblings = parent
+      ? parent.get().childrenBlocks
+      : this.storage.getRootBlocks();
+    const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
+
+    if (currentIndex < 1) {
+      return this;
+    }
+
+    const newParent = siblings[currentIndex - 1];
+    const newSiblings = newParent.get().childrenBlocks;
+
+    const lastChildIndex =
+      newSiblings.length > 0
+        ? newSiblings[newSiblings.length - 1].get().fractionalIndex
+        : 0;
+    const newFractionalIndex = lastChildIndex + 1;
+
+    this.updateBlock({
+      id: blockId,
+      parentId: newParent.get().id,
+      fractionalIndex: newFractionalIndex,
+    });
+
+    return this;
+  }
+
+  promoteBlock(blockId: BlockId): BlockTransaction {
+    const blockToPromote = this.storage.getBlock(blockId);
+    if (!blockToPromote) return this;
+
+    const parent = blockToPromote.get().parentBlock;
+    if (!parent) return this;
+
+    const grandParent = parent.get().parentBlock;
+
+    const grandParentChildren = grandParent
+      ? grandParent.get().childrenBlocks
+      : this.storage.getRootBlocks();
+    const parentIndexInGrandParent = grandParentChildren.findIndex(
+      (b) => b.get().id === parent.get().id
+    );
+
+    const parentFractionalIndex = parent.get().fractionalIndex;
+    const nextParentSibling =
+      parentIndexInGrandParent > -1 &&
+      parentIndexInGrandParent < grandParentChildren.length - 1
+        ? grandParentChildren[parentIndexInGrandParent + 1]
+        : null;
+    const nextParentSiblingFractionalIndex = nextParentSibling
+      ? nextParentSibling.get().fractionalIndex
+      : parentFractionalIndex + 2;
+    const newFractionalIndex =
+      (parentFractionalIndex + nextParentSiblingFractionalIndex) / 2;
+
+    this.updateBlock({
+      id: blockId,
+      parentId: grandParent ? grandParent.get().id : null,
+      fractionalIndex: newFractionalIndex,
+    });
+
+    return this;
+  }
+
+  insertAfterWithChildren(
+    targetBlockId: BlockId,
+    allBlocks: Block[]
+  ): BlockTransaction {
+    if (allBlocks.length === 0) return this;
+
+    const targetBlock = this.storage.getBlock(targetBlockId);
+    if (!targetBlock) return this;
+
+    // 分离根块和非根块
+    const rootBlocks: Block[] = [];
+    const nonRootBlocks: Block[] = [];
+
+    for (const block of allBlocks) {
+      if (block.parentId === null) {
+        rootBlocks.push(block);
+      } else {
+        nonRootBlocks.push(block);
+      }
+    }
+
+    // 1. 先插入根块到目标位置
+    if (rootBlocks.length > 0) {
+      const targetBlockData = targetBlock.get();
+      const parentBlock = targetBlockData.parentBlock;
+      const siblings = parentBlock
+        ? parentBlock.get().childrenBlocks
+        : this.storage.getRootBlocks();
+      const targetIndex = siblings.findIndex(
+        (b) => b.get().id === targetBlockId
+      );
+
+      if (targetIndex !== -1) {
+        // 计算插入位置的分数索引范围
+        const targetFractionalIndex = targetBlockData.fractionalIndex;
+        const nextSibling =
+          targetIndex < siblings.length - 1 ? siblings[targetIndex + 1] : null;
+        const nextSiblingFractionalIndex = nextSibling
+          ? nextSibling.get().fractionalIndex
+          : targetFractionalIndex + 2;
+
+        // 计算每个根块的分数索引
+        const gap =
+          (nextSiblingFractionalIndex - targetFractionalIndex) /
+          (rootBlocks.length + 1);
+
+        // 准备根块
+        rootBlocks.forEach((block, index) => {
+          const newFractionalIndex = targetFractionalIndex + gap * (index + 1);
+          this.addBlock({
+            ...block,
+            parentId: targetBlockData.parentId,
+            fractionalIndex: newFractionalIndex,
+          });
+        });
+      }
+    }
+
+    // 2. 然后插入非根块（此时它们的父块已经存在）
+    if (nonRootBlocks.length > 0) {
+      nonRootBlocks.forEach((block) => {
+        this.addBlock(block);
+      });
+    }
+
+    return this;
+  }
+
+  commit(): BlockTransactionResult {
+    return this.storage.commitTransaction(this);
+  }
 }
 
 export class BaseBlockStorage implements BlockStorage {
@@ -106,7 +299,7 @@ export class BaseBlockStorage implements BlockStorage {
       const nodeJson = JSON.parse(block.content);
       const node = outlinerSchema.nodeFromJSON(nodeJson);
       const refs = getBlockRefs(node);
-      for (const ref of refs) this.addInRef(block.id, ref);
+      for (const ref of refs) this.addInRef(ref, block.id);
     }
 
     // 补全之前没初始化的 parentBlock 和 childrenBlocks
@@ -219,23 +412,81 @@ export class BaseBlockStorage implements BlockStorage {
     }
   }
 
-  async preCheckImport(content: string): Promise<ImportPrecheck> {
-    const result: ImportPrecheck = {
+  forEachBlock(cb: (block: BlockLoaded) => boolean): void {
+    for (const block of this.blocks.values()) {
+      if (!cb(block)) break;
+    }
+  }
+
+  getBlock(id: BlockId): BlockLoaded | null {
+    return this.blocks.get(id) || null;
+  }
+
+  getRootBlocks(): BlockLoaded[] {
+    const roots: BlockLoaded[] = [];
+    for (const block of this.blocks.values()) {
+      if (block.get().parentId === null) {
+        roots.push(block);
+      }
+    }
+    roots.sort((a, b) => a.get().fractionalIndex - b.get().fractionalIndex);
+    return roots;
+  }
+
+  getInRefs(id: BlockId): Observable<Set<BlockId>> {
+    let res = this.inRefs.get(id);
+    if (res) return res;
+    else {
+      res = new Observable(new Set());
+      this.inRefs.set(id, res);
+      return res;
+    }
+  }
+
+  export(): void {
+    const allBlocks: Block[] = [];
+    for (const blockLoaded of this.blocks.values()) {
+      allBlocks.push(toBlock(blockLoaded));
+    }
+    allBlocks.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
+    const jsonlContent = allBlocks
+      .map((block) => JSON.stringify(block))
+      .join("\n");
+
+    // 生成文件名（包含时间戳）
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, -5);
+    const filename = `blocks-export-${timestamp}.jsonl`;
+
+    // 下载
+    downloadFile(jsonlContent, filename, "application/jsonl");
+  }
+
+  async preCheckImport(content: string): Promise<PreCheckImportResult> {
+    const result: PreCheckImportResult = {
       valid: false,
-      totalBlocks: 0,
-      conflictingIds: [],
       errors: [],
+      conflictingIds: [],
     };
 
     try {
+      // 解析导入内容
       const lines = content
         .trim()
         .split("\n")
         .filter((line) => line.trim());
-      const validBlocks: Block[] = [];
-      const seenIds = new Set<string>();
 
-      // 解析和验证所有块
+      if (lines.length === 0) {
+        result.errors.push("导入内容为空");
+        return result;
+      }
+
+      const blocksToImport: Block[] = [];
+      const existingIds = new Set<string>();
+
+      // 第一阶段：解析和验证所有块
       for (const [index, line] of lines.entries()) {
         try {
           const blockData = JSON.parse(line);
@@ -245,31 +496,33 @@ export class BaseBlockStorage implements BlockStorage {
             continue;
           }
 
-          // 检查重复ID
-          if (seenIds.has(blockData.id)) {
+          // 检查 ID 是否重复
+          if (existingIds.has(blockData.id)) {
             result.errors.push(`行 ${index + 1}: 重复的块ID ${blockData.id}`);
             continue;
           }
-          seenIds.add(blockData.id);
+          existingIds.add(blockData.id);
 
-          // 检查是否与现有数据冲突
-          if (this.getBlock(blockData.id)) {
+          // 检查是否与现有块冲突
+          const existingBlock = this.getBlock(blockData.id);
+          if (existingBlock) {
             result.conflictingIds.push(blockData.id);
           }
 
-          validBlocks.push(blockData);
+          blocksToImport.push(blockData);
         } catch (error) {
           result.errors.push(`行 ${index + 1}: JSON解析错误 - ${error}`);
         }
       }
 
-      // 验证父子关系
-      const validIds = new Set(validBlocks.map((b) => b.id));
-      for (const block of validBlocks) {
+      // 第二阶段：验证父子关系
+      const importedIds = new Set(blocksToImport.map((b) => b.id));
+      for (const block of blocksToImport) {
         if (block.parentId) {
+          // 检查父块是否存在（在现有数据或即将导入的数据中）
           const parentExists =
             this.getBlock(block.parentId) !== null ||
-            validIds.has(block.parentId);
+            importedIds.has(block.parentId);
           if (!parentExists) {
             result.errors.push(
               `块 ${block.id} 的父块 ${block.parentId} 不存在`
@@ -278,7 +531,7 @@ export class BaseBlockStorage implements BlockStorage {
         }
       }
 
-      result.totalBlocks = validBlocks.length;
+      // 如果没有错误，则认为是有效的
       result.valid = result.errors.length === 0;
       return result;
     } catch (error) {
@@ -286,6 +539,7 @@ export class BaseBlockStorage implements BlockStorage {
       return result;
     }
   }
+
   async import(
     content: string,
     options?: ImportOptions
@@ -307,7 +561,13 @@ export class BaseBlockStorage implements BlockStorage {
     try {
       // 如果需要，先清空现有数据
       if (defaultOptions.clearExisting) {
-        this.clear("import");
+        const tx = this.createTransaction();
+        // 删除所有块
+        this.forEachBlock((block) => {
+          tx.deleteBlock(block.get().id);
+          return true;
+        });
+        tx.commit();
       }
 
       // 解析导入内容
@@ -364,19 +624,21 @@ export class BaseBlockStorage implements BlockStorage {
         }
 
         // 还需要检查现有数据中是否有引用被重新映射的ID
-        // 这对于部分导入场景很重要
+        const tx = this.createTransaction();
         this.forEachBlock((existingBlock) => {
           const blockData = existingBlock.get();
           if (blockData.parentId && idMapping.has(blockData.parentId)) {
             // 现有块引用了一个被重新映射的ID，需要更新引用
-            this.updateBlock(
-              blockData.id,
-              { parentId: idMapping.get(blockData.parentId)! },
-              UpdateSources.localImport
-            );
+            tx.updateBlock({
+              id: blockData.id,
+              parentId: idMapping.get(blockData.parentId)!,
+            });
           }
           return true;
         });
+        if (tx.ops.length > 0) {
+          tx.commit();
+        }
       }
 
       // 第三阶段：验证父子关系
@@ -405,6 +667,7 @@ export class BaseBlockStorage implements BlockStorage {
       }
 
       // 第四阶段：执行导入
+      const tx = this.createTransaction();
       for (const block of blocksToImport) {
         try {
           const existingBlock = this.getBlock(block.id);
@@ -413,24 +676,25 @@ export class BaseBlockStorage implements BlockStorage {
             defaultOptions.conflictResolution === "overwrite"
           ) {
             // 更新现有块（注意：type字段不能更新，只能更新其他字段）
-            this.updateBlock(
-              block.id,
-              {
-                parentId: block.parentId,
-                fractionalIndex: block.fractionalIndex,
-                content: block.content,
-                folded: block.folded,
-              },
-              UpdateSources.localImport
-            );
+            tx.updateBlock({
+              id: block.id,
+              parentId: block.parentId,
+              fractionalIndex: block.fractionalIndex,
+              content: block.content,
+              folded: block.folded,
+            });
           } else {
             // 添加新块
-            this.addBlock(block, UpdateSources.localImport);
+            tx.addBlock(block);
           }
           result.imported++;
         } catch (error) {
           result.errors.push(`导入块 ${block.id} 时出错: ${error}`);
         }
+      }
+
+      if (tx.ops.length > 0) {
+        tx.commit();
       }
 
       result.success = result.errors.length === 0;
@@ -446,44 +710,88 @@ export class BaseBlockStorage implements BlockStorage {
     }
   }
 
-  private emit(event: BlockStorageEvent) {
-    this.pendingEvents.push(event);
-    // 使用 setTimeout 确保在当前操作完成后发送批量事件
-    setTimeout(() => this.flushEvents(), 0);
-  }
+  clear(reason?: string): void {
+    // 创建一个事务来删除所有块
+    const tx = this.createTransaction();
 
-  private emitBatch(events: BlockStorageEvent[]) {
-    if (events.length === 0) return;
-    for (const listener of this.listeners) {
-      listener(events);
+    // 删除所有根块（这会递归删除子块）
+    const rootBlocks = this.getRootBlocks();
+    for (const rootBlock of rootBlocks) {
+      tx.deleteBlock(rootBlock.get().id);
     }
+
+    // 提交事务
+    tx.commit();
+
+    // 清除缓存
+    this.textContentCache.clear();
   }
 
-  private flushEvents() {
-    if (this.pendingEvents.length === 0) return;
-    const eventsToFlush = [...this.pendingEvents];
-    this.pendingEvents = [];
-    this.emitBatch(eventsToFlush);
+  createTransaction(): BlockTransaction {
+    return new BlockTransactionImpl(this, UpdateSources.localEditorStructural);
   }
 
-  forEachBlock(cb: (block: BlockLoaded) => boolean): void {
-    for (const block of this.blocks.values()) {
-      if (!cb(block)) break;
+  /**
+   * 提交事务（内部方法）
+   */
+  commitTransaction(tx: BlockTransactionImpl): BlockTransactionResult {
+    const finishedOps: FinishedBlockOp[] = [];
+
+    // 执行每个操作
+    for (const op of tx.ops) {
+      try {
+        switch (op.type) {
+          case "add":
+            const addedBlock = this.executeAddBlock(op.params);
+            if (addedBlock) {
+              finishedOps.push({ type: "add", block: addedBlock });
+            }
+            break;
+
+          case "update":
+            const updateResult = this.executeUpdateBlock(op.params);
+            if (updateResult) {
+              finishedOps.push({
+                type: "update",
+                newBlock: updateResult.newBlock,
+                oldBlock: updateResult.oldBlock,
+              });
+            }
+            break;
+
+          case "delete":
+            const deletedBlocks = this.executeDeleteBlock(op.blockId);
+            for (const deletedBlock of deletedBlocks) {
+              finishedOps.push({ type: "delete", deletedBlock });
+            }
+            break;
+        }
+      } catch (error) {
+        console.error(`执行操作失败:`, op, error);
+      }
     }
+
+    // 创建事务结果
+    const result: BlockTransactionResult = {
+      txId: tx.txId,
+      ops: finishedOps,
+      source: tx.source,
+      metadata: tx.metadata,
+    };
+
+    // 发送事务提交事件
+    this.emit({
+      type: "tx-committed",
+      result,
+    });
+
+    return result;
   }
 
-  getBlock(id: BlockId): BlockLoaded | null {
-    return this.blocks.get(id) || null;
-  }
-
-  addBlock(
-    params: AddBlockParams,
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
+  private executeAddBlock(params: AddBlockParams): BlockLoaded | null {
     if (this.blocks.has(params.id)) {
       console.warn(`ID 为 ${params.id} 的块已存在。`);
-      return;
+      return null;
     }
 
     const newBlockLoaded = new Observable<any>({
@@ -511,118 +819,15 @@ export class BaseBlockStorage implements BlockStorage {
       this.addInRef(ref, params.id); // params.id 引用了 ref
     }
 
-    this.emit({
-      type: "block-added",
-      newBlock: newBlockLoaded,
-      source,
-      metadata,
-    });
+    return newBlockLoaded;
   }
 
-  addBlocks(
-    blocks: Block[],
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    if (blocks.length === 0) return;
-
-    // 检查是否有重复ID
-    const newBlockIds = new Set<string>();
-    for (const block of blocks) {
-      if (this.blocks.has(block.id)) {
-        console.warn(`ID 为 ${block.id} 的块已存在，批量插入被取消。`);
-        return;
-      }
-      if (newBlockIds.has(block.id)) {
-        console.warn(`批量插入中存在重复ID ${block.id}，批量插入被取消。`);
-        return;
-      }
-      newBlockIds.add(block.id);
-    }
-
-    // 第一阶段：创建所有块（不建立父子关系）
-    const newBlockLoadeds = new Map<BlockId, BlockLoaded>();
-
-    for (const block of blocks) {
-      const newBlockLoaded = new Observable<any>({
-        ...block,
-        parentBlock: null,
-        childrenBlocks: [],
-      });
-
-      this.blocks.set(block.id, newBlockLoaded);
-      newBlockLoadeds.set(block.id, newBlockLoaded);
-
-      // 更新 linkings
-      const nodeJson = JSON.parse(block.content);
-      const node = outlinerSchema.nodeFromJSON(nodeJson);
-      const refs = getBlockRefs(node);
-      for (const ref of refs) {
-        this.addInRef(ref, block.id);
-      }
-    }
-
-    // 第二阶段：建立所有父子关系
-    for (const block of blocks) {
-      if (block.parentId) {
-        const childBlockLoaded = newBlockLoadeds.get(block.id)!;
-        // 先尝试在新块中找父块
-        let parentBlockLoaded = newBlockLoadeds.get(block.parentId);
-        // 如果没找到，再在现有块中找
-        if (!parentBlockLoaded) {
-          parentBlockLoaded = this.blocks.get(block.parentId);
-        }
-
-        if (parentBlockLoaded) {
-          childBlockLoaded.update(
-            (val) => (val.parentBlock = parentBlockLoaded)
-          );
-          parentBlockLoaded.update((val) =>
-            val.childrenBlocks.push(childBlockLoaded)
-          );
-        } else {
-          console.warn(`块 ${block.id} 的父块 ${block.parentId} 不存在`);
-        }
-      }
-    }
-
-    // 第三阶段：对所有受影响的父块进行排序
-    const parentsToSort = new Set<BlockLoaded>();
-    for (const block of blocks) {
-      if (block.parentId) {
-        const parentBlockLoaded = this.blocks.get(block.parentId);
-        if (parentBlockLoaded) {
-          parentsToSort.add(parentBlockLoaded);
-        }
-      }
-    }
-
-    for (const parent of parentsToSort) {
-      sortChildren(parent);
-    }
-
-    // 第四阶段：触发所有添加事件（批量发送）
-    const events: BlockStorageEvent[] = [];
-    for (const blockId of newBlockIds) {
-      const newBlockLoaded = newBlockLoadeds.get(blockId)!;
-      events.push({
-        type: "block-added",
-        newBlock: newBlockLoaded,
-        source,
-        metadata,
-      });
-    }
-    this.emitBatch(events);
-  }
-
-  updateBlock(
-    id: BlockId,
-    params: UpdateBlockParams,
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    const blockToUpdate = this.blocks.get(id);
-    if (!blockToUpdate) return;
+  private executeUpdateBlock(params: UpdateBlockParams): {
+    oldBlock: BlockLoaded;
+    newBlock: BlockLoaded;
+  } | null {
+    const blockToUpdate = this.blocks.get(params.id);
+    if (!blockToUpdate) return null;
 
     const oldBlockSnapshot = new Observable({ ...blockToUpdate.get() });
     const oldParentId = blockToUpdate.get().parentId;
@@ -643,7 +848,7 @@ export class BaseBlockStorage implements BlockStorage {
       const oldNode = outlinerSchema.nodeFromJSON(oldNodeJson);
       const oldRefs = getBlockRefs(oldNode);
       for (const ref of oldRefs) {
-        this.removeInRef(ref, id); // ref 不再引用 id
+        this.removeInRef(ref, params.id); // ref 不再引用 params.id
       }
 
       // 添加所有新的引用
@@ -651,14 +856,16 @@ export class BaseBlockStorage implements BlockStorage {
       const newNode = outlinerSchema.nodeFromJSON(newNodeJson);
       const newRefs = getBlockRefs(newNode);
       for (const ref of newRefs) {
-        this.addInRef(id, ref); // ref 引用了 id
+        this.addInRef(ref, params.id); // ref 引用了 params.id
       }
     }
 
     if (hasParentChanged) {
       if (oldParent) {
         oldParent.update((val) => {
-          const index = val.childrenBlocks.findIndex((b) => b.get().id === id);
+          const index = val.childrenBlocks.findIndex(
+            (b) => b.get().id === params.id
+          );
           if (index > -1) val.childrenBlocks.splice(index, 1);
         });
       }
@@ -668,7 +875,7 @@ export class BaseBlockStorage implements BlockStorage {
         : null;
       if (newParent) {
         newParent.update((val) => {
-          if (!val.childrenBlocks.some((b) => b.get().id === id)) {
+          if (!val.childrenBlocks.some((b) => b.get().id === params.id)) {
             val.childrenBlocks.push(blockToUpdate);
           }
         });
@@ -684,25 +891,45 @@ export class BaseBlockStorage implements BlockStorage {
       }
     }
 
-    this.emit({
-      type: "block-updated",
+    return {
       oldBlock: oldBlockSnapshot,
       newBlock: blockToUpdate,
-      source,
-      metadata,
-    });
+    };
   }
 
-  deleteBlock(
-    id: BlockId,
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
+  private executeDeleteBlock(id: BlockId): BlockLoaded[] {
     // 收集所有要删除的块
     const blocksToDelete = this.collectBlocksToDelete(id);
 
-    // 批量删除和发送事件
-    this.deleteBlocksBatch(blocksToDelete, source, metadata);
+    // 执行删除
+    for (const blockToDelete of blocksToDelete) {
+      const blockId = blockToDelete.get().id;
+
+      // 从父块的子块列表中移除
+      const parent = blockToDelete.get().parentBlock;
+      parent?.update((val) => {
+        const index = val.childrenBlocks.findIndex(
+          (b) => b.get().id === blockId
+        );
+        if (index > -1) val.childrenBlocks.splice(index, 1);
+      });
+
+      // 从存储中删除
+      this.blocks.delete(blockId);
+
+      // 更新 linkings，删除所有引用
+      const nodeJson = JSON.parse(blockToDelete.get().content);
+      const node = outlinerSchema.nodeFromJSON(nodeJson);
+      const refs = getBlockRefs(node);
+      for (const ref of refs) {
+        this.removeInRef(ref, blockId); // ref 不再引用 blockId
+      }
+    }
+
+    // 清除文本内容缓存
+    this.invalidateTextContentCache();
+
+    return blocksToDelete;
   }
 
   private collectBlocksToDelete(id: BlockId): BlockLoaded[] {
@@ -730,104 +957,24 @@ export class BaseBlockStorage implements BlockStorage {
     return blocksToDelete;
   }
 
-  private deleteBlocksBatch(
-    blocksToDelete: BlockLoaded[],
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    const events: BlockStorageEvent[] = [];
-
-    for (const blockToDelete of blocksToDelete) {
-      const id = blockToDelete.get().id;
-
-      // 从父块的子块列表中移除
-      const parent = blockToDelete.get().parentBlock;
-      parent?.update((val) => {
-        const index = val.childrenBlocks.findIndex((b) => b.get().id === id);
-        if (index > -1) val.childrenBlocks.splice(index, 1);
-      });
-
-      // 从存储中删除
-      this.blocks.delete(id);
-
-      // 更新 linkings，删除所有引用
-      const nodeJson = JSON.parse(blockToDelete.get().content);
-      const node = outlinerSchema.nodeFromJSON(nodeJson);
-      const refs = getBlockRefs(node);
-      for (const ref of refs) {
-        this.removeInRef(ref, id); // ref 不再引用 id
-      }
-
-      // 收集删除事件
-      events.push({
-        type: "block-deleted",
-        deleted: blockToDelete,
-        source,
-        metadata,
-      });
-    }
-
-    // 清除文本内容缓存
-    this.invalidateTextContentCache();
-
-    // 批量发送删除事件
-    this.emitBatch(events);
+  private emit(event: BlockStorageEvent) {
+    this.pendingEvents.push(event);
+    // 使用 setTimeout 确保在当前操作完成后发送批量事件
+    setTimeout(() => this.flushEvents(), 0);
   }
 
-  clear(source?: UpdateSource): void {
-    const allBlocks = Array.from(this.blocks.values());
-    this.blocks.clear();
-    this.invalidateTextContentCache();
-
-    // 批量发送删除事件
-    const events: BlockStorageEvent[] = allBlocks.map((block) => ({
-      type: "block-deleted",
-      deleted: block,
-      source,
-    }));
-    this.emitBatch(events);
+  private flushEvents() {
+    if (this.pendingEvents.length === 0) return;
+    const eventsToFlush = [...this.pendingEvents];
+    this.pendingEvents = [];
+    this.emitBatch(eventsToFlush);
   }
 
-  getRootBlocks(): BlockLoaded[] {
-    const roots: BlockLoaded[] = [];
-    for (const block of this.blocks.values()) {
-      if (block.get().parentId === null) {
-        roots.push(block);
-      }
+  private emitBatch(events: BlockStorageEvent[]) {
+    if (events.length === 0) return;
+    for (const listener of this.listeners) {
+      listener(events);
     }
-    roots.sort((a, b) => a.get().fractionalIndex - b.get().fractionalIndex);
-    return roots;
-  }
-
-  getInRefs(id: BlockId): Observable<Set<BlockId>> {
-    let res = this.inRefs.get(id);
-    if (res) return res;
-    else {
-      res = new Observable(new Set());
-      this.inRefs.set(id, res);
-      return res;
-    }
-  }
-
-  export(): void {
-    const allBlocks: Block[] = [];
-    for (const blockLoaded of this.blocks.values()) {
-      allBlocks.push(toBlock(blockLoaded));
-    }
-    allBlocks.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
-    const jsonlContent = allBlocks
-      .map((block) => JSON.stringify(block))
-      .join("\n");
-
-    // 生成文件名（包含时间戳）
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .slice(0, -5);
-    const filename = `blocks-export-${timestamp}.jsonl`;
-
-    // 下载
-    downloadFile(jsonlContent, filename, "application/jsonl");
   }
 
   addEventListener(listener: BlockStorageEventListener): void {
@@ -836,155 +983,5 @@ export class BaseBlockStorage implements BlockStorage {
 
   removeEventListener(listener: BlockStorageEventListener): void {
     this.listeners = this.listeners.filter((l) => l !== listener);
-  }
-
-  demoteBlock(
-    id: BlockId,
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    const blockToDemote = this.blocks.get(id);
-    if (!blockToDemote) return;
-
-    const parent = blockToDemote.get().parentBlock;
-    const siblings = parent
-      ? parent.get().childrenBlocks
-      : this.getRootBlocks();
-    const currentIndex = siblings.findIndex((b) => b.get().id === id);
-
-    if (currentIndex < 1) {
-      return;
-    }
-
-    const newParent = siblings[currentIndex - 1];
-    const newSiblings = newParent.get().childrenBlocks;
-
-    const lastChildIndex =
-      newSiblings.length > 0
-        ? newSiblings[newSiblings.length - 1].get().fractionalIndex
-        : 0;
-    const newFractionalIndex = lastChildIndex + 1;
-
-    this.updateBlock(
-      id,
-      {
-        parentId: newParent.get().id,
-        fractionalIndex: newFractionalIndex,
-      },
-      source,
-      metadata
-    );
-  }
-
-  promoteBlock(
-    id: BlockId,
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    const blockToPromote = this.blocks.get(id);
-    if (!blockToPromote) return;
-
-    const parent = blockToPromote.get().parentBlock;
-    if (!parent) return;
-
-    const grandParent = parent.get().parentBlock;
-
-    const grandParentChildren = grandParent
-      ? grandParent.get().childrenBlocks
-      : this.getRootBlocks();
-    const parentIndexInGrandParent = grandParentChildren.findIndex(
-      (b) => b.get().id === parent.get().id
-    );
-
-    const parentFractionalIndex = parent.get().fractionalIndex;
-    const nextParentSibling =
-      parentIndexInGrandParent > -1 &&
-      parentIndexInGrandParent < grandParentChildren.length - 1
-        ? grandParentChildren[parentIndexInGrandParent + 1]
-        : null;
-    const nextParentSiblingFractionalIndex = nextParentSibling
-      ? nextParentSibling.get().fractionalIndex
-      : parentFractionalIndex + 2;
-    const newFractionalIndex =
-      (parentFractionalIndex + nextParentSiblingFractionalIndex) / 2;
-
-    this.updateBlock(
-      id,
-      {
-        parentId: grandParent ? grandParent.get().id : null,
-        fractionalIndex: newFractionalIndex,
-      },
-      source,
-      metadata
-    );
-  }
-
-  insertAfterWithChildren(
-    targetBlockId: BlockId,
-    allBlocks: Block[],
-    source?: UpdateSource,
-    metadata?: EventMetadata
-  ): void {
-    if (allBlocks.length === 0) return;
-
-    const targetBlock = this.blocks.get(targetBlockId);
-    if (!targetBlock) return;
-
-    // 分离根块和非根块
-    const rootBlocks: Block[] = [];
-    const nonRootBlocks: Block[] = [];
-
-    for (const block of allBlocks) {
-      if (block.parentId === null) {
-        rootBlocks.push(block);
-      } else {
-        nonRootBlocks.push(block);
-      }
-    }
-
-    // 1. 先插入根块到目标位置
-    if (rootBlocks.length > 0) {
-      const targetBlockData = targetBlock.get();
-      const parentBlock = targetBlockData.parentBlock;
-      const siblings = parentBlock
-        ? parentBlock.get().childrenBlocks
-        : this.getRootBlocks();
-      const targetIndex = siblings.findIndex(
-        (b) => b.get().id === targetBlockId
-      );
-
-      if (targetIndex !== -1) {
-        // 计算插入位置的分数索引范围
-        const targetFractionalIndex = targetBlockData.fractionalIndex;
-        const nextSibling =
-          targetIndex < siblings.length - 1 ? siblings[targetIndex + 1] : null;
-        const nextSiblingFractionalIndex = nextSibling
-          ? nextSibling.get().fractionalIndex
-          : targetFractionalIndex + 2;
-
-        // 计算每个根块的分数索引
-        const gap =
-          (nextSiblingFractionalIndex - targetFractionalIndex) /
-          (rootBlocks.length + 1);
-
-        // 准备根块
-        const rootBlocksToInsert: Block[] = rootBlocks.map((block, index) => {
-          const newFractionalIndex = targetFractionalIndex + gap * (index + 1);
-          return {
-            ...block,
-            parentId: targetBlockData.parentId,
-            fractionalIndex: newFractionalIndex,
-          };
-        });
-
-        // 使用 addBlocks 插入根块
-        this.addBlocks(rootBlocksToInsert, source, metadata);
-      }
-    }
-
-    // 2. 然后插入非根块（此时它们的父块已经存在）
-    if (nonRootBlocks.length > 0) {
-      this.addBlocks(nonRootBlocks, source, metadata);
-    }
   }
 }

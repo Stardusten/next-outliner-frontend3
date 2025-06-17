@@ -45,11 +45,27 @@ export class FullTextIndex {
 
     this.storage.addEventListener((events: BlockStorageEventBatch) => {
       for (const e of events) {
-        const blockId =
-          e.type === "block-added" || e.type === "block-updated"
-            ? e.newBlock.get().id
-            : e.deleted.get().id;
-        this.dirtySet.add(blockId);
+        if (e.type === "tx-committed") {
+          // 处理事务中的所有操作
+          for (const op of e.result.ops) {
+            let blockId: BlockId;
+
+            switch (op.type) {
+              case "add":
+                blockId = op.block.get().id;
+                this.dirtySet.add(blockId);
+                break;
+              case "update":
+                blockId = op.newBlock.get().id;
+                this.dirtySet.add(blockId);
+                break;
+              case "delete":
+                blockId = op.deletedBlock.get().id;
+                this.dirtySet.add(blockId);
+                break;
+            }
+          }
+        }
       }
     });
   }

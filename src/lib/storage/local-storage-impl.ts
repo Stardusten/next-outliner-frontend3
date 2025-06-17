@@ -1,8 +1,7 @@
-import type { Block, BlockId, BlockLoaded } from "../blocks/types";
+import type { Block, BlockId } from "../blocks/types";
 import { sortChildren, toBlock } from "../blocks/utils";
 import { Observable } from "../reactivity/observable";
 import { BaseBlockStorage } from "./base-impl";
-import type { AddBlockParams, EventMetadata, UpdateBlockParams, UpdateSource } from "./interface";
 
 const BLOCK_INDEX_KEY = "pm-block-index";
 const BLOCK_KEY_PREFIX = "pm-block-";
@@ -16,6 +15,7 @@ export class LocalStorageBlockStorage extends BaseBlockStorage {
     super([]); // 传空数组，因为我们要从 localStorage 加载
 
     this._loadFromStorage();
+    this._listenBlockStorageEvents();
 
     // 如果 localStorage 为空且提供了初始块，则用初始块填充
     if (this.blocks.size === 0 && initBlocks.length > 0) {
@@ -28,7 +28,7 @@ export class LocalStorageBlockStorage extends BaseBlockStorage {
             ...block,
             parentBlock: null,
             childrenBlocks: [],
-          }),
+          })
         );
       }
       this._saveIndexToStorage(blockIds);
@@ -54,6 +54,27 @@ export class LocalStorageBlockStorage extends BaseBlockStorage {
     }
   }
 
+  private _listenBlockStorageEvents(): void {
+    this.addEventListener((events) => {
+      for (const event of events) {
+        if (event.type === "tx-committed") {
+          for (const op of event.result.ops) {
+            if (op.type === "add") {
+              this._saveBlockToStorage(toBlock(op.block));
+              this._saveIndexToStorage();
+            } else if (op.type === "update") {
+              this._saveBlockToStorage(toBlock(op.newBlock));
+            } else if (op.type === "delete") {
+              const deleted = op.deletedBlock.get();
+              this._deleteBlockFromStorage(deleted.id);
+              this._saveIndexToStorage();
+            }
+          }
+        }
+      }
+    });
+  }
+
   private _loadFromStorage(): void {
     const indexJson = localStorage.getItem(BLOCK_INDEX_KEY);
     if (!indexJson) return;
@@ -69,7 +90,7 @@ export class LocalStorageBlockStorage extends BaseBlockStorage {
             ...block,
             parentBlock: null,
             childrenBlocks: [],
-          }),
+          })
         );
       }
     }
@@ -86,35 +107,5 @@ export class LocalStorageBlockStorage extends BaseBlockStorage {
   private _saveIndexToStorage(ids?: BlockId[]): void {
     const blockIds = ids ?? Array.from(this.blocks.keys());
     localStorage.setItem(BLOCK_INDEX_KEY, JSON.stringify(blockIds));
-  }
-
-  addBlock(params: AddBlockParams, source?: UpdateSource, metadata?: EventMetadata): void {
-    super.addBlock(params, source, metadata);
-    this._saveBlockToStorage(params);
-    this._saveIndexToStorage();
-  }
-
-  updateBlock(
-    id: BlockId,
-    params: UpdateBlockParams,
-    source?: UpdateSource,
-    metadata?: EventMetadata,
-  ): void {
-    super.updateBlock(id, params, source, metadata);
-    const block = this.getBlock(id);
-    if (block) {
-      this._saveBlockToStorage(toBlock(block));
-    }
-  }
-
-  deleteBlock(id: BlockId, source?: UpdateSource, metadata?: EventMetadata): void {
-    super.deleteBlock(id, source, metadata);
-    this._deleteBlockFromStorage(id);
-    this._saveIndexToStorage();
-  }
-
-  clear(source?: UpdateSource): void {
-    super.clear(source);
-    localStorage.clear();
   }
 }
