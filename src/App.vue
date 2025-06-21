@@ -119,11 +119,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import "prosemirror-view/style/prosemirror.css";
-import type { BlockStorage } from "./lib/storage/interface";
+import type { BlockStorage } from "./lib/storage/block/interface";
 import type { Editor, EditorEvent } from "./lib/editor/interface";
 import { ProseMirrorEditor } from "./lib/editor/impl";
 import { initializeBlockStorage } from "./utils/data";
-import { LocalStorageBlockStorage } from "./lib/storage/local-storage-impl";
+import { LocalStorageBlockStorage } from "./lib/storage/block/local-storage-impl";
 import { FullTextIndex } from "./lib/index/fulltext";
 import { Search, Menu } from "lucide-vue-next";
 import MoreMenu from "./components/MoreMenu.vue";

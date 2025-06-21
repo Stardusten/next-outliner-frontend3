@@ -1,8 +1,8 @@
-import type { Block, BlockId, BlockLoaded } from "../blocks/types";
-import { sortChildren, toBlock } from "../blocks/utils";
-import { outlinerSchema } from "../editor/schema";
-import { UpdateSources } from "../editor/update-source";
-import { Observable } from "../reactivity/observable";
+import type { Block, BlockId, BlockLoaded } from "../../blocks/types";
+import { sortChildren, toBlock } from "../../blocks/utils";
+import { outlinerSchema } from "../../editor/schema";
+import { UpdateSources } from "../../editor/update-source";
+import { Observable } from "../../reactivity/observable";
 import type {
   BlockStorage,
   BlockTransaction,

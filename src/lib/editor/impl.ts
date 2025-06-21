@@ -12,9 +12,14 @@ import type {
   BlockStorage,
   BlockStorageEvent,
   BlockStorageEventBatch,
+  BlockTransactionResult,
   SelectionMetadata,
-} from "../storage/interface";
-import { findCurrListItem, toggleFocusedFoldState } from "./commands";
+} from "../storage/block/interface";
+import {
+  findCurrListItem,
+  getCurrSelection,
+  toggleFocusedFoldState,
+} from "./commands";
 import { toCodeblock } from "./input-rules/to-codeblock";
 import type {
   Editor,
@@ -42,6 +47,7 @@ import {
 } from "./utils";
 import { createListItemNodeViewClass } from "./node-views/list-item";
 import { UpdateSources } from "./update-source";
+import { UndoRedoManager } from "./undo-redo";
 
 const PM_EDITOR_ID_PREFIX = "prosemirror-editor";
 const STORAGE_SYNC_META_KEY = "fromStorage";
@@ -56,6 +62,7 @@ export class ProseMirrorEditor implements Editor {
   private rootBlockIds: BlockId[];
   private storage: BlockStorage;
   private listeners: EventListener[] = [];
+  private undoRedoManager: UndoRedoManager;
   private storageListener: (events: BlockStorageEventBatch) => void;
   // 是否启用自动保存
   private autoSave: boolean;
@@ -67,6 +74,7 @@ export class ProseMirrorEditor implements Editor {
   constructor(storage: BlockStorage, config?: EditorConfig) {
     this.id = `${PM_EDITOR_ID_PREFIX}-${nanoid()}`;
     this.storage = storage;
+    this.undoRedoManager = new UndoRedoManager(storage, this.id);
     this.autoSave = config?.autoSave ?? true;
     this.rootBlockIds = config?.initialRootBlockIds ?? [];
 
@@ -74,30 +82,30 @@ export class ProseMirrorEditor implements Editor {
     this.storageListener = (events: BlockStorageEventBatch) => {
       if (!this.view) return;
 
-      // 找到是否有需要恢复的选区
-      let selection: SelectionMetadata | null = null;
+      // 收集所有的事务
+      const txs: BlockTransactionResult[] = [];
       for (const event of events) {
-        if (event.type === "tx-committed") {
-          const res = event.result;
-          if (
-            res.metadata.selection &&
-            res.source !== UpdateSources.localEditorContent(this.id)
-          ) {
-            selection = res.metadata.selection;
-          }
-        }
+        if (event.type === "tx-committed") txs.push(event.result);
+      }
+      if (txs.length === 0) return;
+
+      // 如果第一个事务没有 beforeSelection，则
+      // 把当前的选区信息保存到第一个事务的 metadata.beforeSelection 中
+      const firstTx = txs[0];
+      const currSelection = getCurrSelection(this.view.state);
+      if (firstTx.metadata.beforeSelection == null) {
+        firstTx.metadata.beforeSelection = currSelection ?? undefined;
       }
 
-      // 如果没有找到指定的选区，则保存当前选区作为回退
-      if (!selection) {
-        const sel = this.view.state.selection;
-        const listItemInfo = findCurrListItem(this.view.state);
-        if (listItemInfo && listItemInfo.node.attrs.blockId) {
-          selection = {
-            blockId: listItemInfo.node.attrs.blockId,
-            offset: sel.from - (listItemInfo.pos + 2),
-          };
-        }
+      // 确定更新 view 后需要恢复到的选区，分三种情况：
+      // 1. 最后一个事务指定了的选区
+      // 2. 默认恢复到 view 更新前，也就是当前选区
+      let selectionToRestore: SelectionMetadata | null = currSelection ?? null;
+      const lastTx = txs[txs.length - 1];
+      if (lastTx.metadata.selection != null) {
+        selectionToRestore = lastTx.metadata.selection;
+      } else {
+        selectionToRestore = currSelection;
       }
 
       // 只进行一次视图更新，处理所有相关事件
@@ -106,16 +114,41 @@ export class ProseMirrorEditor implements Editor {
       const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
 
       // 尝试恢复选区
-      if (selection) {
-        const newPos = getAbsPos(tr.doc, selection.blockId, selection.offset);
-        if (newPos !== null) {
-          tr.setSelection(TextSelection.create(tr.doc, newPos));
+      if (selectionToRestore != null) {
+        const anchor = getAbsPos(
+          tr.doc,
+          selectionToRestore.blockId,
+          selectionToRestore.anchor
+        );
+        const head = selectionToRestore.head
+          ? (getAbsPos(
+              tr.doc,
+              selectionToRestore.blockId,
+              selectionToRestore.head
+            ) ?? undefined)
+          : undefined;
+        if (anchor !== null) {
+          tr.setSelection(TextSelection.create(tr.doc, anchor, head));
         }
       }
 
       // 标记此事务来自外部存储同步，防止 dispatchTransaction 中再次触发同步
       tr.setMeta(STORAGE_SYNC_META_KEY, true);
       this.view.dispatch(tr);
+
+      setTimeout(() => {
+        if (!this.view) return;
+
+        // 如果最后一个事务没有 selection，则把当前的选区信息保存到
+        // 最后一个事务的 metadata.selection 中
+        if (lastTx.metadata.selection == null) {
+          const afterSelection = getCurrSelection(this.view.state);
+          lastTx.metadata.selection = afterSelection ?? undefined;
+        }
+
+        // 将这批事务加入撤销重做栈
+        this.undoRedoManager.addItem(txs);
+      });
     };
     this.storage.addEventListener(this.storageListener);
   }
@@ -139,7 +172,7 @@ export class ProseMirrorEditor implements Editor {
       // 将无法捕获到被 keymapPlugin 处理的事件
       createBlockRefCompletionPlugin(this.emit.bind(this)),
       inputRules({ rules: [toCodeblock] }),
-      createKeymapPlugin(this.storage),
+      createKeymapPlugin(this, this.storage),
       createHighlightCodeblockPlugin(),
       imeSpan, // imeSpan 用于修复 Safari 下一些奇怪的问题
       createPastePlugin(this.storage),
@@ -169,6 +202,9 @@ export class ProseMirrorEditor implements Editor {
       dispatchTransaction: (transaction: ProseMirrorTransaction) => {
         if (!this.view) return;
 
+        // 先记录当前选区
+        const beforeSelection = getCurrSelection(this.view.state);
+
         // 立即应用事务
         transaction = normalizeSelection(transaction); // 先规范化选区
         const newState = this.view.state.apply(transaction);
@@ -176,12 +212,17 @@ export class ProseMirrorEditor implements Editor {
 
         // 如果文档内容被用户修改，则将变更同步回数据库
         // 通过检查 meta key 来避免同步由 storageListener 触发的变更
-        if (
-          transaction.docChanged &&
-          !transaction.getMeta(STORAGE_SYNC_META_KEY)
-        ) {
-          this.syncContentChangesToStorage(transaction);
-        }
+        // 放到 setTimeout 中是因为 IME 候选上屏幕的那个 transaction
+        // 对应的 this.view.composing 为 true
+        setTimeout(() => {
+          if (
+            transaction.docChanged &&
+            !this.view?.composing &&
+            !transaction.getMeta(STORAGE_SYNC_META_KEY)
+          ) {
+            this.syncContentChangesToStorage(transaction, beforeSelection);
+          }
+        });
       },
     });
 
@@ -344,6 +385,38 @@ export class ProseMirrorEditor implements Editor {
     executeCompletion(blockId, this.view!);
   }
 
+  /**
+   * 撤销上一次操作
+   * @returns 是否成功撤销
+   */
+  undo(): boolean {
+    return this.undoRedoManager.undo();
+  }
+
+  /**
+   * 重做上一次撤销的操作
+   * @returns 是否成功重做
+   */
+  redo(): boolean {
+    return this.undoRedoManager.redo();
+  }
+
+  /**
+   * 检查是否可以撤销
+   * @returns 是否可以撤销
+   */
+  canUndo(): boolean {
+    return this.undoRedoManager.canUndo();
+  }
+
+  /**
+   * 检查是否可以重做
+   * @returns 是否可以重做
+   */
+  canRedo(): boolean {
+    return this.undoRedoManager.canRedo();
+  }
+
   emit(event: EditorEvent): void {
     this.listeners.forEach((listener) => listener(event));
   }
@@ -451,7 +524,10 @@ export class ProseMirrorEditor implements Editor {
     });
   }
 
-  private syncContentChangesToStorage(tr: ProseMirrorTransaction) {
+  private syncContentChangesToStorage(
+    tr: ProseMirrorTransaction,
+    beforeSelection: SelectionMetadata | null
+  ) {
     // 这样做能 work，基于传入的 transaction 的每个 step 只操作单个 listItem
     // 不会一个 step 操作多个 listItem
     //
@@ -489,10 +565,14 @@ export class ProseMirrorEditor implements Editor {
 
         const newData = serialize(listItem.node.firstChild!);
         const tx = this.storage.createTransaction();
+        tx.source = UpdateSources.localEditorContent(this.id);
         tx.updateBlock({
           id: blockId,
           ...newData,
         });
+        if (beforeSelection) {
+          tx.metadata.beforeSelection = beforeSelection;
+        }
         tx.commit();
       }
     }

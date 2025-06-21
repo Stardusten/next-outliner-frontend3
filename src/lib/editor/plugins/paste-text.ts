@@ -7,11 +7,10 @@ import {
 import { outlinerSchema } from "../schema";
 import { nanoid } from "nanoid";
 import { serialize } from "../utils";
-import type { Block, BlockId } from "@/lib/blocks/types";
-import type { BlockStorage } from "@/lib/storage/interface";
+import type { Block } from "@/lib/blocks/types";
+import type { BlockStorage } from "@/lib/storage/block/interface";
 import { Plugin } from "prosemirror-state";
 import { findCurrListItem, isEmptyListItem } from "../commands";
-import { UpdateSources } from "../update-source";
 
 type TempBlock = Omit<Block, "fractionalIndex"> & {
   childrenIds: TempBlock[];
@@ -251,7 +250,7 @@ export function createPastePlugin(storage: BlockStorage) {
             // 插入后，将光标移动到插入的最后一个块的末尾
             tx.metadata.selection = {
               blockId: rootBlocks[rootBlocks.length - 1].id,
-              offset: lastRootNode.nodeSize,
+              anchor: lastRootNode.nodeSize,
             };
             tx.insertAfterWithChildren(currBlockId, allBlocks);
             tx.commit();

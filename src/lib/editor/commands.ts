@@ -7,6 +7,7 @@ import {
 import type {
   BlockStorage,
   BlockTransactionMetadata,
+  SelectionMetadata,
 } from "../storage/interface";
 import type { BlockId } from "@/lib/blocks/types";
 import {
@@ -17,6 +18,7 @@ import {
 } from "./utils";
 import { outlinerSchema } from "./schema";
 import { Node } from "prosemirror-model";
+import type { Editor } from "./interface";
 
 export function findCurrListItem(state: EditorState) {
   const { $from } = state.selection;
@@ -27,6 +29,17 @@ export function findCurrListItem(state: EditorState) {
     }
   }
   return null;
+}
+
+export function getCurrSelection(state: EditorState): SelectionMetadata | null {
+  const sel = state.selection;
+  const listItemInfo = findCurrListItem(state);
+  return listItemInfo && listItemInfo.node.attrs.blockId
+    ? {
+        blockId: listItemInfo.node.attrs.blockId,
+        anchor: sel.from - (listItemInfo.pos + 2),
+      }
+    : null;
 }
 
 export function isEmptyListItem(node: Node): boolean {
@@ -47,10 +60,10 @@ export function promoteSelected(storage: BlockStorage): Command {
     if (!blockId) return false;
 
     // 缩进后，光标位置仍然保持在当前块的相同位置
-    const offset = state.selection.from - (pos + 2);
+    const anchor = state.selection.from - (pos + 2);
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, offset };
+    tx.metadata.selection = { blockId, anchor };
     tx.promoteBlock(blockId);
     tx.commit();
     return true;
@@ -69,10 +82,10 @@ export function demoteSelected(storage: BlockStorage): Command {
     if (!blockId) return false;
 
     // 反缩进后，光标位置仍然保持在当前块的相同位置
-    const offset = state.selection.from - (pos + 2);
+    const anchor = state.selection.from - (pos + 2);
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, offset };
+    tx.metadata.selection = { blockId, anchor };
     tx.demoteBlock(blockId);
     tx.commit();
     return true;
@@ -169,7 +182,7 @@ export function splitListItem(storage: BlockStorage): Command {
 
     // 创建事务
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: focusBlockId, offset: focusOffset };
+    tx.metadata.selection = { blockId: focusBlockId, anchor: focusOffset };
 
     // 1. 更新当前块的内容
     tx.updateBlock({
@@ -229,7 +242,7 @@ export function deleteEmptyListItem(
     }
 
     // 确定删除后要聚焦的块 - 直接在 ProseMirror 文档中查找
-    let focusTarget: { blockId: string; offset: number } | null = null;
+    let focusTarget: { blockId: string; anchor: number } | null = null;
 
     if (direction === "forward") {
       // Delete 键：找下一个 listItem
@@ -246,7 +259,7 @@ export function deleteEmptyListItem(
         const nextListItem = state.doc.nodeAt(nextListItemPos);
         if (nextListItem) {
           const nextBlockId = nextListItem.attrs.blockId as string;
-          focusTarget = { blockId: nextBlockId, offset: 0 };
+          focusTarget = { blockId: nextBlockId, anchor: 0 };
         }
       }
     } else {
@@ -265,7 +278,7 @@ export function deleteEmptyListItem(
           const prevBlockData = storage.getBlock(prevBlockId);
           if (prevBlockData) {
             const content = storage.getTextContent(prevBlockId);
-            focusTarget = { blockId: prevBlockId, offset: content.length };
+            focusTarget = { blockId: prevBlockId, anchor: content.length };
           }
         }
       }
@@ -393,7 +406,7 @@ export function toggleFocusedFoldState(
 
     const currentFoldedState = currentBlock.get().folded;
     // 保留光标位置
-    const offset = state.selection.from - (pos + 2);
+    const anchor = state.selection.from - (pos + 2);
 
     targetState ??= !currentFoldedState;
 
@@ -402,7 +415,7 @@ export function toggleFocusedFoldState(
     }
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: blockId2, offset };
+    tx.metadata.selection = { blockId: blockId2, anchor };
     tx.updateBlock({
       id: blockId2,
       folded: targetState,
@@ -480,10 +493,10 @@ export function moveBlockUp(storage: BlockStorage): Command {
       (beforePrevSiblingFractionalIndex + prevSiblingData.fractionalIndex) / 2;
 
     // 保留光标位置
-    const offset = state.selection.from - (pos + 2);
+    const anchor = state.selection.from - (pos + 2);
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, offset };
+    tx.metadata.selection = { blockId, anchor };
     tx.updateBlock({
       id: blockId,
       fractionalIndex: newFractionalIndex,
@@ -541,7 +554,7 @@ export function moveBlockDown(storage: BlockStorage): Command {
     const offset = state.selection.from - (pos + 2);
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, offset };
+    tx.metadata.selection = { blockId, anchor: offset };
     tx.updateBlock({
       id: blockId,
       fractionalIndex: newFractionalIndex,
@@ -672,7 +685,7 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
     const mergePoint = prevContentSize;
 
     const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: prevBlockId, offset: mergePoint };
+    tx.metadata.selection = { blockId: prevBlockId, anchor: mergePoint };
 
     // 1. 更新前一个块的内容为合并后的内容
     tx.updateBlock({
@@ -935,6 +948,26 @@ export function codeblockMoveToLineEnd(): Command {
       }
     }
 
+    return true;
+  };
+}
+
+export function undo(editor: Editor): Command {
+  return function (state, dispatch) {
+    if (!editor.canUndo()) return false;
+    if (dispatch) {
+      editor.undo();
+    }
+    return true;
+  };
+}
+
+export function redo(editor: Editor): Command {
+  return function (state, dispatch) {
+    if (!editor.canRedo()) return false;
+    if (dispatch) {
+      editor.redo();
+    }
     return true;
   };
 }

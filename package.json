@@ -19,6 +19,7 @@
     "flexsearch": "^0.8.205",
     "lowlight": "^3.3.0",
     "lucide-vue-next": "^0.514.0",
+    "minio": "^8.0.5",
     "nanoid": "^5.1.5",
     "pinia": "^3.0.1",
     "prosemirror-changeset": "^2.3.1",

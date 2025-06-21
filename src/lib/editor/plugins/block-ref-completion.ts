@@ -1,10 +1,7 @@
 import { EditorState, Plugin } from "prosemirror-state";
-import { parseBlockRefStr } from "../utils";
-import { Fragment, Slice } from "prosemirror-model";
-import { outlinerSchema } from "../schema";
-import type { ProseMirrorEditor } from "../impl";
-import type { CompletionStatus, EditorEvent } from "../interface";
 import type { EditorView } from "prosemirror-view";
+import type { CompletionStatus, EditorEvent } from "../interface";
+import { outlinerSchema } from "../schema";
 
 /**
  * 检查当前状态是否应该显示补全

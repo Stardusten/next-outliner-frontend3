@@ -1,5 +1,5 @@
 import type { Block } from "../lib/blocks/types";
-import type { BlockStorage } from "../lib/storage/interface";
+import type { BlockStorage } from "../lib/storage/block/interface";
 
 // 初始化数据到存储
 export function initializeBlockStorage(storage: BlockStorage) {
@@ -63,10 +63,9 @@ export function initializeBlockStorage(storage: BlockStorage) {
       },
     ];
 
-    // 在 in-memory-impl 的构造函数中直接处理初始化
-    // 这个函数现在可以用于其他需要批量添加块的场景
-    // 这里我们假设 storage 是空的，所以可以直接 add
-    initialBlocks.forEach((block) => storage.addBlock(block));
+    const tx = storage.createTransaction();
+    initialBlocks.forEach((block) => tx.addBlock(block));
+    tx.commit();
     console.log("Initialized storage with default blocks");
   } else {
     console.log(`Storage already has blocks, skipping initialization`);

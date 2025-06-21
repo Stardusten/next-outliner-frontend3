@@ -1,6 +1,6 @@
 import { EditorView } from "prosemirror-view";
 import { createBlockRefNodeViewClass } from "./node-views/block-ref";
-import type { BlockStorage } from "../storage/interface";
+import type { BlockStorage } from "../storage/block/interface";
 import { EditorState as ProseMirrorState } from "prosemirror-state";
 import type { BlockId } from "../blocks/types";
 import { outlinerSchema } from "./schema";

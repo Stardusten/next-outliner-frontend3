@@ -1,5 +1,5 @@
-import type { Block, BlockId, BlockLoaded } from "../blocks/types";
-import type { Observable } from "../reactivity/observable";
+import type { Block, BlockId, BlockLoaded } from "../../blocks/types";
+import type { Observable } from "../../reactivity/observable";
 
 export interface BlockStorage {
   /** 遍历所有块，回调函数返回 false 时停止遍历 */
@@ -102,6 +102,9 @@ export type UpdateBlockParams = { id: BlockId } & Partial<
  * 块事务的元数据，包括事务执行后期望的选区等
  */
 export type BlockTransactionMetadata = {
+  /** 事务执行前选区 */
+  beforeSelection?: SelectionMetadata;
+  /** 事务执行后选区 */
   selection?: SelectionMetadata;
 };
 
@@ -110,7 +113,8 @@ export type BlockTransactionMetadata = {
  */
 export type SelectionMetadata = {
   blockId: BlockId;
-  offset: number;
+  anchor: number;
+  head?: number;
 };
 
 export type UpdateSource = string;
