@@ -1,6 +1,6 @@
-import type { Block, BlockId } from "../blocks/types";
-import { sortChildren, toBlock } from "../blocks/utils";
-import { Observable } from "../reactivity/observable";
+import type { Block, BlockId } from "../../blocks/types";
+import { sortChildren, toBlock } from "../../blocks/utils";
+import { Observable } from "../../reactivity/observable";
 import { BaseBlockStorage } from "./base-impl";
 
 const BLOCK_INDEX_KEY = "pm-block-index";

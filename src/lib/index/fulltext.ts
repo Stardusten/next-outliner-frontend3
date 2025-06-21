@@ -1,7 +1,7 @@
 import type {
   BlockStorage,
   BlockStorageEventBatch,
-} from "../storage/interface";
+} from "../storage/block/interface";
 // @ts-ignore
 import Document from "@/../node_modules/flexsearch/dist/module/document";
 import { calcMatchScore, hybridTokenize } from "./tokenize";

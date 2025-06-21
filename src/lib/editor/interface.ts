@@ -1,6 +1,5 @@
 import type { Block, BlockId } from "../blocks/types";
-import type { BlockStorage } from "../storage/interface";
-import type { EditorState as ProseMirrorState } from "prosemirror-state";
+import type { BlockStorage } from "../storage/block/interface";
 
 export type Changes = {
   added: Block[];
@@ -60,4 +59,8 @@ export interface Editor {
   };
   executeComplete(blockId: BlockId): void;
   locateBlock(blockId: BlockId): void;
+  undo(): boolean;
+  redo(): boolean;
+  canUndo(): boolean;
+  canRedo(): boolean;
 }

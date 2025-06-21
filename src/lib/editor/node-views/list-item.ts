@@ -1,4 +1,4 @@
-import type { BlockStorage } from "@/lib/storage/interface";
+import type { BlockStorage } from "@/lib/storage/block/interface";
 import type { EditorView, NodeView } from "prosemirror-view";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { outlinerSchema } from "../schema";

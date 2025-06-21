@@ -1,5 +1,5 @@
 import { keymap } from "prosemirror-keymap";
-import type { BlockStorage } from "../storage/interface";
+import type { BlockStorage } from "../storage/block/interface";
 import {
   codeblockIndent,
   codeblockInsertLineBreak,
@@ -16,15 +16,18 @@ import {
   moveBlockDown,
   moveBlockUp,
   promoteSelected,
+  redo,
   selectCurrentListItem,
   splitListItem,
   toggleFocusedFoldState,
+  undo,
 } from "./commands";
 import type { Command, EditorState } from "prosemirror-state";
 import { chainCommands, toggleMark } from "prosemirror-commands";
 import { outlinerSchema } from "./schema";
+import type { Editor } from "./interface";
 
-export function createKeymapPlugin(storage: BlockStorage) {
+export function createKeymapPlugin(editor: Editor, storage: BlockStorage) {
   const toggleFoldTrue = toggleFocusedFoldState(storage, true, undefined);
   const toggleFoldFalse = toggleFocusedFoldState(storage, false, undefined);
 
@@ -45,12 +48,15 @@ export function createKeymapPlugin(storage: BlockStorage) {
       text: chainCommands(
         deleteEmptyListItem(storage),
         mergeWithPreviousBlock(storage),
-        deleteSelected(),
+        deleteSelected()
       ),
       code: chainCommands(deleteEmptyListItem(storage), deleteSelected()),
     }),
     Delete: dispatchByBlockType({
-      text: chainCommands(deleteEmptyListItem(storage, "forward"), deleteSelected()),
+      text: chainCommands(
+        deleteEmptyListItem(storage, "forward"),
+        deleteSelected()
+      ),
       code: chainCommands(deleteEmptyListItem(storage), deleteSelected()),
     }),
     "Mod-a": dispatchByBlockType({
@@ -73,6 +79,8 @@ export function createKeymapPlugin(storage: BlockStorage) {
     End: dispatchByBlockType({
       codeblock: codeblockMoveToLineEnd(),
     }),
+    "Mod-z": undo(editor),
+    "Mod-Shift-z": redo(editor),
   });
 }
 

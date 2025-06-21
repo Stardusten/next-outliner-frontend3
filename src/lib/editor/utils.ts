@@ -6,7 +6,7 @@ import {
   TextSelection,
 } from "prosemirror-state";
 import type { Block, BlockId, BlockLoaded } from "../blocks/types";
-import type { BlockStorage } from "../storage/interface";
+import type { BlockStorage } from "../storage/block/interface";
 import { outlinerSchema } from "./schema";
 
 /**
