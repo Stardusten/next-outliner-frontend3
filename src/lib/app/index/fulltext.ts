@@ -1,11 +1,8 @@
-import type {
-  BlockStorage,
-  BlockStorageEventBatch,
-} from "../storage/block/interface";
 // @ts-ignore
 import Document from "@/../node_modules/flexsearch/dist/module/document";
 import { calcMatchScore, hybridTokenize } from "./tokenize";
-import type { BlockId, BlockLoaded } from "../blocks/types";
+import type { BlockId, BlockNode } from "@/lib/common/types";
+import type { App } from "../app";
 
 export type FullTextIndexConfig = {
   /** 是否忽略注音符号 */
@@ -13,14 +10,14 @@ export type FullTextIndexConfig = {
 };
 
 export class FullTextIndex {
-  private storage: BlockStorage;
+  private app: App;
   private flexsearch: any;
   // 用于记录所有 “脏块”，即块内容与索引时不一致的块的 ID
   private dirtySet: Set<BlockId>;
   private config: FullTextIndexConfig;
 
-  constructor(storage: BlockStorage, config?: FullTextIndexConfig) {
-    this.storage = storage;
+  constructor(app: App, config?: FullTextIndexConfig) {
+    this.app = app;
     this.dirtySet = new Set();
 
     this.config = {
@@ -43,42 +40,35 @@ export class FullTextIndex {
 
     this.initIndex(); // 先初始化索引
 
-    this.storage.addEventListener((events: BlockStorageEventBatch) => {
-      for (const e of events) {
-        if (e.type === "tx-committed") {
-          // 处理事务中的所有操作
-          for (const op of e.result.ops) {
-            let blockId: BlockId;
-
-            switch (op.type) {
-              case "add":
-                blockId = op.block.get().id;
-                this.dirtySet.add(blockId);
-                break;
-              case "update":
-                blockId = op.newBlock.get().id;
-                this.dirtySet.add(blockId);
-                break;
-              case "delete":
-                blockId = op.deletedBlock.get().id;
-                this.dirtySet.add(blockId);
-                break;
-            }
-          }
+    this.app.on("tx-committed", (event) => {
+      for (const change of event.changes) {
+        let blockId: BlockId;
+        switch (change.type) {
+          case "block:create":
+            blockId = change.blockId;
+            this.dirtySet.add(blockId);
+            break;
+          case "block:update":
+            blockId = change.blockId;
+            this.dirtySet.add(blockId);
+            break;
+          case "block:delete":
+            blockId = change.blockId;
+            this.dirtySet.add(blockId);
+            break;
         }
       }
     });
   }
 
   private initIndex() {
-    this.storage.forEachBlock((b) => {
-      const blockId = b.get().id;
-      this.updateIndexOfBlock(blockId, b);
-      return true;
-    });
+    for (const blockNode of this.app.getAllNodes()) {
+      const blockId = blockNode.id;
+      this.updateIndexOfBlock(blockId, blockNode);
+    }
   }
 
-  private updateIndexOfBlock(blockId: BlockId, block: BlockLoaded | null) {
+  private updateIndexOfBlock(blockId: BlockId, block: BlockNode | null) {
     // 这个块被删除了，也从索引中删除
     if (block == null && this.flexsearch.contain(blockId)) {
       this.flexsearch.remove(blockId);
@@ -88,7 +78,7 @@ export class FullTextIndex {
         this.flexsearch.remove(blockId);
       }
       // 然后添加最新的索引项
-      const textContent = this.storage.getTextContent(blockId);
+      const textContent = this.app.getTextContent(blockId);
       this.flexsearch.add(blockId, {
         id: blockId,
         textContent,
@@ -101,7 +91,7 @@ export class FullTextIndex {
     if (this.dirtySet.size === 0) return;
 
     for (const blockId of this.dirtySet) {
-      const block = this.storage.getBlock(blockId);
+      const block = this.app.getBlockNode(blockId);
       this.updateIndexOfBlock(blockId, block);
     }
     // 清空 dirtySet

@@ -20,7 +20,7 @@
         <div class="completion-item-content">
           <SearchResultItem
             :block="block"
-            :storage="storage"
+            :storage="app"
             :search-query="query"
           />
         </div>
@@ -35,21 +35,21 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
-import type { Block } from "../lib/blocks/types";
 import SearchResultItem from "./SearchResultItem.vue";
-import type { BlockStorage } from "@/lib/storage/interface";
+import type { BlockNode } from "@/lib/common/types";
+import type { App } from "@/lib/app/app";
 
 interface Props {
   visible: boolean;
   query: string;
   position: { x: number; y: number };
-  blocks: Block[];
+  blocks: BlockNode[];
   activeIndex: number;
-  storage: BlockStorage;
+  app: App;
 }
 
 interface Emits {
-  (e: "select", block: Block): void;
+  (e: "select", block: BlockNode): void;
   (e: "close"): void;
 }
 
@@ -185,7 +185,7 @@ const adjustedPosition = computed(() => {
 });
 
 // 选择块
-function selectBlock(block: Block) {
+function selectBlock(block: BlockNode) {
   emit("select", block);
 }
 </script>

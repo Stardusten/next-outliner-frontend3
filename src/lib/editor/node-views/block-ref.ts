@@ -1,10 +1,10 @@
-import type { BlockStorage } from "@/lib/storage/block/interface";
 import type { EditorView, NodeView } from "prosemirror-view";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { outlinerSchema } from "../schema";
-import type { BlockId } from "@/lib/blocks/types";
+import type { App } from "@/lib/app/app";
+import type { BlockId } from "@/lib/common/types";
 
-export function createBlockRefNodeViewClass(storage: BlockStorage) {
+export function createBlockRefNodeViewClass(app: App) {
   return class implements NodeView {
     dom: HTMLElement;
     unsubscriber: (() => void) | null = null;
@@ -23,16 +23,13 @@ export function createBlockRefNodeViewClass(storage: BlockStorage) {
       this.dom.dataset.blockId = node.attrs.blockId as BlockId;
 
       const blockId = node.attrs.blockId as BlockId;
-      const block = storage.getBlock(blockId);
-
-      if (block) {
-        this.unsubscriber = block.subscribe(
-          (b) => {
-            this.dom.innerText = storage.getTextContent(blockId);
-          },
-          { immediate: true }
-        );
-      }
+      const textContent = app.getTextContentReactive(blockId);
+      textContent.subscribe(
+        (textContent) => {
+          this.dom.innerText = textContent;
+        },
+        { immediate: true }
+      );
     }
 
     destroy() {

@@ -1,13 +1,14 @@
-import { keymap } from "prosemirror-keymap";
-import { Node, Schema, type NodeSpec } from "prosemirror-model";
-import type { Command, EditorState, Transaction } from "prosemirror-state";
-import {
-  EditorState as ProseMirrorState,
-  TextSelection,
-} from "prosemirror-state";
-import type { Block, BlockId, BlockLoaded } from "../blocks/types";
-import type { BlockStorage } from "../storage/block/interface";
+import { Node } from "prosemirror-model";
+import type { EditorState, Transaction } from "prosemirror-state";
+import { TextSelection } from "prosemirror-state";
 import { outlinerSchema } from "./schema";
+import type {
+  BlockDataInner,
+  BlockId,
+  BlockNode,
+  BlockType,
+} from "../common/types";
+import type { App } from "../app/app";
 
 /**
  * 将当前文档转换为 Markdown
@@ -55,7 +56,7 @@ export function oldDeserialize(repr: string): Node {
 }
 
 export function serialize(node: Node): {
-  type: Block["type"];
+  type: BlockType;
   content: string;
 } {
   const paragraphNodeType = outlinerSchema.nodes.paragraph;
@@ -79,16 +80,17 @@ export function serialize(node: Node): {
 }
 
 export function deserialize(
-  block: BlockLoaded,
+  blockNode: BlockNode,
   level?: number,
-  storage?: BlockStorage
+  storage?: App
 ): Node {
   // 使用反序列化来创建段落内容
   let listItemNode: Node | null = null;
   const listItemType = outlinerSchema.nodes.listItem;
   const paragraphType = outlinerSchema.nodes.paragraph;
-  const blockData = block.get();
-  const hasChildren = blockData.childrenBlocks.length > 0;
+  const blockData = blockNode.data.toJSON() as BlockDataInner;
+  const children = blockNode.children();
+  const hasChildren = children != null && children.length > 0;
 
   level ??= 0;
 
@@ -100,7 +102,7 @@ export function deserialize(
         listItemNode = listItemType.create(
           {
             level,
-            blockId: blockData.id,
+            blockId: blockNode.id,
             folded: blockData.folded,
             hasChildren,
             type: "text",
@@ -113,7 +115,7 @@ export function deserialize(
         listItemNode = listItemType.create(
           {
             level,
-            blockId: blockData.id,
+            blockId: blockNode.id,
             folded: blockData.folded,
             hasChildren,
             type: "code",
@@ -125,7 +127,7 @@ export function deserialize(
   } catch (error) {
     // 如果反序列化失败，尝试使用纯文本内容创建段落节点
     console.warn("Failed to deserialize block content");
-    const textContent = storage ? storage.getTextContent(blockData.id) : "";
+    const textContent = storage ? storage.getTextContent(blockNode.id) : "";
     const paragraphNode = paragraphType.create(
       null,
       textContent ? [outlinerSchema.text(textContent)] : []
@@ -133,7 +135,7 @@ export function deserialize(
     listItemNode = listItemType.create(
       {
         level,
-        blockId: blockData.id,
+        blockId: blockNode.id,
         folded: blockData.folded,
         hasChildren,
         type: "text",
@@ -147,7 +149,7 @@ export function deserialize(
     listItemNode = listItemType.create(
       {
         level,
-        blockId: blockData.id,
+        blockId: blockNode.id,
         folded: blockData.folded,
         hasChildren,
         type: "text",
@@ -160,7 +162,7 @@ export function deserialize(
 }
 
 export function createStateFromStorage(
-  storage: BlockStorage,
+  storage: App,
   rootBlockIds: BlockId[],
   rootOnly: boolean = false
 ): Node {
@@ -171,17 +173,18 @@ export function createStateFromStorage(
   } = outlinerSchema.nodes;
 
   // 将嵌套的 block 转换为扁平的 listItem 节点数组
-  function flattenBlocks(blocks: BlockLoaded[], level: number): Node[] {
+  function flattenBlocks(blockNodes: BlockNode[], level: number): Node[] {
     const nodes: Node[] = [];
 
-    for (const blockLoaded of blocks) {
-      const blockData = blockLoaded.get();
-      const hasChildren = blockData.childrenBlocks.length > 0;
-      nodes.push(deserialize(blockLoaded, level, storage));
+    for (const blockNode of blockNodes) {
+      const blockData = blockNode.data.toJSON() as BlockDataInner;
+      const children = blockNode.children();
+      const hasChildren = children != null && children.length > 0;
+      nodes.push(deserialize(blockNode, level, storage));
 
       // 如果块有子节点且未被折叠，并且 rootOnly 为 false，则递归渲染子节点
       if (!rootOnly && hasChildren && !blockData.folded) {
-        const childNodes = flattenBlocks(blockData.childrenBlocks, level + 1);
+        const childNodes = flattenBlocks(children, level + 1);
         nodes.push(...childNodes);
       }
     }
@@ -189,15 +192,14 @@ export function createStateFromStorage(
     return nodes;
   }
 
-  // 获取根块的 BlockLoaded 对象
-  let rootBlocks: BlockLoaded[];
+  // 获取根块的 BlockNode 对象
+  let rootBlocks: BlockNode[];
   if (rootBlockIds.length > 0) {
-    // 只在这里使用 storage.getBlock，之后完全依赖缓存属性
     rootBlocks = rootBlockIds
-      .map((id) => storage.getBlock(id))
-      .filter((b): b is BlockLoaded => b !== null);
+      .map((id) => storage.getBlockNode(id))
+      .filter((b): b is BlockNode => b !== null);
   } else {
-    rootBlocks = storage.getRootBlocks();
+    rootBlocks = storage.getRootBlockNodes();
   }
 
   const flatNodes = flattenBlocks(rootBlocks, 0);
@@ -269,33 +271,6 @@ export function parseBlockRefStr(str: string) {
     return str.slice(prefix.length);
   }
   return null;
-}
-
-/**
- * 计算从根到指定块的完整路径
- * @param storage - 块存储接口
- * @param blockId - 目标块的 ID
- * @returns 从根到目标块的路径数组，包含目标块本身，如果块不存在则返回 null
- */
-export function getBlockPath(
-  storage: BlockStorage,
-  blockId: BlockId
-): BlockId[] | null {
-  const targetBlock = storage.getBlock(blockId);
-  if (!targetBlock) {
-    return null;
-  }
-
-  // 从目标块向上遍历，收集所有祖先块的 ID
-  const path: BlockId[] = [blockId];
-  let currentBlock = targetBlock.get().parentBlock;
-
-  while (currentBlock) {
-    path.unshift(currentBlock.get().id);
-    currentBlock = currentBlock.get().parentBlock;
-  }
-
-  return path;
 }
 
 /**

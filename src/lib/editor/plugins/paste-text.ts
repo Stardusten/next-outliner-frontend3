@@ -7,13 +7,18 @@ import {
 import { outlinerSchema } from "../schema";
 import { nanoid } from "nanoid";
 import { serialize } from "../utils";
-import type { Block } from "@/lib/blocks/types";
-import type { BlockStorage } from "@/lib/storage/block/interface";
 import { Plugin } from "prosemirror-state";
 import { findCurrListItem, isEmptyListItem } from "../commands";
+import type { App } from "@/lib/app/app";
+import type { BlockNode } from "@/lib/common/types";
 
-type TempBlock = Omit<Block, "fractionalIndex"> & {
-  childrenIds: TempBlock[];
+type Block = {
+  id: string;
+  type: "text" | "code";
+  folded: boolean;
+  content: string;
+  parentId: string | null;
+  children: Block[];
 };
 
 const blockTags: { [tagName: string]: boolean } = {
@@ -107,11 +112,11 @@ function linkify(fragment: Fragment): Fragment {
 function parseHtml(html: string) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
-  const ctx: TempBlock[] = [];
-  const blocks: Record<string, TempBlock> = {};
+  const ctx: Block[] = [];
+  const blocks: Record<string, Block> = {};
   const domParser = ProsemirrorDOMParser.fromSchema(outlinerSchema);
 
-  function addBlock(dom: Node, ctx: TempBlock[], parentId: string | null) {
+  function addBlock(dom: Node, ctx: Block[], parentId: string | null) {
     const pNode = outlinerSchema.nodes.paragraph.create({});
     let pNode2 = domParser.parse(dom, { topNode: pNode });
     if (pNode2.content.size === 0) return;
@@ -125,16 +130,16 @@ function parseHtml(html: string) {
     blocks[id] = {
       id,
       ...serialize(pNode2),
-      childrenIds: [],
       parentId,
+      children: [],
       folded: false, // 默认不折叠
     };
     ctx.push(blocks[id]);
   }
 
-  function traverse(node: Node, ctx: TempBlock[], parentId: string | null) {
+  function traverse(node: Node, ctx: Block[], parentId: string | null) {
     if (node instanceof HTMLOListElement || node instanceof HTMLUListElement) {
-      const newCtx = ctx.length === 0 ? ctx : ctx[ctx.length - 1].childrenIds;
+      const newCtx = ctx.length === 0 ? ctx : ctx[ctx.length - 1].children;
       const newParentId = ctx.length === 0 ? parentId : ctx[ctx.length - 1].id;
       for (const child of (node as HTMLElement).childNodes) {
         traverse(child, newCtx, newParentId); // 对每个子元素递归
@@ -170,12 +175,29 @@ function parseHtml(html: string) {
   return [ctx, blocks] as const;
 }
 
-export function createPastePlugin(storage: BlockStorage) {
+export function createPastePlugin(app: App) {
   const plugin = new Plugin({
     props: {
       handlePaste(view, event) {
         event.preventDefault();
         event.stopImmediatePropagation();
+
+        const currListItem = findCurrListItem(view.state);
+        const currBlockId = currListItem?.node.attrs.blockId ?? null;
+        if (currListItem == null || currBlockId == null) return true;
+
+        // 在代码块中粘贴，不会创建出多个块
+        if (
+          currListItem.node?.firstChild?.type === outlinerSchema.nodes.codeblock
+        ) {
+          const text = event.clipboardData?.getData("text/plain");
+          if (text) {
+            const tr = view.state.tr;
+            tr.replaceSelectionWith(outlinerSchema.text(text));
+            view.dispatch(tr);
+          }
+          return true;
+        }
 
         const html = event.clipboardData?.getData("text/html");
         // 粘贴了 html 内容
@@ -194,66 +216,75 @@ export function createPastePlugin(storage: BlockStorage) {
             tr.replaceSelectionWith(pNode);
             view.dispatch(tr);
           } else {
-            const currListItem = findCurrListItem(view.state);
-            const currBlockId = currListItem?.node.attrs.blockId ?? null;
-            if (currBlockId == null) return true;
+            const idMapping = new Map<string, BlockNode>(); // old id -> BlockNode
+            app.tx(
+              (tx) => {
+                // 粘贴了多于一个块，则粘贴所有块到当前块下方
+                const createTree = (block: Block, node: BlockNode) => {
+                  for (let i = 0; i < block.children.length; i++) {
+                    const child = block.children[i];
+                    const childNode = tx.insertBlockUnder(
+                      node,
+                      (dataMap) => {
+                        dataMap.set("type", child.type);
+                        dataMap.set("folded", child.folded);
+                        dataMap.set("content", child.content);
+                      },
+                      i
+                    );
+                    idMapping.set(child.id, childNode);
+                    createTree(child, childNode);
+                  }
+                };
 
-            // 粘贴了多于一个块，则粘贴所有块到当前块下方
-            // 1. 先将 TempBlock 转换为 Block，即根据 childrenIds 计算 fractionalIndex
-            const nonRootBlocks: Block[] = [];
-            const rootBlocks: Block[] = [];
+                let lastRoot: BlockNode | null = null;
+                let prevBlockId = currBlockId;
+                for (let i = 0; i < parsedTree.length; i++) {
+                  const block = parsedTree[i];
+                  if (block.parentId == null) {
+                    const rootNode = tx.insertBlockAfter(
+                      prevBlockId,
+                      (dataMap) => {
+                        dataMap.set("type", block.type);
+                        dataMap.set("folded", block.folded);
+                        dataMap.set("content", block.content);
+                      }
+                    );
+                    lastRoot = rootNode;
+                    prevBlockId = rootNode.id;
+                    idMapping.set(block.id, rootNode);
+                    createTree(block, rootNode);
+                  }
+                }
 
-            function convertTempBlockToBlock(
-              tempBlock: TempBlock,
-              siblingIndex: number
-            ): Block {
-              const block: Block = {
-                id: tempBlock.id,
-                type: tempBlock.type,
-                parentId: tempBlock.parentId,
-                content: tempBlock.content,
-                folded: tempBlock.folded,
-                fractionalIndex: siblingIndex + 1, // 使用简单的递增策略
-              };
+                // 如果当前块为空，则删除当前块
+                if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+                  tx.deleteBlock(currBlockId);
+                }
 
-              if (tempBlock.parentId == null) rootBlocks.push(block);
-              else nonRootBlocks.push(block);
+                // 插入后，将光标移动到插入的最后一个块的末尾
+                if (lastRoot != null) {
+                  const lastRootContent = lastRoot.data.get(
+                    "content"
+                  ) as string;
+                  const lastRootJson = JSON.parse(lastRootContent);
+                  const lastRootNode =
+                    outlinerSchema.nodeFromJSON(lastRootJson);
 
-              // 递归处理子块
-              tempBlock.childrenIds.forEach((childTempBlock, index) => {
-                convertTempBlockToBlock(childTempBlock, index);
-              });
-
-              return block;
-            }
-
-            parsedTree.forEach((rootTempBlock) => {
-              // 根块的 fractionalIndex 之后反正会重新计算
-              // 因此这里设置为 0 就行
-              convertTempBlockToBlock(rootTempBlock, 0);
-            });
-
-            // 2. 使用 insertAfterWithChildren 方法同时处理根块和非根块
-            const allBlocks = [...rootBlocks, ...nonRootBlocks];
-
-            const lastRoot = rootBlocks[rootBlocks.length - 1];
-            const lastRootJson = JSON.parse(lastRoot.content);
-            const lastRootNode = outlinerSchema.nodeFromJSON(lastRootJson);
-
-            const tx = storage.createTransaction();
-
-            // 如果当前块为空，则删除当前块
-            if (currListItem?.node && isEmptyListItem(currListItem.node)) {
-              tx.deleteBlock(currBlockId);
-            }
-
-            // 插入后，将光标移动到插入的最后一个块的末尾
-            tx.metadata.selection = {
-              blockId: rootBlocks[rootBlocks.length - 1].id,
-              anchor: lastRootNode.nodeSize,
-            };
-            tx.insertAfterWithChildren(currBlockId, allBlocks);
-            tx.commit();
+                  tx.updateOrigin({
+                    selection: {
+                      blockId: lastRoot!.id,
+                      anchor: lastRootNode.nodeSize,
+                      scrollIntoView: true,
+                    },
+                  });
+                }
+              },
+              {
+                type: "localEditorStructural",
+                txId: nanoid(),
+              }
+            );
           }
           return true;
         }
@@ -280,33 +311,45 @@ export function createPastePlugin(storage: BlockStorage) {
             return true;
           } else {
             // 粘贴了多行文本
-            const currListItem = findCurrListItem(view.state);
-            const currBlockId = currListItem?.node.attrs.blockId ?? null;
-            if (currBlockId == null) return true;
+            app.tx(
+              (tx) => {
+                let prevBlockId = currBlockId;
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  const tNode = outlinerSchema.text(line);
+                  const pNode = outlinerSchema.nodes.paragraph.create(
+                    {},
+                    tNode
+                  );
+                  const newBlockNode = tx.insertBlockAfter(
+                    prevBlockId,
+                    (dataMap) => {
+                      dataMap.set("type", "text");
+                      dataMap.set("folded", false);
+                      dataMap.set("content", serialize(pNode).content);
+                    }
+                  );
+                  prevBlockId = newBlockNode.id;
+                }
 
-            const tx = storage.createTransaction();
+                // 如果当前块为空，则删除当前块
+                if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+                  tx.deleteBlock(currBlockId);
+                }
 
-            // 如果当前块为空，则删除当前块
-            if (currListItem?.node && isEmptyListItem(currListItem.node)) {
-              tx.deleteBlock(currBlockId);
-            }
-
-            const blocks: Block[] = [];
-            for (const line of lines) {
-              const tNode = outlinerSchema.text(line);
-              const pNode = outlinerSchema.nodes.paragraph.create({}, tNode);
-              const block: Block = {
-                id: nanoid(),
-                parentId: null,
-                fractionalIndex: 0,
-                ...serialize(pNode),
-                folded: false,
-              };
-              blocks.push(block);
-            }
-
-            tx.insertAfterWithChildren(currBlockId, blocks);
-            tx.commit();
+                tx.updateOrigin({
+                  selection: {
+                    blockId: prevBlockId,
+                    anchor: 0,
+                    scrollIntoView: true,
+                  },
+                });
+              },
+              {
+                type: "localEditorStructural",
+                txId: nanoid(),
+              }
+            );
           }
         }
 

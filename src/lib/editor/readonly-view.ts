@@ -1,21 +1,21 @@
 import { EditorView } from "prosemirror-view";
 import { createBlockRefNodeViewClass } from "./node-views/block-ref";
-import type { BlockStorage } from "../storage/block/interface";
 import { EditorState as ProseMirrorState } from "prosemirror-state";
-import type { BlockId } from "../blocks/types";
 import { outlinerSchema } from "./schema";
 import { createStateFromStorage } from "./utils";
 import { createHighlightMatchesPlugin } from "./plugins/highlight-matches";
 import { createListItemNodeViewClass } from "./node-views/list-item";
+import type { BlockId } from "../common/types";
+import type { App } from "../app/app";
 
 export class ReadonlyBlockView {
   private blockId: BlockId;
-  private storage: BlockStorage;
+  private storage: App;
   private view?: EditorView;
   private highlightTerms: string[];
 
-  constructor(storage: BlockStorage, blockId: BlockId) {
-    this.storage = storage;
+  constructor(app: App, blockId: BlockId) {
+    this.storage = app;
     this.blockId = blockId;
     this.highlightTerms = [];
   }

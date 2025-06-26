@@ -1,11 +1,11 @@
-import type { BlockStorage } from "@/lib/storage/block/interface";
+import type { BlockId } from "@/lib/common/types";
 import type { EditorView, NodeView } from "prosemirror-view";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { outlinerSchema } from "../schema";
-import type { Observable } from "@/lib/reactivity/observable";
-import type { BlockId } from "@/lib/blocks/types";
+import type { Observable } from "@/lib/common/observable";
+import type { App } from "@/lib/app/app";
 
-export function createListItemNodeViewClass(storage: BlockStorage) {
+export function createListItemNodeViewClass(app: App) {
   return class implements NodeView {
     dom: HTMLElement;
     contentDOM: HTMLElement;
@@ -40,7 +40,7 @@ export function createListItemNodeViewClass(storage: BlockStorage) {
 
       const refCounter = document.createElement("div");
       refCounter.classList.add("ref-counter");
-      this.inRefs = storage.getInRefs(node.attrs.blockId);
+      this.inRefs = app.getInRefs(node.attrs.blockId);
 
       this.refCounterUnsub = this.inRefs.subscribe(
         (refs) => {

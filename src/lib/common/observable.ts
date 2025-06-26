@@ -7,6 +7,7 @@ type Subscriber<T> = (value: T) => void;
 export class Observable<T> {
   private value: T;
   private subscribers: Set<Subscriber<T>> = new Set();
+  private disposers: (() => void) | null = null;
 
   constructor(initialValue: T) {
     this.value = initialValue;
@@ -40,7 +41,10 @@ export class Observable<T> {
   /**
    * 添加订阅者
    */
-  subscribe(subscriber: Subscriber<T>, config?: { immediate?: boolean }): () => void {
+  subscribe(
+    subscriber: Subscriber<T>,
+    config?: { immediate?: boolean }
+  ): () => void {
     this.subscribers.add(subscriber);
 
     if (config?.immediate) {
@@ -56,6 +60,15 @@ export class Observable<T> {
   subscribeOnce(subscriber: Subscriber<T>): void {
     const unsubscribe = this.subscribe(subscriber);
     unsubscribe();
+  }
+
+  setDisposer(disposer: () => void): void {
+    this.disposers = disposer;
+  }
+
+  dispose(): void {
+    if (this.disposers) this.disposers();
+    this.subscribers.clear();
   }
 
   /**

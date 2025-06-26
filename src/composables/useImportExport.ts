@@ -1,81 +1,172 @@
+import { outlinerSchema } from "@/lib/editor/schema";
+import { nanoid } from "nanoid";
+import { Fragment, type Node } from "prosemirror-model";
 import { ref } from "vue";
-import type { BlockStorage, ImportOptions } from "@/lib/storage/interface";
+import { toast } from "./useToast";
+import type { App } from "@/lib/app/app";
+import type { BlockNode } from "@/lib/common/types";
 
-export function useImportExport(getBlockStorage: () => BlockStorage) {
+type Block = {
+  id: string;
+  type: "text" | "code";
+  folded: boolean;
+  parentId: string;
+  fractionalIndex: number;
+  content: string;
+  children: Block[];
+};
+
+export function useImportExport(getApp: () => App) {
   // 导入功能状态
   const importDialogVisible = ref(false);
-  const importConflictCount = ref(0);
-  let pendingImportData: { content: string; precheck: any } | null = null;
+  const importBlockCount = ref(0);
+  let pendingImportFile: File | null = null;
 
   // 清空存储确认状态
   const clearStorageDialogVisible = ref(false);
 
   // 导出功能
   const handleExport = () => {
-    const blockStorage = getBlockStorage();
-    blockStorage.export();
+    const app = getApp();
+    const snapshot = app.exportShallowSnapshot();
+    const base64snapshot = btoa(JSON.stringify(snapshot));
+    const a = document.createElement("a");
+    a.href = `data:application/json;base64,${base64snapshot}`;
+    a.download = `${app.docId}_${new Date().toISOString()}.snapshot`;
+    a.click();
+    a.remove();
   };
 
   // 导入功能
   const handleImport = async (file: File) => {
-    const blockStorage = getBlockStorage();
-
     try {
       const content = await file.text();
+      const lines = content.split("\n");
 
-      // 预检查导入数据
-      const precheck = await blockStorage.preCheckImport(content);
-
-      if (!precheck.valid) {
-        alert(`导入文件有错误：\n${precheck.errors.join("\n")}`);
-        return;
+      const blockMap = new Map<string, Block>();
+      for (const line of lines) {
+        const block = JSON.parse(line) as Block;
+        block.children = [];
+        blockMap.set(block.id, block);
       }
 
-      // 如果没有冲突，直接导入
-      if (precheck.conflictingIds.length === 0) {
-        const result = await blockStorage.import(content, {
-          conflictResolution: "skip", // 没有冲突时用什么策略都一样
-          clearExisting: false,
-        });
-
-        if (result.success) {
-          alert(`导入成功！共导入 ${result.imported} 个块`);
-          location.reload();
-        } else {
-          alert(`导入失败：${result.message}`);
-        }
-        return;
-      }
-
-      // 有冲突，显示对话框让用户选择
-      pendingImportData = { content, precheck };
-      importConflictCount.value = precheck.conflictingIds.length;
+      importBlockCount.value = blockMap.size;
       importDialogVisible.value = true;
+      pendingImportFile = file;
     } catch (error) {
-      alert(`读取文件失败：${error}`);
+      toast.error(`导入失败：${error}`);
     }
   };
 
-  // 处理导入确认
-  const handleImportConfirm = async (strategy: ImportOptions["conflictResolution"]) => {
-    if (!pendingImportData) return;
+  const applyIdMapping = (
+    type: "text" | "code",
+    content: string,
+    mapping: Map<string, string>
+  ) => {
+    const nodeJson = JSON.parse(content);
+    const node = outlinerSchema.nodeFromJSON(nodeJson);
+    const blockRefType = outlinerSchema.nodes.blockRef;
+    const paragraphType = outlinerSchema.nodes.paragraph;
+    const codeblockType = outlinerSchema.nodes.codeblock;
 
-    const blockStorage = getBlockStorage();
+    const recur = (fragment: Fragment) => {
+      const result: Node[] = [];
 
-    try {
-      const result = await blockStorage.import(pendingImportData.content, {
-        conflictResolution: strategy,
-        clearExisting: false,
+      fragment.forEach((child) => {
+        if (child.type === blockRefType) {
+          const oldId = child.attrs.blockId;
+          const newId = mapping.get(oldId) ?? oldId;
+          const newNode = blockRefType.create({ blockId: newId });
+          result.push(newNode);
+        } else {
+          result.push(child.copy(recur(child.content)));
+        }
       });
 
-      if (result.success) {
-        alert(`导入成功！\n${result.message}`);
-        location.reload();
-      } else {
-        alert(`导入失败：${result.message}\n\n错误详情：\n${result.errors.join("\n")}`);
+      return Fragment.fromArray(result);
+    };
+
+    if (type == "text") {
+      const paragraph = paragraphType.create({}, recur(node.content));
+      return JSON.stringify(paragraph.toJSON());
+    } else if (type == "code") {
+      const codeblock = codeblockType.create({}, recur(node.content));
+      return JSON.stringify(codeblock.toJSON());
+    } else throw new Error("不支持的块类型");
+  };
+
+  // 处理导入确认
+  const handleImportConfirm = async () => {
+    if (!pendingImportFile) return;
+
+    try {
+      const content = await pendingImportFile.text();
+      const lines = content.split("\n");
+
+      const blockMap = new Map<string, Block>();
+      for (const line of lines) {
+        const block = JSON.parse(line) as Block;
+        block.children = [];
+        blockMap.set(block.id, block);
       }
+
+      for (const block of blockMap.values()) {
+        if (block.parentId == null) continue; // 根块
+        const parentBlock = blockMap.get(block.parentId);
+        if (!parentBlock) {
+          throw new Error(`父块 ${block.parentId} 不存在`);
+        }
+        parentBlock.children.push(block);
+      }
+
+      for (const block of blockMap.values()) {
+        block.children.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
+      }
+
+      const blockStorage = getApp();
+      const idMapping = new Map<string, string>();
+      const blockNodes: [Block, BlockNode][] = [];
+      blockStorage.tx(
+        (tx) => {
+          const createTree = (block: Block, node: BlockNode) => {
+            for (let i = 0; i < block.children.length; i++) {
+              const child = block.children[i];
+              const childNode = tx.insertBlockUnder(node, (dataMap) => {}, i);
+              idMapping.set(child.id, childNode.id);
+              blockNodes.push([child, childNode]);
+              createTree(child, childNode);
+            }
+          };
+
+          [...blockMap.values()]
+            .filter((block) => block.parentId == null)
+            .sort((a, b) => a.fractionalIndex - b.fractionalIndex)
+            .forEach((block, i) => {
+              const rootNode = tx.insertBlockUnder(null, (dataMap) => {}, i);
+              idMapping.set(block.id, rootNode.id);
+              blockNodes.push([block, rootNode]);
+              createTree(block, rootNode);
+            });
+
+          for (const [block, blockNode] of blockNodes) {
+            blockNode.data.set("type", block.type);
+            blockNode.data.set("folded", block.folded);
+            blockNode.data.set(
+              "content",
+              applyIdMapping(block.type, block.content, idMapping)
+            );
+          }
+        },
+        {
+          type: "localImport",
+          txId: nanoid(),
+        }
+      );
+
+      toast.success("导入成功！");
+      blockStorage._saver.forceSave();
     } catch (error) {
-      alert(`导入失败：${error}`);
+      toast.error(`导入失败：${error}`);
     } finally {
       handleImportCancel();
     }
@@ -84,8 +175,8 @@ export function useImportExport(getBlockStorage: () => BlockStorage) {
   // 处理导入取消
   const handleImportCancel = () => {
     importDialogVisible.value = false;
-    importConflictCount.value = 0;
-    pendingImportData = null;
+    importBlockCount.value = 0;
+    pendingImportFile = null;
   };
 
   // 清空存储功能
@@ -95,11 +186,18 @@ export function useImportExport(getBlockStorage: () => BlockStorage) {
 
   // 确认清空存储
   const handleClearStorageConfirm = () => {
-    const blockStorage = getBlockStorage();
-    blockStorage.clear("user-clear");
-    clearStorageDialogVisible.value = false;
-    alert("存储已清空！");
-    location.reload();
+    const storage = getApp();
+    try {
+      storage._persistence.clear();
+      storage._saver.forceSave();
+      // 刷新页面以重新加载
+      window.location.reload();
+    } catch (error) {
+      console.error("清空存储失败:", error);
+      toast.error("清空存储失败，请查看控制台了解详情");
+    } finally {
+      clearStorageDialogVisible.value = false;
+    }
   };
 
   // 取消清空存储
@@ -110,7 +208,7 @@ export function useImportExport(getBlockStorage: () => BlockStorage) {
   return {
     // 状态
     importDialogVisible,
-    importConflictCount,
+    importBlockCount,
     clearStorageDialogVisible,
 
     // 方法

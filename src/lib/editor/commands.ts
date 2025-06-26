@@ -4,12 +4,6 @@ import {
   type Command,
   type EditorState,
 } from "prosemirror-state";
-import type {
-  BlockStorage,
-  BlockTransactionMetadata,
-  SelectionMetadata,
-} from "../storage/interface";
-import type { BlockId } from "@/lib/blocks/types";
 import {
   buildBlockRefStr,
   getSelectedListItemInfo,
@@ -19,6 +13,8 @@ import {
 import { outlinerSchema } from "./schema";
 import { Node } from "prosemirror-model";
 import type { Editor } from "./interface";
+import type { App } from "../app/app";
+import type { BlockId, SelectionInfo } from "../common/types";
 
 export function findCurrListItem(state: EditorState) {
   const { $from } = state.selection;
@@ -31,7 +27,7 @@ export function findCurrListItem(state: EditorState) {
   return null;
 }
 
-export function getCurrSelection(state: EditorState): SelectionMetadata | null {
+export function getCurrSelection(state: EditorState): SelectionInfo | null {
   const sel = state.selection;
   const listItemInfo = findCurrListItem(state);
   return listItemInfo && listItemInfo.node.attrs.blockId
@@ -48,12 +44,10 @@ export function isEmptyListItem(node: Node): boolean {
   return pNode.content.size === 0;
 }
 
-export function promoteSelected(storage: BlockStorage): Command {
+export function promoteSelected(app: App): Command {
   return function (state, dispatch) {
     const { start, end, cross } = getSelectedListItemInfo(state);
-    if (!start || !end || cross) {
-      return true;
-    }
+    if (!start || !end || cross) return true;
 
     const { node, pos } = start;
     const { blockId } = node.attrs;
@@ -62,20 +56,19 @@ export function promoteSelected(storage: BlockStorage): Command {
     // 缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, anchor };
-    tx.promoteBlock(blockId);
-    tx.commit();
+    app.tx((tx) => tx.promoteBlock(blockId), {
+      type: "localEditorStructural",
+      txId: nanoid(),
+      selection: { blockId, anchor },
+    });
     return true;
   };
 }
 
-export function demoteSelected(storage: BlockStorage): Command {
+export function demoteSelected(app: App): Command {
   return function (state, dispatch) {
     const { start, end, cross } = getSelectedListItemInfo(state);
-    if (!start || !end || cross) {
-      return true;
-    }
+    if (!start || !end || cross) return true;
 
     const { node, pos } = start;
     const { blockId } = node.attrs;
@@ -84,165 +77,108 @@ export function demoteSelected(storage: BlockStorage): Command {
     // 反缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, anchor };
-    tx.demoteBlock(blockId);
-    tx.commit();
+    app.tx((tx) => tx.demoteBlock(blockId), {
+      type: "localEditorStructural",
+      txId: nanoid(),
+      selection: { blockId, anchor },
+    });
     return true;
   };
 }
 
-export function splitListItem(storage: BlockStorage): Command {
+export function splitListItem(app: App): Command {
   return function (state, dispatch) {
     const { $from } = state.selection;
 
-    const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) return false;
+    const currListItem = findCurrListItem(state);
+    if (!currListItem) return false;
 
-    const { node: listItem } = listItemInfo;
-    const blockId = listItem.attrs.blockId as string;
-    const newBlockId = nanoid();
+    const { node: listItem } = currListItem;
+    const currBlockId = listItem.attrs.blockId as BlockId;
 
-    const currentBlock = storage.getBlock(blockId);
-    if (!currentBlock) return false;
+    const currentBlockNode = app.getBlockNode(currBlockId);
+    if (!currentBlockNode) return false;
 
-    // 获取当前段落节点
     const paragraphNode = listItem.firstChild;
     if (!paragraphNode) return false;
 
-    // 计算分割点
     const splitPos = $from.parentOffset;
-
-    // 创建分割前的段落内容
-    const beforeContent = paragraphNode.cut(0, splitPos);
-    const afterContent = paragraphNode.cut(splitPos);
-
-    // 序列化内容
-    const beforeSerialized = oldSerialize(beforeContent);
-    const afterSerialized = oldSerialize(afterContent);
-
-    // 提取纯文本内容
-    const beforeText = beforeContent.textContent;
-    const afterText = afterContent.textContent;
-
-    // 计算新块的分数索引
-    const parentBlock = currentBlock.get().parentBlock;
-    const siblings = parentBlock
-      ? parentBlock.get().childrenBlocks
-      : storage.getRootBlocks();
-    const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
-
-    const currentFractionalIndex = currentBlock.get().fractionalIndex;
-
-    let newFractionalIndex: number;
-
-    // 如果在块的开头分割（splitPos === 0），新块应该在当前块之前
     if (splitPos === 0) {
-      const prevSibling = currentIndex > 0 ? siblings[currentIndex - 1] : null;
-      const prevSiblingFractionalIndex = prevSibling
-        ? prevSibling.get().fractionalIndex
-        : currentFractionalIndex - 2;
-      newFractionalIndex =
-        (prevSiblingFractionalIndex + currentFractionalIndex) / 2;
+      app.tx(
+        (tx) => {
+          // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
+          const newNode = tx.insertBlockBefore(currBlockId, (dataMap) => {
+            const newContent = oldSerialize(
+              outlinerSchema.nodes.paragraph.create()
+            );
+            dataMap.set("type", "text");
+            dataMap.set("folded", false);
+            dataMap.set("content", newContent);
+          });
+          // 要求聚焦到新块
+          tx.updateOrigin({ selection: { blockId: newNode.id, anchor: 0 } });
+        },
+        {
+          type: "localEditorStructural",
+          txId: nanoid(),
+        }
+      );
     } else {
-      // 否则，新块在当前块之后
-      const nextSibling =
-        currentIndex > -1 && currentIndex < siblings.length - 1
-          ? siblings[currentIndex + 1]
-          : null;
-      const nextSiblingFractionalIndex = nextSibling
-        ? nextSibling.get().fractionalIndex
-        : currentFractionalIndex + 2;
-      newFractionalIndex =
-        (currentFractionalIndex + nextSiblingFractionalIndex) / 2;
+      app.tx(
+        (tx) => {
+          // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
+          const beforeContent = paragraphNode.cut(0, splitPos);
+          const afterContent = paragraphNode.cut(splitPos);
+          const beforeSerialized = oldSerialize(beforeContent);
+          const afterSerialized = oldSerialize(afterContent);
+          tx.updateBlockData(currBlockId, { content: beforeSerialized });
+          const newNode = tx.insertBlockAfter(currBlockId, (dataMap) => {
+            dataMap.set("type", "text");
+            dataMap.set("folded", false);
+            dataMap.set("content", afterSerialized);
+          });
+          // 要求聚焦到新块开头
+          tx.updateOrigin({ selection: { blockId: newNode.id, anchor: 0 } });
+        },
+        {
+          type: "localEditorStructural",
+          txId: nanoid(),
+        }
+      );
     }
 
-    // 决定更新哪个块的内容和创建哪个块
-    let updateBlockId: string;
-    let updateContent: string;
-    let newBlockContent: string;
-    let focusBlockId: string;
-    let focusOffset: number;
-
-    if (splitPos === 0) {
-      // 在开头分割：创建空的新块，保持当前块内容不变
-      updateBlockId = blockId;
-      updateContent = oldSerialize(paragraphNode); // 保持原内容
-      newBlockContent = oldSerialize(outlinerSchema.nodes.paragraph.create()); // 创建空段落
-      focusBlockId = blockId; // 焦点保持在原块
-      focusOffset = 0; // 光标在开头
-    } else {
-      // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
-      updateBlockId = blockId;
-      updateContent = beforeSerialized;
-      newBlockContent = afterSerialized;
-      focusBlockId = newBlockId; // 焦点移到新块
-      focusOffset = 0; // 光标在新块开头
-    }
-
-    // 创建事务
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: focusBlockId, anchor: focusOffset };
-
-    // 1. 更新当前块的内容
-    tx.updateBlock({
-      id: updateBlockId,
-      content: updateContent,
-    });
-
-    // 2. 添加新块
-    tx.addBlock({
-      id: newBlockId,
-      type: "text",
-      folded: false,
-      parentId: currentBlock.get().parentId,
-      fractionalIndex: newFractionalIndex,
-      content: newBlockContent,
-    });
-
-    tx.commit();
     return true;
   };
 }
 
 export function deleteEmptyListItem(
-  storage: BlockStorage,
+  app: App,
   direction: "backward" | "forward" = "backward"
 ): Command {
   return function (state, dispatch) {
     const { $from, empty } = state.selection;
     // 该命令只在光标位于块开头且没有选中内容时触发
-    if (!empty || $from.parentOffset !== 0) {
-      return false;
-    }
+    if (!empty || $from.parentOffset !== 0) return false;
 
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
-    }
+    if (!listItemInfo) return false;
 
     // 块必须为空
-    if (listItemInfo.node.textContent.length > 0) {
-      return false;
-    }
+    if (listItemInfo.node.textContent.length > 0) return false;
 
-    const blockId = listItemInfo.node.attrs.blockId as string;
-    if (!blockId) {
-      return false;
-    }
+    const blockId = listItemInfo.node.attrs.blockId as BlockId;
+    if (!blockId) return false;
 
-    const currentBlock = storage.getBlock(blockId);
-    if (!currentBlock) {
-      return false;
-    }
+    const currentBlockNode = app.getBlockNode(blockId);
+    if (!currentBlockNode) return false;
+
+    const children = currentBlockNode.children() ?? [];
 
     // 不删除有子块的块
-    if (currentBlock.get().childrenBlocks.length > 0) {
-      return false;
-    }
+    if (children.length > 0) return false;
 
     // 确定删除后要聚焦的块 - 直接在 ProseMirror 文档中查找
-    let focusTarget: { blockId: string; anchor: number } | null = null;
+    let focusTarget: { blockId: BlockId; anchor: number } | null = null;
 
     if (direction === "forward") {
       // Delete 键：找下一个 listItem
@@ -258,7 +194,7 @@ export function deleteEmptyListItem(
       if (nextListItemPos !== null) {
         const nextListItem = state.doc.nodeAt(nextListItemPos);
         if (nextListItem) {
-          const nextBlockId = nextListItem.attrs.blockId as string;
+          const nextBlockId = nextListItem.attrs.blockId as BlockId;
           focusTarget = { blockId: nextBlockId, anchor: 0 };
         }
       }
@@ -274,25 +210,24 @@ export function deleteEmptyListItem(
       if (prevListItemPos !== null) {
         const prevListItem = state.doc.nodeAt(prevListItemPos);
         if (prevListItem) {
-          const prevBlockId = prevListItem.attrs.blockId as string;
-          const prevBlockData = storage.getBlock(prevBlockId);
+          const prevBlockId = prevListItem.attrs.blockId as BlockId;
+          const prevBlockData = app.getBlockData(prevBlockId);
           if (prevBlockData) {
-            const content = storage.getTextContent(prevBlockId);
+            const content = app.getTextContent(prevBlockId);
             focusTarget = { blockId: prevBlockId, anchor: content.length };
           }
         }
       }
     }
 
-    if (!focusTarget) {
-      // 如果这是编辑器中唯一的根块，则不删除
-      return false;
-    }
+    // 如果这是编辑器中唯一的根块，则不删除
+    if (!focusTarget) return false;
 
-    const tx = storage.createTransaction();
-    tx.metadata.selection = focusTarget;
-    tx.deleteBlock(blockId);
-    tx.commit();
+    app.tx((tx) => tx.deleteBlock(blockId), {
+      type: "localEditorStructural",
+      txId: nanoid(),
+      selection: focusTarget,
+    });
 
     return true;
   };
@@ -301,9 +236,7 @@ export function deleteEmptyListItem(
 export function selectCurrentListItem(): Command {
   return function (state, dispatch) {
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
-    }
+    if (!listItemInfo) return false;
 
     const { node: listItem, pos } = listItemInfo;
 
@@ -338,22 +271,16 @@ export function deleteSelected(): Command {
   return function (state, dispatch) {
     const { from, to, empty } = state.selection;
 
-    if (empty) {
-      return false; // 该命令仅处理非空选择。
-    }
+    if (empty) return false; // 该命令仅处理非空选择。
 
     const { start, end, cross } = getSelectedListItemInfo(state);
-    if (!start || !end || cross) {
-      return true;
-    }
+    if (!start || !end || cross) return true;
 
     // 选择在单个 listItem 内
     const { node: listItem, pos: listItemPos } = start;
     const paragraphNode = listItem.firstChild;
 
-    if (!paragraphNode) {
-      return false;
-    }
+    if (!paragraphNode) return false;
 
     const paraContentStartPos = listItemPos + 2; // 在 listItem 和段落开标签之后
     const paraContentEndPos = paraContentStartPos + paragraphNode.content.size;
@@ -378,49 +305,29 @@ export function deleteSelected(): Command {
 }
 
 export function toggleFocusedFoldState(
-  storage: BlockStorage,
+  app: App,
   targetState?: boolean,
   blockId?: BlockId
 ): Command {
   return function (state, dispatch) {
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
+    if (!listItemInfo) return false;
+
+    if (!blockId) {
+      blockId = listItemInfo.node.attrs.blockId as BlockId;
+      if (!blockId) return false;
     }
 
-    const { node: listItem, pos } = listItemInfo;
-
-    let blockId2 = blockId;
-    if (blockId2 == null) {
-      blockId2 = listItem.attrs.blockId as string;
-      if (blockId2 == null) {
-        return false;
-      }
+    const currentBlockData = app.getBlockData(blockId);
+    if (!currentBlockData || targetState === currentBlockData.folded) {
+      return true;
     }
 
-    const currentBlock = storage.getBlock(blockId2);
-    // 只有存在子块的块才能被折叠/展开
-    if (!currentBlock || currentBlock.get().childrenBlocks.length === 0) {
-      return false;
-    }
-
-    const currentFoldedState = currentBlock.get().folded;
-    // 保留光标位置
-    const anchor = state.selection.from - (pos + 2);
-
-    targetState ??= !currentFoldedState;
-
-    if (targetState === currentFoldedState) {
-      return false;
-    }
-
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: blockId2, anchor };
-    tx.updateBlock({
-      id: blockId2,
-      folded: targetState,
+    app.tx((tx) => tx.toggleFold(blockId!, targetState), {
+      type: "localEditorStructural",
+      txId: nanoid(),
     });
-    tx.commit();
+
     return true;
   };
 }
@@ -449,208 +356,125 @@ export function copyBlockRef(): Command {
   };
 }
 
-export function moveBlockUp(storage: BlockStorage): Command {
+export function moveBlockUp(app: App): Command {
   return function (state, dispatch) {
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) {
       return false;
     }
 
-    const { node: listItem, pos } = listItemInfo;
-    const blockId = listItem.attrs.blockId as string;
-    if (!blockId) {
-      return false;
-    }
+    const blockId = listItemInfo.node.attrs.blockId as BlockId;
+    if (!blockId) return false;
 
-    const currentBlock = storage.getBlock(blockId);
-    if (!currentBlock) {
-      return false;
-    }
+    const blockNode = app.getBlockNode(blockId);
+    if (!blockNode) return false;
 
-    const currentBlockData = currentBlock.get();
-    const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock
-      ? parentBlock.get().childrenBlocks
-      : storage.getRootBlocks();
-    const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
+    const index = blockNode.index()!;
+    if (index === 0) return false; // 已经是第一个块
 
-    // 如果已经是第一个块，无法上移
-    if (currentIndex <= 0) {
-      return false;
-    }
-
-    const prevSibling = siblings[currentIndex - 1];
-    const prevSiblingData = prevSibling.get();
-
-    // 计算新的 fractionalIndex，将当前块移到前一个兄弟块的位置
-    const beforePrevSibling =
-      currentIndex > 1 ? siblings[currentIndex - 2] : null;
-    const beforePrevSiblingFractionalIndex = beforePrevSibling
-      ? beforePrevSibling.get().fractionalIndex
-      : prevSiblingData.fractionalIndex - 2;
-
-    const newFractionalIndex =
-      (beforePrevSiblingFractionalIndex + prevSiblingData.fractionalIndex) / 2;
-
-    // 保留光标位置
-    const anchor = state.selection.from - (pos + 2);
-
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, anchor };
-    tx.updateBlock({
-      id: blockId,
-      fractionalIndex: newFractionalIndex,
+    app.tx((tx) => tx.moveBlock(blockId, blockNode.parent()!, index - 1), {
+      type: "localEditorStructural",
+      txId: nanoid(),
     });
-    tx.commit();
 
     return true;
   };
 }
 
-export function moveBlockDown(storage: BlockStorage): Command {
+export function moveBlockDown(app: App): Command {
   return function (state, dispatch) {
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) {
       return false;
     }
 
-    const { node: listItem, pos } = listItemInfo;
-    const blockId = listItem.attrs.blockId as string;
-    if (!blockId) {
-      return false;
-    }
+    const blockId = listItemInfo.node.attrs.blockId as BlockId;
+    if (!blockId) return false;
 
-    const currentBlock = storage.getBlock(blockId);
-    if (!currentBlock) {
-      return false;
-    }
+    const blockNode = app.getBlockNode(blockId);
+    if (!blockNode) return false;
 
-    const currentBlockData = currentBlock.get();
-    const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock
-      ? parentBlock.get().childrenBlocks
-      : storage.getRootBlocks();
-    const currentIndex = siblings.findIndex((b) => b.get().id === blockId);
+    const index = blockNode.index()!;
+    const parentNode = blockNode.parent()!;
+    if (index >= parentNode.children()!.length - 1) return false; // 已经是最后一个块
 
-    // 如果已经是最后一个块，无法下移
-    if (currentIndex < 0 || currentIndex >= siblings.length - 1) {
-      return false;
-    }
-
-    const nextSibling = siblings[currentIndex + 1];
-    const nextSiblingData = nextSibling.get();
-
-    // 计算新的 fractionalIndex，将当前块移到下一个兄弟块的位置
-    const afterNextSibling =
-      currentIndex + 2 < siblings.length ? siblings[currentIndex + 2] : null;
-    const afterNextSiblingFractionalIndex = afterNextSibling
-      ? afterNextSibling.get().fractionalIndex
-      : nextSiblingData.fractionalIndex + 2;
-
-    const newFractionalIndex =
-      (nextSiblingData.fractionalIndex + afterNextSiblingFractionalIndex) / 2;
-
-    // 保留光标位置
-    const offset = state.selection.from - (pos + 2);
-
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId, anchor: offset };
-    tx.updateBlock({
-      id: blockId,
-      fractionalIndex: newFractionalIndex,
+    app.tx((tx) => tx.moveBlock(blockId, parentNode, index + 1), {
+      type: "localEditorStructural",
+      txId: nanoid(),
     });
-    tx.commit();
 
     return true;
   };
 }
 
-export function mergeWithPreviousBlock(storage: BlockStorage): Command {
+export function mergeWithPreviousBlock(app: App): Command {
   return function (state, dispatch) {
     const { $from, empty } = state.selection;
 
     // 只在光标位于块开头且没有选中内容时触发
-    if (!empty || $from.parentOffset !== 0) {
-      return false;
-    }
+    if (!empty || $from.parentOffset !== 0) return false;
 
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
-    }
+    if (!listItemInfo) return false;
 
     const { node: currentListItem } = listItemInfo;
-    const currentBlockId = currentListItem.attrs.blockId as string;
-    if (!currentBlockId) {
-      return false;
-    }
+    const currentBlockId = currentListItem.attrs.blockId as BlockId;
+    if (!currentBlockId) return false;
 
-    const currentBlock = storage.getBlock(currentBlockId);
-    if (!currentBlock) {
-      return false;
-    }
+    const currentBlockNode = app.getBlockNode(currentBlockId);
+    if (!currentBlockNode) return false;
 
-    const currentBlockData = currentBlock.get();
+    const currentBlockData = app.getBlockData(currentBlockId);
+    if (!currentBlockData) return false;
 
     // 不能合并有子块的块
-    if (currentBlockData.childrenBlocks.length > 0) {
-      return false;
-    }
+    const children = currentBlockNode.children();
+    if (children && children.length > 0) return false;
 
     // 找到前一个可以合并的块
-    const parentBlock = currentBlockData.parentBlock;
-    const siblings = parentBlock
-      ? parentBlock.get().childrenBlocks
-      : storage.getRootBlocks();
-    const currentIndex = siblings.findIndex(
-      (b) => b.get().id === currentBlockId
-    );
+    const parentBlockNode = currentBlockNode.parent();
+    if (!parentBlockNode) return false; // 根块无法合并
 
-    // 如果是第一个块，无法合并
-    if (currentIndex <= 0) {
-      return false;
-    }
+    const siblings = parentBlockNode.children();
+    if (!siblings) return false;
+
+    const currentIndex = currentBlockNode.index();
+    if (
+      currentIndex === null ||
+      currentIndex === undefined ||
+      currentIndex <= 0
+    )
+      return false; // 如果是第一个块，无法合并
 
     // 找到前一个兄弟块（同级别）
-    const prevSibling = siblings[currentIndex - 1];
-    const prevBlockData = prevSibling.get();
-    const prevBlockId = prevBlockData.id;
+    const prevBlockNode = siblings[currentIndex - 1];
+    const prevBlockId = prevBlockNode.id;
+    const prevBlockData = app.getBlockData(prevBlockId);
+    if (!prevBlockData) return false;
 
     // 只能合并同类型的文本块
-    if (prevBlockData.type !== "text" || currentBlockData.type !== "text") {
+    if (prevBlockData.type !== "text" || currentBlockData.type !== "text")
       return false;
-    }
 
-    // 前一个块不能有子块，或者前一个块是折叠的（这样合并会比较复杂）
-    if (prevBlockData.childrenBlocks.length > 0) {
-      return false;
-    }
+    // 前一个块不能有子块
+    const prevChildren = prevBlockNode.children();
+    if (prevChildren && prevChildren.length > 0) return false;
 
     // 获取当前块的段落节点
     const currentParagraphNode = currentListItem.firstChild;
-    if (!currentParagraphNode) {
-      return false;
-    }
-
-    // 获取前一个块的内容用于合并
-    const prevBlockLoaded = storage.getBlock(prevBlockId);
-    if (!prevBlockLoaded) {
-      return false;
-    }
-
-    const prevBlockContent = prevBlockLoaded.get().content as string;
+    if (!currentParagraphNode) return false;
 
     // 解析前一个块的内容
     let prevParagraphNode;
     try {
-      if (prevBlockContent && prevBlockContent.trim() !== "") {
-        prevParagraphNode = oldDeserialize(prevBlockContent);
+      if (prevBlockData.content && prevBlockData.content.trim() !== "") {
+        prevParagraphNode = oldDeserialize(prevBlockData.content);
       } else {
         prevParagraphNode = outlinerSchema.nodes.paragraph.create();
       }
     } catch (error) {
       // 如果解析失败，创建包含纯文本的段落
-      const prevTextContent = storage.getTextContent(prevBlockId);
+      const prevTextContent = app.getTextContent(prevBlockId);
       prevParagraphNode = outlinerSchema.nodes.paragraph.create(
         null,
         prevTextContent ? [outlinerSchema.text(prevTextContent)] : []
@@ -684,19 +508,21 @@ export function mergeWithPreviousBlock(storage: BlockStorage): Command {
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
 
-    const tx = storage.createTransaction();
-    tx.metadata.selection = { blockId: prevBlockId, anchor: mergePoint };
-
-    // 1. 更新前一个块的内容为合并后的内容
-    tx.updateBlock({
-      id: prevBlockId,
-      content: mergedSerialized,
-    });
-
-    // 2. 删除当前块
-    tx.deleteBlock(currentBlockId);
-
-    tx.commit();
+    app.tx(
+      (tx) => {
+        // 1. 更新前一个块的内容为合并后的内容
+        tx.updateBlockData(prevBlockId, { content: mergedSerialized });
+        // 2. 删除当前块
+        tx.deleteBlock(currentBlockId);
+        // 3. 设置光标位置
+        const selection = { blockId: prevBlockId, anchor: mergePoint };
+        tx.updateOrigin({ selection });
+      },
+      {
+        type: "localEditorStructural",
+        txId: nanoid(),
+      }
+    );
 
     return true;
   };
@@ -954,20 +780,12 @@ export function codeblockMoveToLineEnd(): Command {
 
 export function undo(editor: Editor): Command {
   return function (state, dispatch) {
-    if (!editor.canUndo()) return false;
-    if (dispatch) {
-      editor.undo();
-    }
-    return true;
+    throw new Error("Undo is not currently supported");
   };
 }
 
 export function redo(editor: Editor): Command {
   return function (state, dispatch) {
-    if (!editor.canRedo()) return false;
-    if (dispatch) {
-      editor.redo();
-    }
-    return true;
+    throw new Error("Redo is not currently supported");
   };
 }

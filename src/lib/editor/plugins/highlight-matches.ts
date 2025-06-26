@@ -1,4 +1,4 @@
-import { removeDiacritics } from "@/lib/index/tokenize";
+import { removeDiacritics } from "@/lib/app/index/tokenize";
 import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 
