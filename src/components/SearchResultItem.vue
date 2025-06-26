@@ -4,13 +4,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from "vue";
-import type { Block } from "@/lib/blocks/types";
-import type { BlockStorage } from "@/lib/storage/interface";
 import { ReadonlyBlockView } from "@/lib/editor/readonly-view";
+import type { BlockNode } from "@/lib/common/types";
+import type { App } from "@/lib/app/app";
 
 interface Props {
-  block: Block;
-  storage: BlockStorage;
+  block: BlockNode;
+  storage: App;
   searchQuery: string;
 }
 

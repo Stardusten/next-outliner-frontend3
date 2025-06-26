@@ -1,8 +1,8 @@
-import { computed } from "vue";
-import type { BlockId, BlockLoaded } from "@/lib/blocks/types";
 import type { Editor, EditorEvent } from "@/lib/editor/interface";
-import type { BlockStorage } from "@/lib/storage/interface";
 import { useLocalStorage } from "./useLocalStorage";
+import type { BlockId, BlockNode } from "@/lib/common/types";
+import type { App } from "@/lib/app/app";
+import { computed } from "vue";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -13,7 +13,7 @@ export interface BreadcrumbItem {
 
 export function useBreadcrumb(
   getEditor: () => Editor,
-  getBlockStorage: () => BlockStorage
+  getBlockStorage: () => App
 ) {
   const [rootBlockIds, setRootBlockIds] = useLocalStorage<BlockId[]>(
     ROOT_BLOCKS_KEY,
@@ -21,27 +21,26 @@ export function useBreadcrumb(
   );
 
   const breadcrumbItems = computed((): BreadcrumbItem[] => {
-    const blockStorage = getBlockStorage();
+    const app = getBlockStorage();
     const items: BreadcrumbItem[] = [{ title: "我的笔记" }];
 
     if (rootBlockIds.value.length === 1) {
       const rootBlockId = rootBlockIds.value[0];
-      const rootBlock = blockStorage.getBlock(rootBlockId);
+      const rootBlock = app.getBlockNode(rootBlockId);
       if (rootBlock) {
         const path: BlockId[] = [];
-        let currentBlock: BlockLoaded | null = rootBlock;
+        let currentBlock: BlockNode | null = rootBlock;
 
         while (currentBlock) {
-          path.unshift(currentBlock.get().id);
-          currentBlock = currentBlock.get().parentBlock;
+          path.unshift(currentBlock.id);
+          currentBlock = currentBlock.parent() ?? null;
         }
 
         path.forEach((blockId) => {
-          const block = blockStorage.getBlock(blockId);
+          const block = app.getBlockNode(blockId);
           if (block) {
             const title =
-              blockStorage.getTextContent(blockId) ||
-              `块 ${blockId.slice(0, 8)}`;
+              app.getTextContent(blockId) || `块 ${blockId.slice(0, 8)}`;
             items.push({ blockId, title });
           }
         });

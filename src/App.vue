@@ -51,7 +51,7 @@
 
     <!-- 补全弹窗 -->
     <CompletionPopup
-      :storage="blockStorage"
+      :app="app"
       :visible="completion.completionVisible.value"
       :query="completion.completionQuery.value"
       :position="completion.completionPosition.value"
@@ -63,7 +63,7 @@
 
     <!-- 搜索弹窗 -->
     <SearchPopup
-      :storage="blockStorage"
+      :app="app"
       :visible="search.searchVisible.value"
       :position="search.searchPosition.value"
       :searchResults="search.searchResults.value"
@@ -78,7 +78,7 @@
     <!-- 导入对话框 -->
     <ImportDialog
       :visible="importExport.importDialogVisible.value"
-      :conflictCount="importExport.importConflictCount.value"
+      :blockCount="importExport.importBlockCount.value"
       @confirm="importExport.handleImportConfirm"
       @cancel="importExport.handleImportCancel"
     />
@@ -113,18 +113,18 @@
         请谨慎操作，建议在清空前先导出数据备份。
       </p>
     </BaseModal>
+
+    <!-- Toast 通知 -->
+    <Toast :toasts="toast.toasts.value" @remove="toast.remove" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import "prosemirror-view/style/prosemirror.css";
-import type { BlockStorage } from "./lib/storage/block/interface";
 import type { Editor, EditorEvent } from "./lib/editor/interface";
 import { ProseMirrorEditor } from "./lib/editor/impl";
-import { initializeBlockStorage } from "./utils/data";
-import { LocalStorageBlockStorage } from "./lib/storage/block/local-storage-impl";
-import { FullTextIndex } from "./lib/index/fulltext";
+import { FullTextIndex } from "./lib/app/index/fulltext";
 import { Search, Menu } from "lucide-vue-next";
 import MoreMenu from "./components/MoreMenu.vue";
 import {
@@ -134,15 +134,21 @@ import {
   useBlockRefCompletion,
   useSearch,
   useImportExport,
+  useToast,
 } from "./composables";
 import CompletionPopup from "./components/CompletionPopup.vue";
 import SearchPopup from "./components/SearchPopup.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import BaseModal from "./components/BaseModal.vue";
+import Toast from "./components/Toast.vue";
+import { App } from "./lib/app/app";
+import { LocalStoragePersistence } from "./lib/app/local-storage";
 
-// 基础状态
+const docId = "doc01";
 const wrapper = ref<HTMLElement | null>(null);
-const blockStorage: BlockStorage = new LocalStorageBlockStorage();
+const app = new App(docId, LocalStoragePersistence);
+console.info("create blocks success");
+
 let editor: Editor;
 let fulltextIndex: FullTextIndex;
 
@@ -151,33 +157,30 @@ useLineSpacing();
 
 const completion = useBlockRefCompletion(
   () => editor,
-  () => blockStorage,
-  () => fulltextIndex
+  () => app
 );
 
 const breadcrumb = useBreadcrumb(
   () => editor,
-  () => blockStorage
+  () => app
 );
 
 const search = useSearch(
   () => editor,
-  () => blockStorage,
-  () => fulltextIndex
+  () => app
 );
 
-const importExport = useImportExport(() => blockStorage);
+const importExport = useImportExport(() => app);
+
+const toast = useToast();
 
 onMounted(() => {
   if (!wrapper.value) {
     throw new Error("Wrapper not found");
   }
 
-  // 初始化存储数据
-  initializeBlockStorage(blockStorage);
-
   // 创建编辑器实例
-  editor = new ProseMirrorEditor(blockStorage, {
+  editor = new ProseMirrorEditor(app, {
     initialRootBlockIds: breadcrumb.rootBlockIds.value,
   });
   editor.mount(wrapper.value);
@@ -187,10 +190,10 @@ onMounted(() => {
   editor.addEventListener(breadcrumb.handleEditorEvent);
 
   // 创建索引
-  fulltextIndex = new FullTextIndex(blockStorage);
+  fulltextIndex = new FullTextIndex(app);
 
   (globalThis as any).editor = editor;
-  (globalThis as any).storage = blockStorage;
+  (globalThis as any).storage = app;
   (globalThis as any).fulltextIndex = fulltextIndex;
 });
 
@@ -300,6 +303,7 @@ onUnmounted(() => {
 .editor-wrapper {
   flex: 1;
   padding: 16px 20px;
+  padding-bottom: 50vh;
   margin-top: 20px;
   outline: none;
 }
@@ -362,9 +366,33 @@ onUnmounted(() => {
   --menu-text-muted: #656d76;
   --menu-danger: #d1242f;
   --menu-danger-hover: #ffeaea;
+  --menu-danger-hover-filled: #b91c1c;
   --toggle-bg: #eaeef2;
   --toggle-bg-active: #0969da;
   --toggle-thumb: #ffffff;
+
+  /* Toast 相关颜色 */
+  --toast-bg: rgba(255, 255, 255, 0.95);
+  --toast-border: #e1e4e8;
+  --toast-border-radius: 8px;
+  --toast-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --toast-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.18);
+  --toast-padding: 16px;
+  --toast-title-font-size: 14px;
+  --toast-message-font-size: 13px;
+  --toast-title-color: #1a1a1a;
+  --toast-message-color: #586069;
+  --toast-close-color: #8b949e;
+  --toast-close-hover-bg: #f5f7fa;
+  --toast-close-hover-color: #1a1a1a;
+  --toast-success-border: #28a745;
+  --toast-success-icon: #28a745;
+  --toast-error-border: #d73a49;
+  --toast-error-icon: #d73a49;
+  --toast-warning-border: #ffc107;
+  --toast-warning-icon: #e36209;
+  --toast-info-border: #0969da;
+  --toast-info-icon: #0969da;
 }
 
 /* 暗色主题 */
@@ -413,9 +441,33 @@ onUnmounted(() => {
   --menu-text-muted: #8b949e;
   --menu-danger: #f85149;
   --menu-danger-hover: #2d1117;
+  --menu-danger-hover-filled: #dc2626;
   --toggle-bg: #30363d;
   --toggle-bg-active: #58a6ff;
   --toggle-thumb: #ffffff;
+
+  /* Toast 暗色主题 */
+  --toast-bg: rgba(22, 27, 34, 0.95);
+  --toast-border: #30363d;
+  --toast-border-radius: 8px;
+  --toast-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --toast-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --toast-padding: 16px;
+  --toast-title-font-size: 14px;
+  --toast-message-font-size: 13px;
+  --toast-title-color: #e6edf3;
+  --toast-message-color: #8b949e;
+  --toast-close-color: #8b949e;
+  --toast-close-hover-bg: #21262d;
+  --toast-close-hover-color: #e6edf3;
+  --toast-success-border: #7ee787;
+  --toast-success-icon: #7ee787;
+  --toast-error-border: #f85149;
+  --toast-error-icon: #f85149;
+  --toast-warning-border: #ffa657;
+  --toast-warning-icon: #ffa657;
+  --toast-info-border: #58a6ff;
+  --toast-info-icon: #58a6ff;
 }
 
 /* 行间距设置在 editor.css 中定义 */

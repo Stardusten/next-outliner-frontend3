@@ -1,19 +1,15 @@
 import { ref, computed } from "vue";
-import type { Block, BlockId } from "@/lib/blocks/types";
-import type { BlockStorage } from "@/lib/storage/interface";
-import type { FullTextIndex } from "@/lib/index/fulltext";
+import type { FullTextIndex } from "@/lib/app/index/fulltext";
 import type { Editor } from "@/lib/editor/interface";
+import type { App } from "@/lib/app/app";
+import type { BlockNode } from "@/lib/common/types";
 
 export interface SearchResult {
-  block: Block;
+  block: BlockNode;
   score?: number;
 }
 
-export function useSearch(
-  getEditor: () => Editor,
-  getBlockStorage: () => BlockStorage,
-  getFullTextIndex: () => FullTextIndex
-) {
+export function useSearch(getEditor: () => Editor, getApp: () => App) {
   const searchVisible = ref(false);
   const searchQuery = ref("");
   const searchResults = ref<SearchResult[]>([]);
@@ -43,20 +39,18 @@ export function useSearch(
       return;
     }
 
-    const fullTextIndex = getFullTextIndex();
-    const blockStorage = getBlockStorage();
+    const app = getApp();
 
     // 使用全文索引搜索，获取带分数的结果
-    const searchResultsWithScore = fullTextIndex.searchWithScore(query, 100);
+    const searchResultsWithScore = app.searchWithScore(query, 100);
 
     const results: SearchResult[] = [];
     for (const { id, score } of searchResultsWithScore) {
-      const blockLoaded = blockStorage.getBlock(id);
-      if (blockLoaded) {
-        const block = blockLoaded.get();
-        const textContent = blockStorage.getTextContent(id);
+      const blockNode = app.getBlockNode(id);
+      if (blockNode) {
+        const textContent = app.getTextContent(id);
         if (textContent && textContent.trim().length > 0) {
-          results.push({ block, score });
+          results.push({ block: blockNode, score });
         }
       }
     }

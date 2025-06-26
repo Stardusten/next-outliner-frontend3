@@ -31,7 +31,7 @@
         <div class="search-item-content">
           <SearchResultItem
             :block="result.block"
-            :storage="storage"
+            :storage="app"
             :search-query="searchQuery"
           />
         </div>
@@ -59,11 +59,11 @@
 import { ref, watch, nextTick, onMounted } from "vue";
 import { Search } from "lucide-vue-next";
 import SearchResultItem from "./SearchResultItem.vue";
-import type { Block } from "../lib/blocks/types";
-import type { BlockStorage } from "@/lib/storage/interface";
+import type { BlockNode } from "@/lib/common/types";
+import type { App } from "@/lib/app/app";
 
 interface SearchResult {
-  block: Block;
+  block: BlockNode;
   score?: number;
 }
 
@@ -73,7 +73,7 @@ interface Props {
   searchResults: SearchResult[];
   activeIndex: number;
   searchQuery: string;
-  storage: BlockStorage;
+  app: App;
 }
 
 interface Emits {

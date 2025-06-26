@@ -212,7 +212,9 @@ div.list-item pre {
   margin: 0;
 }
 
-div.list-item pre code {
+/** 行内和行间代码块 */
+div.list-item pre code,
+code {
   font-family: var(--editor-codeblock-font-family);
   font-size: var(--editor-codeblock-font-size);
   line-height: var(--editor-codeblock-line-height);
@@ -222,7 +224,7 @@ div.list-item pre code {
 div.list-item pre code .hljs-comment,
 div.list-item pre code .hljs-quote {
   color: var(--color-syntax-comment, #6a737d);
-  font-style: italic;
+  /*font-style: italic;*/
 }
 
 div.list-item pre code .hljs-keyword,

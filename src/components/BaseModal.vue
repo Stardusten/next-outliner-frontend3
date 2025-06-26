@@ -147,7 +147,7 @@ const handleOverlayClick = () => {
 }
 
 .modal-header {
-  padding: 16px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--menu-border);
   display: flex;
   align-items: center;
@@ -181,13 +181,13 @@ const handleOverlayClick = () => {
 }
 
 .modal-content {
-  padding: 16px 20px;
+  padding: 16px;
   flex: 1;
   overflow-y: auto;
 }
 
 .modal-footer {
-  padding: 12px 20px 16px;
+  padding: 12px;
   border-top: 1px solid var(--menu-border);
   background: var(--color-bg-muted);
 }
@@ -199,7 +199,7 @@ const handleOverlayClick = () => {
 }
 
 .modal-btn {
-  padding: 5px 16px;
+  padding: 8px 16px;
   border-radius: 6px;
   font-size: var(--ui-font-size);
   font-weight: 500;
@@ -210,7 +210,7 @@ const handleOverlayClick = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
+  min-width: 72px;
 }
 
 .modal-btn:disabled {
@@ -248,16 +248,15 @@ const handleOverlayClick = () => {
 }
 
 .confirm-btn.danger-btn {
-  background: var(--color-bg);
-  color: var(--menu-danger);
-  border-color: var(--menu-border);
+  background: var(--menu-danger);
+  color: white;
+  border-color: var(--menu-danger);
   box-shadow: 0 1px 0 rgba(27, 31, 36, 0.04);
 }
 
 .confirm-btn.danger-btn:hover:not(:disabled) {
-  background: var(--menu-danger-hover);
-  color: var(--menu-danger);
-  border-color: var(--menu-danger);
+  background: var(--menu-danger-hover-filled);
+  border-color: var(--menu-danger-hover-filled);
   box-shadow: 0 1px 0 rgba(27, 31, 36, 0.1);
 }
 </style>

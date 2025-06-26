@@ -1,5 +1,4 @@
 import { keymap } from "prosemirror-keymap";
-import type { BlockStorage } from "../storage/block/interface";
 import {
   codeblockIndent,
   codeblockInsertLineBreak,
@@ -26,38 +25,39 @@ import type { Command, EditorState } from "prosemirror-state";
 import { chainCommands, toggleMark } from "prosemirror-commands";
 import { outlinerSchema } from "./schema";
 import type { Editor } from "./interface";
+import type { App } from "../app/app";
 
-export function createKeymapPlugin(editor: Editor, storage: BlockStorage) {
-  const toggleFoldTrue = toggleFocusedFoldState(storage, true, undefined);
-  const toggleFoldFalse = toggleFocusedFoldState(storage, false, undefined);
+export function createKeymapPlugin(editor: Editor, app: App) {
+  const toggleFoldTrue = toggleFocusedFoldState(app, true, undefined);
+  const toggleFoldFalse = toggleFocusedFoldState(app, false, undefined);
 
   return keymap({
     Tab: dispatchByBlockType({
-      text: chainCommands(demoteSelected(storage), stop),
+      text: chainCommands(demoteSelected(app), stop),
       code: codeblockIndent(),
     }),
     "Shift-Tab": dispatchByBlockType({
-      text: chainCommands(promoteSelected(storage), stop),
+      text: chainCommands(promoteSelected(app), stop),
       code: codeblockOutdent(),
     }),
     Enter: dispatchByBlockType({
-      text: chainCommands(splitListItem(storage), stop),
+      text: chainCommands(splitListItem(app), stop),
       code: codeblockInsertLineBreak(),
     }),
     Backspace: dispatchByBlockType({
       text: chainCommands(
-        deleteEmptyListItem(storage),
-        mergeWithPreviousBlock(storage),
+        deleteEmptyListItem(app),
+        mergeWithPreviousBlock(app),
         deleteSelected()
       ),
-      code: chainCommands(deleteEmptyListItem(storage), deleteSelected()),
+      code: chainCommands(deleteEmptyListItem(app), deleteSelected()),
     }),
     Delete: dispatchByBlockType({
       text: chainCommands(
-        deleteEmptyListItem(storage, "forward"),
+        deleteEmptyListItem(app, "forward"),
         deleteSelected()
       ),
-      code: chainCommands(deleteEmptyListItem(storage), deleteSelected()),
+      code: chainCommands(deleteEmptyListItem(app), deleteSelected()),
     }),
     "Mod-a": dispatchByBlockType({
       text: selectCurrentListItem(),
@@ -65,8 +65,8 @@ export function createKeymapPlugin(editor: Editor, storage: BlockStorage) {
     }),
     "Mod-ArrowUp": chainCommands(toggleFoldTrue, stop),
     "Mod-ArrowDown": chainCommands(toggleFoldFalse, stop),
-    "Alt-ArrowUp": chainCommands(moveBlockUp(storage), stop),
-    "Alt-ArrowDown": chainCommands(moveBlockDown(storage), stop),
+    "Alt-ArrowUp": chainCommands(moveBlockUp(app), stop),
+    "Alt-ArrowDown": chainCommands(moveBlockDown(app), stop),
     "Mod-b": toggleMark(outlinerSchema.marks.bold),
     "Mod-i": toggleMark(outlinerSchema.marks.italic),
     "Mod-u": toggleMark(outlinerSchema.marks.underline),

@@ -1,16 +1,17 @@
-import type { Block, BlockLoaded } from "@/lib/blocks/types";
-import type { FullTextIndex } from "@/lib/index/fulltext";
+import type { FullTextIndex } from "@/lib/app/index/fulltext";
 import type {
   CompletionStatus,
   Editor,
   EditorEvent,
 } from "@/lib/editor/interface";
-import type { BlockStorage } from "@/lib/storage/interface";
 import { onMounted, ref } from "vue";
 import { outlinerSchema } from "@/lib/editor/schema";
+import type { App } from "@/lib/app/app";
+import type { BlockDataInner, BlockNode } from "@/lib/common/types";
 
-function isSingleRefBlock(block: BlockLoaded) {
-  const nodeJson = JSON.parse(block.get().content);
+function isSingleRefBlock(block: BlockNode) {
+  const data = block.data.toJSON() as BlockDataInner;
+  const nodeJson = JSON.parse(data.content);
   const node = outlinerSchema.nodeFromJSON(nodeJson);
   if (!node || node.type !== outlinerSchema.nodes.paragraph) return false;
 
@@ -25,14 +26,13 @@ function isSingleRefBlock(block: BlockLoaded) {
 
 export function useBlockRefCompletion(
   getEditor: () => Editor,
-  getBlockStorage: () => BlockStorage,
-  getFullTextIndex: () => FullTextIndex
+  getApp: () => App
 ) {
   // 补全相关状态
   const completionVisible = ref(false);
   const completionQuery = ref("");
   const completionPosition = ref({ x: 0, y: 0 });
-  const availableBlocks = ref<Block[]>([]);
+  const availableBlocks = ref<BlockNode[]>([]);
   const completionActiveIndex = ref(0);
 
   // 编辑器事件处理
@@ -84,55 +84,51 @@ export function useBlockRefCompletion(
 
   // 加载可用的块列表
   const loadAvailableBlocks = (query?: string) => {
-    const fulltextIndex = getFullTextIndex();
-    const blockStorage = getBlockStorage();
+    const app = getApp();
 
-    const blocks: Block[] = [];
+    const blocks: BlockNode[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
-      const searchResults = fulltextIndex.search(query, 100);
+      const searchResults = app.search(query, 100);
 
       const editor = getEditor();
       const focusedBlockId = editor.getFocusedBlockId();
 
       // 根据搜索结果获取具体的块
       for (const blockId of searchResults) {
-        const blockLoaded = blockStorage.getBlock(blockId);
-        if (blockLoaded) {
-          const block = blockLoaded.get();
-          const textContent = blockStorage.getTextContent(blockId);
-          console.log("blockId=" + blockId + " textContent=" + textContent);
+        const blockNode = app.getBlockNode(blockId);
+        if (blockNode) {
+          const textContent = app.getTextContent(blockId);
           if (textContent && textContent.trim().length > 0) {
             // 当前块永远不会成为候选
-            if (focusedBlockId && block.id === focusedBlockId) continue;
+            if (focusedBlockId && blockNode.id === focusedBlockId) continue;
             // 只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种
             // 因为这会与其原身混淆
-            if (isSingleRefBlock(blockLoaded)) continue;
-            blocks.push(block);
+            if (isSingleRefBlock(blockNode)) continue;
+            blocks.push(blockNode);
           }
         }
       }
     } else {
       // 没有查询时，显示最近的一些块
       let count = 0;
-      blockStorage.forEachBlock((blockLoaded) => {
+      for (const blockNode of app.getAllNodes()) {
         if (count >= 10) return false; // 最多显示10个
 
-        const block = blockLoaded.get();
-        const textContent = blockStorage.getTextContent(block.id);
+        const textContent = app.getTextContent(blockNode.id);
         if (textContent && textContent.trim().length > 0) {
-          blocks.push(block);
+          blocks.push(blockNode);
           count++;
         }
         return true;
-      });
+      }
     }
 
     availableBlocks.value = blocks;
   };
 
   // 补全相关函数
-  const handleBlockSelect = (block: Block) => {
+  const handleBlockSelect = (block: BlockNode) => {
     // 插入选中的块引用
     getEditor().executeComplete(block.id);
     // 关闭补全窗口

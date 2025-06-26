@@ -1,15 +1,8 @@
-import type { Block, BlockId } from "../blocks/types";
-import type { BlockStorage } from "../storage/block/interface";
-
-export type Changes = {
-  added: Block[];
-  updated: Block[];
-  deleted: BlockId[];
-};
+import type { App } from "../app/app";
+import type { BlockId } from "../common/types";
 
 // 编辑器事件
 export type EditorEvent =
-  | { type: "update"; state: Changes }
   | { type: "root-blocks-changed"; rootBlockIds: BlockId[] }
   // 补全相关事件
   | { type: "completion"; status: CompletionStatus | null }
@@ -34,7 +27,7 @@ export interface EditorConfig {
 
 // 编辑器构造函数类型
 export interface EditorConstructor {
-  new (storage: BlockStorage, config?: EditorConfig): Editor;
+  new (storage: App, config?: EditorConfig): Editor;
 }
 
 // 编辑器接口
@@ -59,8 +52,8 @@ export interface Editor {
   };
   executeComplete(blockId: BlockId): void;
   locateBlock(blockId: BlockId): void;
-  undo(): boolean;
-  redo(): boolean;
-  canUndo(): boolean;
-  canRedo(): boolean;
+  // undo(): boolean;
+  // redo(): boolean;
+  // canUndo(): boolean;
+  // canRedo(): boolean;
 }

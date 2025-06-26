@@ -7,14 +7,6 @@ import {
   TextSelection,
 } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import type { BlockId } from "../blocks/types";
-import type {
-  BlockStorage,
-  BlockStorageEvent,
-  BlockStorageEventBatch,
-  BlockTransactionResult,
-  SelectionMetadata,
-} from "../storage/block/interface";
 import {
   findCurrListItem,
   getCurrSelection,
@@ -40,14 +32,13 @@ import {
   createStateFromStorage,
   findListItemAtPos,
   getAbsPos,
-  getBlockPath,
   normalizeSelection,
   serialize,
   toMarkdown,
 } from "./utils";
 import { createListItemNodeViewClass } from "./node-views/list-item";
-import { UpdateSources } from "./update-source";
-import { UndoRedoManager } from "./undo-redo";
+import type { BlockId, SelectionInfo } from "../common/types";
+import type { App, AppEvents } from "../app/app";
 
 const PM_EDITOR_ID_PREFIX = "prosemirror-editor";
 const STORAGE_SYNC_META_KEY = "fromStorage";
@@ -60,56 +51,40 @@ export class ProseMirrorEditor implements Editor {
   readonly id: string;
   private view?: EditorView;
   private rootBlockIds: BlockId[];
-  private storage: BlockStorage;
+  private app: App;
   private listeners: EventListener[] = [];
-  private undoRedoManager: UndoRedoManager;
-  private storageListener: (events: BlockStorageEventBatch) => void;
+  private storageListener: (event: AppEvents["tx-committed"]) => void;
   // 是否启用自动保存
   private autoSave: boolean;
 
   /**
-   * @param storage - 块存储实例，用于数据持久化和同步
+   * @param app - 块存储实例，用于数据持久化和同步
    * @param config - 编辑器配置选项
    */
-  constructor(storage: BlockStorage, config?: EditorConfig) {
+  constructor(app: App, config?: EditorConfig) {
     this.id = `${PM_EDITOR_ID_PREFIX}-${nanoid()}`;
-    this.storage = storage;
-    this.undoRedoManager = new UndoRedoManager(storage, this.id);
+    this.app = app;
     this.autoSave = config?.autoSave ?? true;
     this.rootBlockIds = config?.initialRootBlockIds ?? [];
 
     // 监听存储事件，更新视图
-    this.storageListener = (events: BlockStorageEventBatch) => {
+    this.storageListener = (event: AppEvents["tx-committed"]) => {
       if (!this.view) return;
 
-      // 收集所有的事务
-      const txs: BlockTransactionResult[] = [];
-      for (const event of events) {
-        if (event.type === "tx-committed") txs.push(event.result);
-      }
-      if (txs.length === 0) return;
-
-      // 如果第一个事务没有 beforeSelection，则
-      // 把当前的选区信息保存到第一个事务的 metadata.beforeSelection 中
-      const firstTx = txs[0];
-      const currSelection = getCurrSelection(this.view.state);
-      if (firstTx.metadata.beforeSelection == null) {
-        firstTx.metadata.beforeSelection = currSelection ?? undefined;
+      // 如果事件是来自本地编辑器的内容变更，则不更新视图
+      if (
+        event.origin.type === "localEditorContent" &&
+        event.origin.editorId === this.id
+      ) {
+        return;
       }
 
-      // 确定更新 view 后需要恢复到的选区，分三种情况：
-      // 1. 最后一个事务指定了的选区
-      // 2. 默认恢复到 view 更新前，也就是当前选区
-      let selectionToRestore: SelectionMetadata | null = currSelection ?? null;
-      const lastTx = txs[txs.length - 1];
-      if (lastTx.metadata.selection != null) {
-        selectionToRestore = lastTx.metadata.selection;
-      } else {
-        selectionToRestore = currSelection;
-      }
+      // 确定更新 view 后需要恢复到的选区
+      const selectionToRestore =
+        event.origin.selection ?? getCurrSelection(this.view.state);
 
       // 只进行一次视图更新，处理所有相关事件
-      const newDoc = createStateFromStorage(this.storage, this.rootBlockIds);
+      const newDoc = createStateFromStorage(this.app, this.rootBlockIds);
       const state = this.view.state;
       const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
 
@@ -130,27 +105,16 @@ export class ProseMirrorEditor implements Editor {
         if (anchor !== null) {
           tr.setSelection(TextSelection.create(tr.doc, anchor, head));
         }
+        if (selectionToRestore.scrollIntoView) {
+          tr.scrollIntoView();
+        }
       }
 
       // 标记此事务来自外部存储同步，防止 dispatchTransaction 中再次触发同步
       tr.setMeta(STORAGE_SYNC_META_KEY, true);
       this.view.dispatch(tr);
-
-      setTimeout(() => {
-        if (!this.view) return;
-
-        // 如果最后一个事务没有 selection，则把当前的选区信息保存到
-        // 最后一个事务的 metadata.selection 中
-        if (lastTx.metadata.selection == null) {
-          const afterSelection = getCurrSelection(this.view.state);
-          lastTx.metadata.selection = afterSelection ?? undefined;
-        }
-
-        // 将这批事务加入撤销重做栈
-        this.undoRedoManager.addItem(txs);
-      });
     };
-    this.storage.addEventListener(this.storageListener);
+    this.app.on("tx-committed", this.storageListener);
   }
 
   /**
@@ -163,7 +127,7 @@ export class ProseMirrorEditor implements Editor {
     if (this.view) {
       this.unmount();
     }
-    const doc = createStateFromStorage(this.storage, this.rootBlockIds);
+    const doc = createStateFromStorage(this.app, this.rootBlockIds);
 
     // 构建插件列表
     const plugins = [
@@ -172,10 +136,10 @@ export class ProseMirrorEditor implements Editor {
       // 将无法捕获到被 keymapPlugin 处理的事件
       createBlockRefCompletionPlugin(this.emit.bind(this)),
       inputRules({ rules: [toCodeblock] }),
-      createKeymapPlugin(this, this.storage),
+      createKeymapPlugin(this, this.app),
       createHighlightCodeblockPlugin(),
       imeSpan, // imeSpan 用于修复 Safari 下一些奇怪的问题
-      createPastePlugin(this.storage),
+      createPastePlugin(this.app),
       // pasteLinkPlugin, // 用于粘贴链接
       // pasteBlockRefPlugin, // 用于粘贴块引用
     ];
@@ -186,7 +150,7 @@ export class ProseMirrorEditor implements Editor {
       doc,
     });
 
-    const storage = this.storage;
+    const storage = this.app;
     this.view = new EditorView(dom, {
       state,
       nodeViews: {
@@ -203,7 +167,7 @@ export class ProseMirrorEditor implements Editor {
         if (!this.view) return;
 
         // 先记录当前选区
-        const beforeSelection = getCurrSelection(this.view.state);
+        const beforeSelection = getCurrSelection(this.view.state) ?? undefined;
 
         // 立即应用事务
         transaction = normalizeSelection(transaction); // 先规范化选区
@@ -250,7 +214,7 @@ export class ProseMirrorEditor implements Editor {
       e.stopImmediatePropagation();
       const tgtBlockId = tgt.dataset.blockId;
       if (tgtBlockId != null) {
-        this.locateBlock(tgtBlockId);
+        this.locateBlock(tgtBlockId as BlockId);
       }
       return;
     }
@@ -279,7 +243,7 @@ export class ProseMirrorEditor implements Editor {
         e.stopImmediatePropagation();
         const { state, dispatch } = this.view!;
         toggleFocusedFoldState(
-          this.storage,
+          this.app,
           undefined,
           clickedBlockId
         )(state, dispatch);
@@ -318,7 +282,7 @@ export class ProseMirrorEditor implements Editor {
     this.rootBlockIds = blockIds;
     // 触发一次重绘来更新视图
     if (this.view) {
-      const newDoc = createStateFromStorage(this.storage, this.rootBlockIds);
+      const newDoc = createStateFromStorage(this.app, this.rootBlockIds);
       const state = this.view.state;
       const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
       tr.setMeta(STORAGE_SYNC_META_KEY, true);
@@ -360,7 +324,7 @@ export class ProseMirrorEditor implements Editor {
    */
   destroy(): void {
     this.unmount();
-    this.storage.removeEventListener(this.storageListener);
+    this.app.off("tx-committed", this.storageListener);
     this.listeners = [];
   }
 
@@ -385,38 +349,6 @@ export class ProseMirrorEditor implements Editor {
     executeCompletion(blockId, this.view!);
   }
 
-  /**
-   * 撤销上一次操作
-   * @returns 是否成功撤销
-   */
-  undo(): boolean {
-    return this.undoRedoManager.undo();
-  }
-
-  /**
-   * 重做上一次撤销的操作
-   * @returns 是否成功重做
-   */
-  redo(): boolean {
-    return this.undoRedoManager.redo();
-  }
-
-  /**
-   * 检查是否可以撤销
-   * @returns 是否可以撤销
-   */
-  canUndo(): boolean {
-    return this.undoRedoManager.canUndo();
-  }
-
-  /**
-   * 检查是否可以重做
-   * @returns 是否可以重做
-   */
-  canRedo(): boolean {
-    return this.undoRedoManager.canRedo();
-  }
-
   emit(event: EditorEvent): void {
     this.listeners.forEach((listener) => listener(event));
   }
@@ -428,105 +360,86 @@ export class ProseMirrorEditor implements Editor {
    * 调整根块为当前根块与这个块的公共父块，然后将
    * 选区设置为这个块末尾，并且滚动到这个块
    */
-  locateBlock(targetBlockId: BlockId): void {
-    // 1. 获取目标块的完整路径
-    const targetPath = getBlockPath(this.storage, targetBlockId);
-    if (!targetPath) {
-      return;
-    }
+  async locateBlock(targetBlockId: BlockId): Promise<void> {
+    return this.app.tx(
+      (tx) => {
+        // 1. 获取目标块的完整路径
+        const targetPath = this.app.getBlockPath(targetBlockId);
+        if (!targetPath) {
+          return;
+        }
 
-    // 2. 展开所有祖先块中折叠的块
-    // targetPath 包含目标块本身，所以我们需要排除最后一个元素
-    const ancestors = targetPath.slice(0, -1);
-    for (const ancestorId of ancestors) {
-      const ancestorBlock = this.storage.getBlock(ancestorId);
-      if (ancestorBlock && ancestorBlock.get().folded) {
-        const tx = this.storage.createTransaction();
-        tx.updateBlock({
-          id: ancestorId,
-          folded: false,
-        });
-        tx.commit();
-      }
-    }
+        // 2. 展开所有祖先块中折叠的块
+        // targetPath 包含目标块本身，所以我们需要排除最后一个元素
+        const ancestors = targetPath.slice(0, -1);
+        for (const ancestorId of ancestors) {
+          tx.toggleFold(ancestorId, false);
+        }
 
-    // 3. 确定根块：找到当前根块与目标块的公共父块
-    const currentRoots =
-      this.rootBlockIds.length > 0
-        ? this.rootBlockIds
-        : this.storage.getRootBlocks().map((b) => b.get().id);
+        // 3. 确定根块：找到当前根块与目标块的公共父块
+        const currentRoots =
+          this.rootBlockIds.length > 0
+            ? this.rootBlockIds
+            : this.app.getRootBlockIds();
 
-    let newRootBlocks: BlockId[] = [];
+        let newRootBlocks: BlockId[] = [];
 
-    if (currentRoots.length === 0 || currentRoots.length > 1) {
-      // 如果当前没有根块，显示所有根块
-      newRootBlocks = [];
-    } else {
-      // 寻找公共父块
-      let commonAncestor: BlockId | null = null;
+        if (currentRoots.length === 0 || currentRoots.length > 1) {
+          // 如果当前没有根块，显示所有根块
+          newRootBlocks = [];
+        } else {
+          // 寻找公共父块
+          let commonAncestor: BlockId | null = null;
 
-      for (const rootId of currentRoots) {
-        const rootPath = getBlockPath(this.storage, rootId);
-        if (!rootPath) continue;
+          for (const rootId of currentRoots) {
+            const rootPath = this.app.getBlockPath(rootId);
+            if (!rootPath) continue;
 
-        for (let i = 0; i < Math.min(rootPath.length, targetPath.length); i++) {
-          if (rootPath[i] === targetPath[i]) {
-            commonAncestor = rootPath[i];
+            for (
+              let i = 0;
+              i < Math.min(rootPath.length, targetPath.length);
+              i++
+            ) {
+              if (rootPath[i] === targetPath[i]) {
+                commonAncestor = rootPath[i];
+              } else {
+                break;
+              }
+            }
+
+            if (commonAncestor) {
+              break;
+            }
+          }
+
+          // 如果找到公共祖先，使用它作为新的根块
+          if (commonAncestor) {
+            newRootBlocks = [commonAncestor];
           } else {
-            break;
+            // 如果没有公共祖先，显示所有根块
+            newRootBlocks = [];
           }
         }
 
-        if (commonAncestor) {
-          break;
-        }
-      }
+        // 4. 设置新的根块
+        this.setRootBlocks(newRootBlocks);
 
-      // 如果找到公共祖先，使用它作为新的根块
-      if (commonAncestor) {
-        newRootBlocks = [commonAncestor];
-      } else {
-        // 如果没有公共祖先，显示所有根块
-        newRootBlocks = [];
-      }
-    }
-
-    // 4. 设置新的根块
-    this.setRootBlocks(newRootBlocks);
-
-    // 5. 等待文档更新后，滚动到目标块然后聚焦
-    setTimeout(() => {
-      if (!this.view) return;
-      const content = this.view.state.doc.content;
-      const listItemType = outlinerSchema.nodes.listItem;
-
-      let listItemPos = -1;
-      content.forEach((node, pos) => {
-        if (listItemPos != -1) return false;
-        if (node.type === listItemType) {
-          const blockId = node.attrs.blockId;
-          if (blockId === targetBlockId) {
-            listItemPos = pos;
-            return false;
-          }
-        }
-      });
-
-      if (listItemPos != -1) {
-        const tr = this.view.state.tr;
-        tr.setSelection(TextSelection.create(tr.doc, listItemPos + 2));
-        tr.scrollIntoView();
-        this.view.dispatch(tr);
-        this.view.focus();
-      } else {
-        console.log("listItem with blockId=" + targetBlockId + " not found");
-      }
-    });
+        // 5. 滚动到目标块然后聚焦
+        tx.updateOrigin({
+          selection: {
+            blockId: targetBlockId,
+            anchor: 0,
+            scrollIntoView: true,
+          },
+        });
+      },
+      { type: "localEditorStructural", editorId: this.id, txId: nanoid() }
+    );
   }
 
   private syncContentChangesToStorage(
     tr: ProseMirrorTransaction,
-    beforeSelection: SelectionMetadata | null
+    beforeSelection?: SelectionInfo
   ) {
     // 这样做能 work，基于传入的 transaction 的每个 step 只操作单个 listItem
     // 不会一个 step 操作多个 listItem
@@ -553,28 +466,29 @@ export class ProseMirrorEditor implements Editor {
 
     // 根据 pos 找出发生变化的块和新的内容
     // 然后更新块存储
-    const updatedIds = new Set<BlockId>();
-    for (const pos of positions) {
-      const listItem = findListItemAtPos(tr.doc, pos);
-      if (listItem != null) {
-        const blockId = listItem.node.attrs.blockId as BlockId;
+    this.app.tx(
+      (tx) => {
+        const updatedIds = new Set<BlockId>();
+        for (const pos of positions) {
+          const listItem = findListItemAtPos(tr.doc, pos);
+          if (listItem != null) {
+            const blockId = listItem.node.attrs.blockId as BlockId;
 
-        // 如果已经更新过，则跳过，防止重复更新一个块
-        if (updatedIds.has(blockId)) continue;
-        updatedIds.add(blockId);
+            // 如果已经更新过，则跳过，防止重复更新一个块
+            if (updatedIds.has(blockId)) continue;
+            updatedIds.add(blockId);
 
-        const newData = serialize(listItem.node.firstChild!);
-        const tx = this.storage.createTransaction();
-        tx.source = UpdateSources.localEditorContent(this.id);
-        tx.updateBlock({
-          id: blockId,
-          ...newData,
-        });
-        if (beforeSelection) {
-          tx.metadata.beforeSelection = beforeSelection;
+            const newData = serialize(listItem.node.firstChild!);
+            tx.updateBlockData(blockId, newData);
+          }
         }
-        tx.commit();
+      },
+      {
+        type: "localEditorContent",
+        editorId: this.id,
+        txId: nanoid(),
+        beforeSelection,
       }
-    }
+    );
   }
 }
