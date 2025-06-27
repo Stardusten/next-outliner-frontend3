@@ -41,6 +41,7 @@
           @export="importExport.handleExport"
           @import="importExport.handleImport"
           @clearStorage="importExport.handleClearStorage"
+          @clearHistory="importExport.handleClearHistory"
         />
       </div>
     </header>
@@ -111,6 +112,37 @@
         "
       >
         请谨慎操作，建议在清空前先导出数据备份。
+      </p>
+    </BaseModal>
+
+    <!-- 新增：清空历史版本确认对话框 -->
+    <BaseModal
+      :visible="importExport.clearHistoryDialogVisible.value"
+      title="确认清空历史版本"
+      confirm-text="确认清空"
+      :is-danger="true"
+      @confirm="importExport.handleClearHistoryConfirm"
+      @cancel="importExport.handleClearHistoryCancel"
+      @close="importExport.handleClearHistoryCancel"
+    >
+      <p
+        style="
+          margin: 0 0 16px 0;
+          color: var(--menu-text);
+          font-size: var(--ui-font-size);
+        "
+      >
+        此操作将删除所有历史增量记录，仅保留当前最新快照，无法恢复。
+      </p>
+      <p
+        style="
+          margin: 0;
+          color: var(--menu-danger);
+          font-weight: 500;
+          font-size: var(--ui-font-size);
+        "
+      >
+        请谨慎操作，清空前建议先导出快照备份。
       </p>
     </BaseModal>
 
