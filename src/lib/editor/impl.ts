@@ -39,6 +39,7 @@ import {
 import { createListItemNodeViewClass } from "./node-views/list-item";
 import type { BlockId, SelectionInfo } from "../common/types";
 import type { App, AppEvents } from "../app/app";
+import { DebouncedTimer } from "@/lib/common/timer/debounced";
 
 const PM_EDITOR_ID_PREFIX = "prosemirror-editor";
 const STORAGE_SYNC_META_KEY = "fromStorage";
@@ -58,6 +59,37 @@ export class ProseMirrorEditor implements Editor {
   private autoSave: boolean;
 
   /**
+   * syncTimer 用于"批量"同步编辑器内容到应用层（LoroDoc）。
+   *
+   * 背景说明：
+   * ProseMirror 在用户连续打字时会产生大量 `transaction`，之前的实现是
+   * 每一次 `transaction` 结束后的下一个宏任务就调用 `syncContentChangesToApp`，
+   * 从而触发一次应用层事务（`App.tx`）。由于底层使用的是 CRDT（LoroDoc），
+   * 每一次修改都会被永久记录，这会导致：
+   *   1. 更新日志极其庞大，浪费存储空间。
+   *   2. 频繁写入带来性能开销，特别是在同步到远端时。
+   *
+   * 解决策略：
+   * 1. 使用 `DebouncedTimer(300ms, 2000ms)`：
+   *    - 用户停止输入 300 ms 后自动同步一次。
+   *    - 不管输入多频繁，最长间隔 2 s 强制同步一次，避免长时间不落盘。
+   * 2. 对于正在进行的 IME 组合（`view.composing === true`）
+   *    - 继续延迟，直至组合结束；
+   *    - 组合结束（候选词上屏）时如果此前因 IME 延迟过，则立刻同步，
+   *      保证中文输入等场景在用户确认文字后立即持久化。
+   *
+   * 这样即可把一次连续输入过程压缩为少量同步，显著减少 LoroDoc
+   * 的历史操作数量，同时不影响 IME 体验。
+   */
+  private syncTimer: DebouncedTimer;
+  /** 暂存待同步的最新事务 */
+  private pendingTransaction?: ProseMirrorTransaction;
+  /** 暂存本次批量修改开始前的选区 */
+  private pendingBeforeSelection?: SelectionInfo;
+  /** 标记当前批量变更是否来源于 IME 组合，组合结束后应立即同步 */
+  private pendingFromIME: boolean = false;
+
+  /**
    * @param app - 块存储实例，用于数据持久化和同步
    * @param config - 编辑器配置选项
    */
@@ -66,6 +98,9 @@ export class ProseMirrorEditor implements Editor {
     this.app = app;
     this.autoSave = config?.autoSave ?? true;
     this.rootBlockIds = config?.initialRootBlockIds ?? [];
+
+    // 初始化防抖定时器：300ms 无操作后同步，最长 2s 强制同步一次
+    this.syncTimer = new DebouncedTimer(300, 2000);
 
     // 监听存储事件，更新视图
     this.storageListener = (event: AppEvents["tx-committed"]) => {
@@ -174,19 +209,13 @@ export class ProseMirrorEditor implements Editor {
         const newState = this.view.state.apply(transaction);
         this.view.updateState(newState);
 
-        // 如果文档内容被用户修改，则将变更同步回数据库
-        // 通过检查 meta key 来避免同步由 storageListener 触发的变更
-        // 放到 setTimeout 中是因为 IME 候选上屏幕的那个 transaction
-        // 对应的 this.view.composing 为 true
-        setTimeout(() => {
-          if (
-            transaction.docChanged &&
-            !this.view?.composing &&
-            !transaction.getMeta(STORAGE_SYNC_META_KEY)
-          ) {
-            this.syncContentChangesToStorage(transaction, beforeSelection);
-          }
-        });
+        // 如果文档内容被用户修改，则防抖同步到应用层
+        if (
+          transaction.docChanged &&
+          !transaction.getMeta(STORAGE_SYNC_META_KEY)
+        ) {
+          this.scheduleSyncContentChanges(transaction, beforeSelection);
+        }
       },
     });
 
@@ -437,7 +466,7 @@ export class ProseMirrorEditor implements Editor {
     );
   }
 
-  private syncContentChangesToStorage(
+  private syncContentChangesToApp(
     tr: ProseMirrorTransaction,
     beforeSelection?: SelectionInfo
   ) {
@@ -490,5 +519,58 @@ export class ProseMirrorEditor implements Editor {
         beforeSelection,
       }
     );
+  }
+
+  /**
+   * 防抖同步内容修改到应用层。
+   * 1. 连续输入时合并为一次同步，减少 LoroDoc 操作次数；
+   * 2. 若仍处于 IME 组合状态，则继续延迟，保持原先的 IME 处理逻辑。
+   */
+  private scheduleSyncContentChanges(
+    tr: ProseMirrorTransaction,
+    beforeSelection?: SelectionInfo
+  ) {
+    // 记录最新事务及起始选区（只保存第一次的 beforeSelection）
+    this.pendingTransaction = tr;
+    if (this.pendingBeforeSelection == null) {
+      this.pendingBeforeSelection = beforeSelection;
+    }
+
+    const isComposing = this.view?.composing ?? false;
+
+    const attemptSync = () => {
+      if (!this.pendingTransaction) return;
+
+      // 若 IME 正在输入，则延后同步
+      if (this.view?.composing) {
+        // 仍在 IME 组合状态，继续防抖
+        this.syncTimer.trigger(attemptSync);
+        return;
+      }
+
+      console.log("syncContentChangesToApp", this.pendingTransaction);
+      this.syncContentChangesToApp(
+        this.pendingTransaction,
+        this.pendingBeforeSelection
+      );
+
+      // 重置暂存状态
+      this.pendingTransaction = undefined;
+      this.pendingBeforeSelection = undefined;
+      this.pendingFromIME = false;
+    };
+
+    if (isComposing) {
+      // 在 IME 组合中，使用防抖逻辑，并记录标记
+      this.pendingFromIME = true;
+      this.syncTimer.trigger(attemptSync);
+    } else if (this.pendingFromIME) {
+      // 刚结束 IME，立即同步一次
+      this.syncTimer.cancel();
+      attemptSync();
+    } else {
+      // 普通输入，按防抖逻辑处理
+      this.syncTimer.trigger(attemptSync);
+    }
   }
 }

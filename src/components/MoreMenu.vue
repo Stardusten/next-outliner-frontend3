@@ -81,6 +81,11 @@
         <span class="menu-shortcut">Cmd + /</span>
       </div>
 
+      <div class="menu-item" @click="handleClearHistory">
+        <BrushCleaning :size="14" class="menu-icon" />
+        <span class="menu-label">清空历史版本</span>
+      </div>
+
       <div class="menu-item danger-item" @click="handleClearStorage">
         <Trash2 :size="14" class="menu-icon" />
         <span class="menu-label">清空块存储</span>
@@ -104,15 +109,18 @@ import {
   BookOpen,
   Command,
   Trash2,
+  BrushCleaning,
 } from "lucide-vue-next";
 import ThemeToggle from "./ThemeToggle.vue";
 import SpacingToggle from "./SpacingToggle.vue";
+import { EXPORT_FORMATS } from "@/composables/useImportExport";
 
 // 定义 emits
 const emit = defineEmits<{
   export: [];
   import: [file: File];
   clearStorage: [];
+  clearHistory: [];
 }>();
 
 // 菜单状态
@@ -135,7 +143,7 @@ const handleExport = () => {
 const handleImport = () => {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = ".jsonl,.json";
+  input.accept = EXPORT_FORMATS;
   input.onchange = (event) => {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
@@ -150,6 +158,12 @@ const handleImport = () => {
 // 处理清空存储功能
 const handleClearStorage = () => {
   emit("clearStorage");
+  showMenu.value = false; // 关闭菜单
+};
+
+// 新增：处理清空历史版本功能
+const handleClearHistory = () => {
+  emit("clearHistory");
   showMenu.value = false; // 关闭菜单
 };
 

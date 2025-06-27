@@ -17,6 +17,8 @@ export type Persistence = {
   writeState(docId: string, state: Uint8Array): void;
   /** 执行压缩操作 */
   compact(docId: string): void;
+  /** 清空操作记录（危险！） */
+  clearHistory(docId: string): void;
   /** 获取存储统计信息 */
   getStorageStats(docId: string): {
     stateSize: number;

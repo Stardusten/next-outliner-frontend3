@@ -5,6 +5,8 @@ import { outlinerSchema } from "@/lib/editor/schema";
 import { serialize } from "@/lib/editor/utils";
 import type { Persistence } from "./persistence";
 
+export const BLOCKS_TREE_NAME = "blocks";
+
 function getStateItemKey(docId: string): string {
   return `blocks-${docId}-state`;
 }
@@ -53,7 +55,7 @@ export class LocalStoragePersistence implements Persistence {
       }
       // 创建一个空的文档
       const doc = new LoroDoc();
-      const tree = doc.getTree("blocks");
+      const tree = doc.getTree(BLOCKS_TREE_NAME);
 
       const rootNode = tree.createNode();
       rootNode.data.set("type", "text");
@@ -120,6 +122,36 @@ export class LocalStoragePersistence implements Persistence {
     // 先导入基础状态，再导入所有更新
     doc.importBatch([state, ...updates]);
     const newState = doc.export({ mode: "snapshot" });
+    this.writeState(docId, newState);
+
+    // 删除所有更新文件
+    for (const key of updateKeys) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  clearHistory(docId: string): void {
+    const stateKey = getStateItemKey(docId);
+    const stateStr = localStorage.getItem(stateKey);
+    if (!stateStr) throw new Error("state 不存在");
+    const state = base64ToUint8Array(stateStr);
+
+    const updates: Uint8Array[] = [];
+    const updateKeys: string[] = [];
+    for (const key of Object.keys(localStorage)) {
+      if (isUpdateItemKey(key, docId)) {
+        const value = localStorage.getItem(key)!;
+        updates.push(base64ToUint8Array(value));
+        updateKeys.push(key);
+      }
+    }
+
+    const doc = new LoroDoc();
+    doc.importBatch([state, ...updates]);
+    const newState = doc.export({
+      mode: "shallow-snapshot",
+      frontiers: doc.frontiers(),
+    });
     this.writeState(docId, newState);
 
     // 删除所有更新文件

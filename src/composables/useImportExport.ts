@@ -4,7 +4,9 @@ import { Fragment, type Node } from "prosemirror-model";
 import { ref } from "vue";
 import { toast } from "./useToast";
 import type { App } from "@/lib/app/app";
-import type { BlockNode } from "@/lib/common/types";
+import type { BlockDataInner, BlockNode } from "@/lib/common/types";
+import { LoroDoc } from "loro-crdt";
+import { BLOCKS_TREE_NAME } from "@/lib/app/local-storage";
 
 type Block = {
   id: string;
@@ -16,43 +18,131 @@ type Block = {
   children: Block[];
 };
 
+export const EXPORT_FORMATS = ".jsonl,.bsnapshot,.snapshot";
+
+type ExportFormat = "jsonl" | "bsnapshot" | "snapshot";
+
+type PendingImport =
+  | {
+      format: "bsnapshot";
+      doc: LoroDoc;
+    }
+  | {
+      format: "snapshot";
+      doc: LoroDoc;
+    }
+  | {
+      format: "jsonl";
+      blocks: Map<string, Block>;
+    };
+
+function jsonToUint8Array(obj: Record<string, number>): Uint8Array {
+  // 找到最大下标，决定数组长度
+  const maxIndex = Math.max(...Object.keys(obj).map(Number));
+  const arr = new Uint8Array(maxIndex + 1);
+
+  for (const [k, v] of Object.entries(obj)) {
+    arr[Number(k)] = Number(v); // 写入对应位置
+  }
+  return arr;
+}
+
+// Uint8Array -> Base64 字符串
+function uint8ToBase64(u8: Uint8Array): string {
+  return btoa(String.fromCharCode(...u8));
+}
+
+// Base64 字符串 -> Uint8Array
+function base64ToUint8(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const len = binary.length;
+  const u8 = new Uint8Array(len);
+  for (let i = 0; i < len; i++) u8[i] = binary.charCodeAt(i);
+  return u8;
+}
+
 export function useImportExport(getApp: () => App) {
   // 导入功能状态
   const importDialogVisible = ref(false);
   const importBlockCount = ref(0);
-  let pendingImportFile: File | null = null;
+  let pendingImport: PendingImport | null = null;
 
   // 清空存储确认状态
   const clearStorageDialogVisible = ref(false);
 
+  // 清空历史版本确认状态
+  const clearHistoryDialogVisible = ref(false);
+
   // 导出功能
-  const handleExport = () => {
-    const app = getApp();
-    const snapshot = app.exportShallowSnapshot();
-    const base64snapshot = btoa(JSON.stringify(snapshot));
-    const a = document.createElement("a");
-    a.href = `data:application/json;base64,${base64snapshot}`;
-    a.download = `${app.docId}_${new Date().toISOString()}.snapshot`;
-    a.click();
-    a.remove();
+  const handleExport = (format: ExportFormat = "bsnapshot") => {
+    if (format == "snapshot") {
+      const app = getApp();
+      const snapshot = app.exportShallowSnapshot();
+      const base64snapshot = uint8ToBase64(snapshot);
+      const a = document.createElement("a");
+      a.href = `data:application/json;base64,${base64snapshot}`;
+      a.download = `${app.docId}_${new Date().toLocaleString()}.snapshot`;
+      a.click();
+      a.remove();
+    } else if (format === "bsnapshot") {
+      const app = getApp();
+      const snapshot = app.exportShallowSnapshot();
+      const blob = new Blob([snapshot], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${app.docId}_${new Date().toLocaleString()}.bsnapshot`;
+      a.click();
+      a.remove();
+    }
   };
 
   // 导入功能
   const handleImport = async (file: File) => {
     try {
-      const content = await file.text();
-      const lines = content.split("\n");
+      if (file.name.endsWith(".jsonl")) {
+        const content = await file.text();
+        const lines = content.split("\n");
 
-      const blockMap = new Map<string, Block>();
-      for (const line of lines) {
-        const block = JSON.parse(line) as Block;
-        block.children = [];
-        blockMap.set(block.id, block);
+        const blockMap = new Map<string, Block>();
+        for (const line of lines) {
+          const block = JSON.parse(line) as Block;
+          block.children = [];
+          blockMap.set(block.id, block);
+        }
+
+        importBlockCount.value = blockMap.size;
+        importDialogVisible.value = true;
+        pendingImport = {
+          format: "jsonl",
+          blocks: blockMap,
+        };
+      } else if (file.name.endsWith(".snapshot")) {
+        const bytesBase64 = await file.text();
+        const bytes = base64ToUint8(bytesBase64);
+        const doc = new LoroDoc();
+        doc.import(bytes);
+        importBlockCount.value =
+          doc.getTree(BLOCKS_TREE_NAME)?.getNodes({ withDeleted: false })
+            ?.length ?? 0;
+        importDialogVisible.value = true;
+        pendingImport = {
+          format: "snapshot",
+          doc,
+        };
+      } else if (file.name.endsWith(".bsnapshot")) {
+        const bytes = await file.bytes();
+        const doc = new LoroDoc();
+        doc.import(bytes);
+        importBlockCount.value =
+          doc.getTree(BLOCKS_TREE_NAME)?.getNodes({ withDeleted: false })
+            ?.length ?? 0;
+        importDialogVisible.value = true;
+        pendingImport = {
+          format: "bsnapshot",
+          doc,
+        };
       }
-
-      importBlockCount.value = blockMap.size;
-      importDialogVisible.value = true;
-      pendingImportFile = file;
     } catch (error) {
       toast.error(`导入失败：${error}`);
     }
@@ -97,74 +187,117 @@ export function useImportExport(getApp: () => App) {
 
   // 处理导入确认
   const handleImportConfirm = async () => {
-    if (!pendingImportFile) return;
+    if (!pendingImport) return;
+    const app = getApp();
 
     try {
-      const content = await pendingImportFile.text();
-      const lines = content.split("\n");
+      if (pendingImport.format === "jsonl") {
+        const blockMap = pendingImport.blocks;
 
-      const blockMap = new Map<string, Block>();
-      for (const line of lines) {
-        const block = JSON.parse(line) as Block;
-        block.children = [];
-        blockMap.set(block.id, block);
-      }
-
-      for (const block of blockMap.values()) {
-        if (block.parentId == null) continue; // 根块
-        const parentBlock = blockMap.get(block.parentId);
-        if (!parentBlock) {
-          throw new Error(`父块 ${block.parentId} 不存在`);
-        }
-        parentBlock.children.push(block);
-      }
-
-      for (const block of blockMap.values()) {
-        block.children.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
-      }
-
-      const blockStorage = getApp();
-      const idMapping = new Map<string, string>();
-      const blockNodes: [Block, BlockNode][] = [];
-      blockStorage.tx(
-        (tx) => {
-          const createTree = (block: Block, node: BlockNode) => {
-            for (let i = 0; i < block.children.length; i++) {
-              const child = block.children[i];
-              const childNode = tx.insertBlockUnder(node, (dataMap) => {}, i);
-              idMapping.set(child.id, childNode.id);
-              blockNodes.push([child, childNode]);
-              createTree(child, childNode);
-            }
-          };
-
-          [...blockMap.values()]
-            .filter((block) => block.parentId == null)
-            .sort((a, b) => a.fractionalIndex - b.fractionalIndex)
-            .forEach((block, i) => {
-              const rootNode = tx.insertBlockUnder(null, (dataMap) => {}, i);
-              idMapping.set(block.id, rootNode.id);
-              blockNodes.push([block, rootNode]);
-              createTree(block, rootNode);
-            });
-
-          for (const [block, blockNode] of blockNodes) {
-            blockNode.data.set("type", block.type);
-            blockNode.data.set("folded", block.folded);
-            blockNode.data.set(
-              "content",
-              applyIdMapping(block.type, block.content, idMapping)
-            );
+        for (const block of blockMap.values()) {
+          if (block.parentId == null) continue; // 根块
+          const parentBlock = blockMap.get(block.parentId);
+          if (!parentBlock) {
+            throw new Error(`父块 ${block.parentId} 不存在`);
           }
-        },
-        {
-          type: "localImport",
-          txId: nanoid(),
+          parentBlock.children.push(block);
         }
-      );
 
-      toast.success("导入成功！");
-      blockStorage._saver.forceSave();
+        for (const block of blockMap.values()) {
+          block.children.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
+        }
+
+        const idMapping = new Map<string, string>();
+        const blockNodes: [Block, BlockNode][] = [];
+        app.tx(
+          (tx) => {
+            const createTree = (block: Block, node: BlockNode) => {
+              for (let i = 0; i < block.children.length; i++) {
+                const child = block.children[i];
+                const childNode = tx.insertBlockUnder(node, (dataMap) => {}, i);
+                idMapping.set(child.id, childNode.id);
+                blockNodes.push([child, childNode]);
+                createTree(child, childNode);
+              }
+            };
+
+            [...blockMap.values()]
+              .filter((block) => block.parentId == null)
+              .sort((a, b) => a.fractionalIndex - b.fractionalIndex)
+              .forEach((block, i) => {
+                const rootNode = tx.insertBlockUnder(null, (dataMap) => {}, i);
+                idMapping.set(block.id, rootNode.id);
+                blockNodes.push([block, rootNode]);
+                createTree(block, rootNode);
+              });
+
+            for (const [block, blockNode] of blockNodes) {
+              blockNode.data.set("type", block.type);
+              blockNode.data.set("folded", block.folded);
+              blockNode.data.set(
+                "content",
+                applyIdMapping(block.type, block.content, idMapping)
+              );
+            }
+          },
+          {
+            type: "localImport",
+            txId: nanoid(),
+          }
+        );
+
+        toast.success("导入成功！");
+        app._saver.forceSave();
+      } else if (
+        pendingImport.format === "snapshot" ||
+        pendingImport.format === "bsnapshot"
+      ) {
+        const importedDoc = pendingImport.doc;
+        app.tx(
+          (tx) => {
+            const idMapping = new Map<string, string>();
+            const blockNodes: [BlockNode, BlockNode][] = [];
+            const createTree = (node1: BlockNode, node2: BlockNode) => {
+              const node1children = node1.children() ?? [];
+              for (let i = 0; i < node1children.length; i++) {
+                const child = node1children[i];
+                const childNode = tx.insertBlockUnder(
+                  node2,
+                  (dataMap) => {},
+                  i
+                );
+                idMapping.set(child.id, childNode.id);
+                blockNodes.push([child, childNode]);
+                createTree(child, childNode);
+              }
+            };
+
+            const importedTree = importedDoc.getTree(BLOCKS_TREE_NAME);
+            const importedRoots = importedTree.roots();
+            for (let i = 0; i < importedRoots.length; i++) {
+              const root1 = importedRoots[i];
+              const root2 = tx.insertBlockUnder(null, (dataMap) => {}, i);
+              idMapping.set(root1.id, root2.id);
+              blockNodes.push([root1, root2]);
+              createTree(root1, root2);
+            }
+
+            for (const [node1, node2] of blockNodes) {
+              const data = node1.data.toJSON() as BlockDataInner;
+              node2.data.set("type", data.type);
+              node2.data.set("folded", data.folded);
+              node2.data.set(
+                "content",
+                applyIdMapping(data.type, data.content, idMapping)
+              );
+            }
+          },
+          {
+            type: "localImport",
+            txId: nanoid(),
+          }
+        );
+      }
     } catch (error) {
       toast.error(`导入失败：${error}`);
     } finally {
@@ -176,7 +309,7 @@ export function useImportExport(getApp: () => App) {
   const handleImportCancel = () => {
     importDialogVisible.value = false;
     importBlockCount.value = 0;
-    pendingImportFile = null;
+    pendingImport = null;
   };
 
   // 清空存储功能
@@ -205,11 +338,38 @@ export function useImportExport(getApp: () => App) {
     clearStorageDialogVisible.value = false;
   };
 
+  // 新增：清空历史版本功能
+  const handleClearHistory = () => {
+    clearHistoryDialogVisible.value = true;
+  };
+
+  // 新增：确认清空历史版本
+  const handleClearHistoryConfirm = () => {
+    const storage = getApp();
+    try {
+      storage._persistence.clearHistory(storage.docId);
+      storage.updateCounter.set(0);
+      toast.success("已清空历史版本！");
+    } catch (error) {
+      console.error("清空历史版本失败:", error);
+      toast.error("清空历史版本失败，请查看控制台了解详情");
+    } finally {
+      clearHistoryDialogVisible.value = false;
+    }
+  };
+
+  // 新增：取消清空历史版本
+  const handleClearHistoryCancel = () => {
+    clearHistoryDialogVisible.value = false;
+  };
+
   return {
     // 状态
     importDialogVisible,
     importBlockCount,
     clearStorageDialogVisible,
+    // 新增
+    clearHistoryDialogVisible,
 
     // 方法
     handleExport,
@@ -219,5 +379,9 @@ export function useImportExport(getApp: () => App) {
     handleClearStorage,
     handleClearStorageConfirm,
     handleClearStorageCancel,
+    // 新增
+    handleClearHistory,
+    handleClearHistoryConfirm,
+    handleClearHistoryCancel,
   };
 }

@@ -82,7 +82,8 @@ export function serialize(node: Node): {
 export function deserialize(
   blockNode: BlockNode,
   level?: number,
-  storage?: App
+  storage?: App,
+  overrideAttrs?: Record<string, any>
 ): Node {
   // 使用反序列化来创建段落内容
   let listItemNode: Node | null = null;
@@ -106,6 +107,7 @@ export function deserialize(
             folded: blockData.folded,
             hasChildren,
             type: "text",
+            ...overrideAttrs,
           },
           paragraphNode
         );
@@ -119,6 +121,7 @@ export function deserialize(
             folded: blockData.folded,
             hasChildren,
             type: "code",
+            ...overrideAttrs,
           },
           codeblockNode
         );
@@ -139,6 +142,7 @@ export function deserialize(
         folded: blockData.folded,
         hasChildren,
         type: "text",
+        ...overrideAttrs,
       },
       paragraphNode
     );
