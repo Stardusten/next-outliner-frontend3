@@ -1,12 +1,12 @@
+import type { App } from "@/lib/app/app";
+import { BLOCKS_TREE_NAME } from "@/lib/app/local-storage";
+import type { BlockDataInner, BlockNode, BlockType } from "@/lib/common/types";
 import { outlinerSchema } from "@/lib/editor/schema";
+import { LoroDoc } from "loro-crdt";
 import { nanoid } from "nanoid";
 import { Fragment, type Node } from "prosemirror-model";
-import { ref } from "vue";
+import { ref, shallowRef } from "vue";
 import { toast } from "./useToast";
-import type { App } from "@/lib/app/app";
-import type { BlockDataInner, BlockNode } from "@/lib/common/types";
-import { LoroDoc } from "loro-crdt";
-import { BLOCKS_TREE_NAME } from "@/lib/app/local-storage";
 
 type Block = {
   id: string;
@@ -49,7 +49,16 @@ function jsonToUint8Array(obj: Record<string, number>): Uint8Array {
 
 // Uint8Array -> Base64 字符串
 function uint8ToBase64(u8: Uint8Array): string {
-  return btoa(String.fromCharCode(...u8));
+  // 分块处理大数组，避免栈溢出
+  const CHUNK_SIZE = 8192; // 8KB chunks
+  let binary = "";
+
+  for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
+    const chunk = u8.slice(i, i + CHUNK_SIZE);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
 }
 
 // Base64 字符串 -> Uint8Array
@@ -61,18 +70,13 @@ function base64ToUint8(b64: string): Uint8Array {
   return u8;
 }
 
+const importDialogVisible = ref(false);
+const importBlockCount = ref(0);
+const pendingImport = shallowRef<PendingImport | null>(null);
+const clearStorageDialogVisible = ref(false);
+const clearHistoryDialogVisible = ref(false);
+
 export function useImportExport(getApp: () => App) {
-  // 导入功能状态
-  const importDialogVisible = ref(false);
-  const importBlockCount = ref(0);
-  let pendingImport: PendingImport | null = null;
-
-  // 清空存储确认状态
-  const clearStorageDialogVisible = ref(false);
-
-  // 清空历史版本确认状态
-  const clearHistoryDialogVisible = ref(false);
-
   // 导出功能
   const handleExport = (format: ExportFormat = "bsnapshot") => {
     if (format == "snapshot") {
@@ -113,7 +117,7 @@ export function useImportExport(getApp: () => App) {
 
         importBlockCount.value = blockMap.size;
         importDialogVisible.value = true;
-        pendingImport = {
+        pendingImport.value = {
           format: "jsonl",
           blocks: blockMap,
         };
@@ -126,19 +130,20 @@ export function useImportExport(getApp: () => App) {
           doc.getTree(BLOCKS_TREE_NAME)?.getNodes({ withDeleted: false })
             ?.length ?? 0;
         importDialogVisible.value = true;
-        pendingImport = {
+        pendingImport.value = {
           format: "snapshot",
           doc,
         };
       } else if (file.name.endsWith(".bsnapshot")) {
-        const bytes = await file.bytes();
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
         const doc = new LoroDoc();
         doc.import(bytes);
         importBlockCount.value =
           doc.getTree(BLOCKS_TREE_NAME)?.getNodes({ withDeleted: false })
             ?.length ?? 0;
         importDialogVisible.value = true;
-        pendingImport = {
+        pendingImport.value = {
           format: "bsnapshot",
           doc,
         };
@@ -149,7 +154,7 @@ export function useImportExport(getApp: () => App) {
   };
 
   const applyIdMapping = (
-    type: "text" | "code",
+    type: BlockType,
     content: string,
     mapping: Map<string, string>
   ) => {
@@ -187,12 +192,12 @@ export function useImportExport(getApp: () => App) {
 
   // 处理导入确认
   const handleImportConfirm = async () => {
-    if (!pendingImport) return;
+    if (!pendingImport.value) return;
     const app = getApp();
 
     try {
-      if (pendingImport.format === "jsonl") {
-        const blockMap = pendingImport.blocks;
+      if (pendingImport.value.format === "jsonl") {
+        const blockMap = pendingImport.value.blocks;
 
         for (const block of blockMap.values()) {
           if (block.parentId == null) continue; // 根块
@@ -249,10 +254,10 @@ export function useImportExport(getApp: () => App) {
         toast.success("导入成功！");
         app._saver.forceSave();
       } else if (
-        pendingImport.format === "snapshot" ||
-        pendingImport.format === "bsnapshot"
+        pendingImport.value.format === "snapshot" ||
+        pendingImport.value.format === "bsnapshot"
       ) {
-        const importedDoc = pendingImport.doc;
+        const importedDoc = pendingImport.value.doc;
         app.tx(
           (tx) => {
             const idMapping = new Map<string, string>();
@@ -309,7 +314,7 @@ export function useImportExport(getApp: () => App) {
   const handleImportCancel = () => {
     importDialogVisible.value = false;
     importBlockCount.value = 0;
-    pendingImport = null;
+    pendingImport.value = null;
   };
 
   // 清空存储功能

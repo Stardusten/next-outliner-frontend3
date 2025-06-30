@@ -1,43 +1,36 @@
 <template>
   <div
     v-if="visible"
-    class="completion-popup"
-    :style="{ left: adjustedPosition.x + 'px', top: adjustedPosition.y + 'px' }"
+    class="fixed z-50 w-[350px] max-h-[400px] overflow-y-auto rounded-sm border bg-popover text-popover-foreground shadow-md"
+    :style="popupStyle"
+    ref="listRef"
   >
-    <div class="completion-header">
-      <span class="completion-title">插入块引用</span>
-      <span class="completion-query" v-if="query">{{ query }}</span>
+    <div
+      v-for="(block, index) in blocks"
+      :key="block.id"
+      :ref="(el) => setItemRef(el, index)"
+      class="relative flex w-full cursor-default select-none items-center px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground border-b border-border last:border-b-0"
+      :class="{ 'bg-accent text-accent-foreground': index === activeIndex }"
+      @click="selectBlock(block)"
+    >
+      <div class="flex-1 overflow-hidden text-foreground">
+        <SearchResultItem :block="block" :app="app" :search-query="query" />
+      </div>
     </div>
-    <div class="completion-list" ref="listRef">
-      <div
-        v-for="(block, index) in filteredBlocks"
-        :key="block.id"
-        :ref="(el) => setItemRef(el, index)"
-        class="completion-item"
-        :class="{ active: index === activeIndex }"
-        @click="selectBlock(block)"
-      >
-        <div class="completion-item-content">
-          <SearchResultItem
-            :block="block"
-            :storage="app"
-            :search-query="query"
-          />
-        </div>
-        <div class="block-meta">{{ block.id.slice(0, 8) }}</div>
-      </div>
-      <div v-if="filteredBlocks.length === 0" class="completion-empty">
-        没有找到匹配的块
-      </div>
+    <div
+      v-if="blocks.length === 0"
+      class="p-4 text-center text-sm text-muted-foreground"
+    >
+      没有找到匹配的块
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
-import SearchResultItem from "./SearchResultItem.vue";
-import type { BlockNode } from "@/lib/common/types";
 import type { App } from "@/lib/app/app";
+import type { BlockNode } from "@/lib/common/types";
+import { computed, nextTick, ref, watch } from "vue";
+import SearchResultItem from "./search-popup/SearchResultItem.vue";
 
 interface Props {
   visible: boolean;
@@ -71,7 +64,7 @@ const setItemRef = (el: any, index: number) => {
 
 // 滚动到选中项目
 const scrollToActiveItem = async () => {
-  if (!listRef.value || props.activeIndex < 0 || !filteredBlocks.value.length) {
+  if (!listRef.value || props.activeIndex < 0 || !props.blocks.length) {
     return;
   }
 
@@ -105,83 +98,62 @@ watch(
 
 // 弹窗尺寸常量
 const POPUP_WIDTH = 350;
-const POPUP_MAX_HEIGHT = 400;
+const POPUP_MAX_HEIGHT = 300;
 const LINE_HEIGHT = 30;
-const POPUP_SPACING = 4; // 弹窗与触发位置的间距
+const POPUP_SPACING = 4;
+const WINDOW_PADDING = 8;
 
-// 过滤匹配的块
-const filteredBlocks = computed(() => {
-  // 块列表已经通过全文搜索过滤和排序，直接使用
-  return props.blocks.slice(0, 10);
-});
-
-// 计算调整后的位置，智能选择弹出方向并防止超出可视范围
-const adjustedPosition = computed(() => {
+// 计算弹窗最终的样式
+const popupStyle = computed(() => {
   if (!props.visible) {
-    return props.position;
+    return {} as Record<string, string>;
   }
 
-  const { x, y } = props.position; // x,y 是当前行中元素的左下角
+  const { x, y } = props.position; // x,y 为当前行左下角的页面坐标
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const scrollX = window.scrollX || 0;
-  const scrollY = window.scrollY || 0;
+  const minPadding = 8;
 
-  let adjustedX = x;
-  let adjustedY = y;
+  // 水平位置计算 ---------------------------------------------------------
+  let left = x;
 
-  // 使用固定的最大高度进行位置计算，避免因内容变化导致位置跳动
-  const fixedHeight = POPUP_MAX_HEIGHT;
-
-  // 垂直位置计算 - 智能选择上方或下方
-  const spaceBelow = viewportHeight - (y - scrollY);
-  const spaceAbove = y - scrollY - LINE_HEIGHT;
-
-  if (spaceBelow >= fixedHeight + POPUP_SPACING) {
-    // 下方空间足够，在当前行下方显示
-    adjustedY = y + POPUP_SPACING;
-  } else if (spaceAbove >= fixedHeight + POPUP_SPACING) {
-    // 下方空间不够但上方空间足够，在当前行上方显示
-    adjustedY = y - LINE_HEIGHT - fixedHeight - POPUP_SPACING;
-  } else {
-    // 上下空间都不够，选择空间较大的一方，并调整到边界
-    if (spaceBelow > spaceAbove) {
-      // 下方空间较大，贴底显示
-      adjustedY = viewportHeight + scrollY - fixedHeight - 8;
-    } else {
-      // 上方空间较大，贴顶显示
-      adjustedY = scrollY + 8;
-    }
+  // 检查右侧是否有足够空间
+  if (left + POPUP_WIDTH > viewportWidth - minPadding) {
+    // 右侧空间不足，向左调整
+    left = viewportWidth - POPUP_WIDTH - minPadding;
   }
 
-  // 水平位置计算 - 优先右侧弹出，避免向左弹出
-  const spaceRight = viewportWidth - (x - scrollX);
-  const minPadding = 8; // 最小边距
+  // 确保不超出左边界
+  left = Math.max(minPadding, left);
 
-  if (spaceRight >= POPUP_WIDTH + minPadding) {
-    // 右侧空间足够，保持原位置
-    adjustedX = x;
+  // 垂直位置计算 ---------------------------------------------------------
+  let top = y + POPUP_SPACING;
+  let maxHeight = POPUP_MAX_HEIGHT;
+
+  // 检查下方是否有足够空间
+  const spaceBelow = viewportHeight - y - POPUP_SPACING - WINDOW_PADDING;
+  const spaceAbove = y - LINE_HEIGHT - POPUP_SPACING - WINDOW_PADDING;
+
+  if (spaceBelow < POPUP_MAX_HEIGHT && spaceAbove > spaceBelow) {
+    // 下方空间不足且上方空间更大，向上弹出
+    top = y - LINE_HEIGHT - POPUP_SPACING;
+    maxHeight = Math.min(POPUP_MAX_HEIGHT, spaceAbove);
+    // 使用 transform 让弹窗向上展开
+    return {
+      left: `${left}px`,
+      top: `${top}px`,
+      maxHeight: `${maxHeight}px`,
+      transform: "translateY(-100%)",
+    };
   } else {
-    // 右侧空间不够，将弹窗往左移动，确保完全显示
-    // 计算需要往左移动多少才能完全显示
-    const overflowAmount =
-      x + POPUP_WIDTH - (viewportWidth + scrollX - minPadding);
-    adjustedX = x - overflowAmount;
-
-    // 确保不会移动到左边界之外
-    const leftBoundary = scrollX + minPadding;
-    if (adjustedX < leftBoundary) {
-      adjustedX = leftBoundary;
-    }
+    // 向下弹出（默认）
+    maxHeight = Math.min(POPUP_MAX_HEIGHT, spaceBelow);
+    return {
+      left: `${left}px`,
+      top: `${top}px`,
+      maxHeight: `${maxHeight}px`,
+    };
   }
-
-  // 确保垂直方向不超出边界
-  adjustedY = Math.max(
-    scrollY + 8,
-    Math.min(adjustedY, viewportHeight + scrollY - fixedHeight - 8)
-  );
-
-  return { x: adjustedX, y: adjustedY };
 });
 
 // 选择块
@@ -189,81 +161,3 @@ function selectBlock(block: BlockNode) {
   emit("select", block);
 }
 </script>
-
-<style scoped>
-.completion-popup {
-  position: fixed;
-  z-index: 1000;
-  background: var(--menu-bg);
-  border: 1px solid var(--menu-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px var(--menu-shadow);
-  width: 350px;
-  max-height: 400px;
-  overflow: hidden;
-  font-size: var(--ui-font-size);
-}
-
-.completion-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--menu-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.completion-title {
-  font-size: var(--ui-font-size-small);
-  color: var(--menu-text-muted);
-  font-weight: 500;
-}
-
-.completion-query {
-  font-size: var(--ui-font-size-small);
-  color: var(--color-block-ref);
-  background: var(--color-bg-hover);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
-}
-
-.completion-list {
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.completion-item {
-  font-size: var(--ui-font-size);
-  padding: 8px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-color-muted);
-  transition: background-color 0.15s ease;
-}
-
-.completion-item:last-child {
-  border-bottom: none;
-}
-
-.completion-item:hover,
-.completion-item.active {
-  background-color: var(--menu-item-hover);
-}
-
-.completion-item-content {
-  color: var(--menu-text);
-  overflow: hidden;
-}
-
-.block-meta {
-  font-size: var(--ui-font-size-tiny);
-  color: var(--menu-text-muted);
-  font-family: monospace;
-}
-
-.completion-empty {
-  padding: 16px 12px;
-  text-align: center;
-  color: var(--menu-text-muted);
-  font-size: var(--ui-font-size);
-}
-</style>

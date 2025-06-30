@@ -61,6 +61,8 @@ export function serialize(node: Node): {
 } {
   const paragraphNodeType = outlinerSchema.nodes.paragraph;
   const codeblockNodeType = outlinerSchema.nodes.codeblock;
+  const fileNodeType = outlinerSchema.nodes.file;
+
   if (node.type === paragraphNodeType) {
     return {
       type: "text",

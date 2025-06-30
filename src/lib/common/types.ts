@@ -32,6 +32,7 @@ export type TxOrigin = (
   | {
       type: "localEditorContent";
       editorId: string;
+      blockId: BlockId;
       txId: string;
     }
   | {

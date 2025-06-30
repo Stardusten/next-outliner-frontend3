@@ -7,10 +7,12 @@ import {
   codeblockOutdent,
   codeblockSelectAll,
   copyBlockRef,
+  backspaceAfterCharBeforeExpandedFile,
   deleteEmptyListItem,
   deleteSelected,
   demoteSelected,
   findCurrListItem,
+  insertLineBreak,
   mergeWithPreviousBlock,
   moveBlockDown,
   moveBlockUp,
@@ -20,6 +22,8 @@ import {
   splitListItem,
   toggleFocusedFoldState,
   undo,
+  deleteBeforeCharBeforeExpandedFile,
+  uploadFile,
 } from "./commands";
 import type { Command, EditorState } from "prosemirror-state";
 import { chainCommands, toggleMark } from "prosemirror-commands";
@@ -48,16 +52,26 @@ export function createKeymapPlugin(editor: Editor, app: App) {
       text: chainCommands(
         deleteEmptyListItem(app),
         mergeWithPreviousBlock(app),
-        deleteSelected()
+        deleteSelected(),
+        backspaceAfterCharBeforeExpandedFile()
       ),
-      code: chainCommands(deleteEmptyListItem(app), deleteSelected()),
+      code: chainCommands(
+        deleteEmptyListItem(app),
+        deleteSelected(),
+        backspaceAfterCharBeforeExpandedFile()
+      ),
     }),
     Delete: dispatchByBlockType({
       text: chainCommands(
         deleteEmptyListItem(app, "forward"),
-        deleteSelected()
+        deleteSelected(),
+        deleteBeforeCharBeforeExpandedFile()
       ),
-      code: chainCommands(deleteEmptyListItem(app), deleteSelected()),
+      code: chainCommands(
+        deleteEmptyListItem(app),
+        deleteSelected(),
+        deleteBeforeCharBeforeExpandedFile()
+      ),
     }),
     "Mod-a": dispatchByBlockType({
       text: selectCurrentListItem(),
@@ -79,8 +93,31 @@ export function createKeymapPlugin(editor: Editor, app: App) {
     End: dispatchByBlockType({
       codeblock: codeblockMoveToLineEnd(),
     }),
+    "Shift-Enter": dispatchByBlockType({
+      text: insertLineBreak(),
+    }),
     "Mod-z": undo(editor),
     "Mod-Shift-z": redo(editor),
+    // 文件上传
+    "Mod-g": uploadFile(app),
+    "Mod-Shift-g": (state, dispatch) => {
+      const currListItem = findCurrListItem(state);
+      if (currListItem == null) return false;
+
+      if (dispatch) {
+        const tr = state.tr;
+        const fileNode = outlinerSchema.nodes.file.create({
+          path: "image.png__58EElIM8gOC7PaWjfg2yB.png__1751167844770__4x0awrsuVeeCCO6mAEt0H",
+          displayMode: "preview",
+          filename: "image.png__58EElIM8gOC7PaWjfg2yB.png",
+          type: "image",
+          size: 100,
+        });
+        tr.replaceSelectionWith(fileNode);
+        dispatch(tr);
+      }
+      return true;
+    },
   });
 }
 

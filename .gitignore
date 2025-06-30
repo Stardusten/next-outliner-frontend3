@@ -1,3 +1,5 @@
+src/dev-config.ts
+
 # Dependencies
 node_modules
 .pnpm-store/

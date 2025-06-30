@@ -34,6 +34,31 @@ const blockRef: NodeSpec = {
   ],
 };
 
+const file: NodeSpec = {
+  group: "inline",
+  inline: true,
+  atom: true,
+  attrs: {
+    path: {},
+    displayMode: { default: "inline" }, // inline | expanded | preview
+    filename: {},
+    type: {},
+    size: {},
+    extraInfo: { default: "" },
+    status: { default: "uploaded" }, // "uploading-{progress}" | "uploaded" | "failed-{errorCode}"
+  },
+  parseDOM: [], // TODO
+};
+
+const lineBreak: NodeSpec = {
+  group: "inline",
+  inline: true,
+  toDOM() {
+    return ["br"];
+  },
+  parseDOM: [{ tag: "br" }],
+};
+
 const codeblock: NodeSpec = {
   group: "block",
   content: "inline*",
@@ -42,7 +67,11 @@ const codeblock: NodeSpec = {
     lang: { default: "plaintext" },
   },
   toDOM(node) {
-    return ["pre", { "data-lang": node.attrs.lang }, ["code", 0]];
+    return [
+      "pre",
+      { "data-lang": node.attrs.lang, spellcheck: false },
+      ["code", 0],
+    ];
   },
   parseDOM: [
     {
@@ -191,8 +220,10 @@ export const outlinerSchema = new Schema({
     text,
     blockRef,
     codeblock,
+    file,
     paragraph,
     listItem,
+    lineBreak,
   },
   marks: {
     link,
