@@ -17,6 +17,7 @@ import { Saver } from "./saver";
 import { TransactionManager } from "./tx";
 import { UpdateCounter } from "./update-counter";
 import { FullTextIndex } from "./index/fulltext";
+import type { AttachmentStorage } from "./attachment/storage";
 
 export type BlockChanges =
   | {
@@ -60,6 +61,7 @@ export class App {
   _doc: LoroDoc;
   _tree: LoroTree;
   _persistence: Persistence;
+  _attachmentStorage: AttachmentStorage;
   docId: string;
 
   _eb: Emitter<AppEvents>;
@@ -89,11 +91,15 @@ export class App {
   _txManager: TransactionManager;
   tx: TransactionManager["tx"];
 
-  constructor(
-    docId: string,
-    persistenceClz: new (docId: string) => Persistence
-  ) {
+  constructor(params: {
+    docId: string;
+    persistence: Persistence;
+    attachmentStorage: AttachmentStorage;
+  }) {
+    const { docId, persistence, attachmentStorage } = params;
+
     this.docId = docId;
+    this._attachmentStorage = attachmentStorage;
 
     // 初始化事件总线
     this._eb = mitt<AppEvents>();
@@ -102,7 +108,7 @@ export class App {
     this.off = this._eb.off.bind(this._eb);
 
     // 初始化持久化层，并从存储加载数据
-    this._persistence = new persistenceClz(docId);
+    this._persistence = persistence;
     const [doc, tree] = this._persistence.load();
     this._doc = doc;
     this._tree = tree;
@@ -248,5 +254,23 @@ export class App {
 
   getAllNodes(withDeleted = false): BlockNode[] {
     return this._tree.getNodes({ withDeleted });
+  }
+
+  get attachmentStorage(): AttachmentStorage {
+    return this._attachmentStorage;
+  }
+
+  /**
+   * 释放内部资源，停止保存/压缩定时器
+   */
+  destroy(): void {
+    try {
+      this._saver.stop();
+      this._compacter.stop();
+    } catch (e) {
+      console.warn("Error during App.destroy", e);
+    }
+    // 清理事件监听
+    this.off && this.off("tx-committed", () => {});
   }
 }

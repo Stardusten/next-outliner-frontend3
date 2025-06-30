@@ -83,21 +83,25 @@ export class TextContentManager {
     const blockData = app.getBlockData(blockId);
     if (!blockData) return;
 
-    const nodeJson = JSON.parse(blockData.content);
-    const node = outlinerSchema.nodeFromJSON(nodeJson);
+    let textContent = "";
+    if (blockData.type === "text" || blockData.type === "code") {
+      const nodeJson = JSON.parse(blockData.content);
+      const node = outlinerSchema.nodeFromJSON(nodeJson);
 
-    const arr: string[] = [];
-    node.content.descendants((currNode) => {
-      if (currNode.isText) arr.push(currNode.text ?? "");
-      else if (currNode.type === outlinerSchema.nodes.blockRef) {
-        const blockId = currNode.attrs.blockId;
-        const content = this.getTextContent(blockId, visited);
-        arr.push(content);
-      } else if (currNode.type === outlinerSchema.nodes.codeblock) {
-        arr.push(currNode.textContent);
-      }
-    });
-    const textContent = arr.join("");
+      const arr: string[] = [];
+      node.content.descendants((currNode) => {
+        if (currNode.isText) arr.push(currNode.text ?? "");
+        else if (currNode.type === outlinerSchema.nodes.blockRef) {
+          const blockId = currNode.attrs.blockId;
+          const content = this.getTextContent(blockId, visited);
+          arr.push(content);
+        } else if (currNode.type === outlinerSchema.nodes.codeblock) {
+          arr.push(currNode.textContent);
+        }
+      });
+      textContent = arr.join("");
+    }
+
     this.textContentCache.set(blockId, textContent);
   }
 

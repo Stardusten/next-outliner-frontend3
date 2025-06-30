@@ -36,10 +36,12 @@ export class InRefsManager {
     const { app } = this;
     for (const node of app.getAllNodes(false)) {
       const data = node.data.toJSON() as BlockDataInner;
-      const nodeJson = JSON.parse(data.content);
-      const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-      const refs = getBlockRefs(pmNode);
-      for (const ref of refs) this.addInRef(ref, node.id);
+      if (data.type === "text" || data.type === "code") {
+        const nodeJson = JSON.parse(data.content);
+        const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
+        const refs = getBlockRefs(pmNode);
+        for (const ref of refs) this.addInRef(ref, node.id);
+      }
     }
   }
 
@@ -76,28 +78,35 @@ export class InRefsManager {
         if (change.type === "block:create") {
           const blockData = app.getBlockData(change.blockId);
           if (!blockData) continue;
-          const nodeJson = JSON.parse(blockData.content);
-          const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-          const refs = getBlockRefs(pmNode);
-          for (const ref of refs) this.addInRef(ref, change.blockId);
+          if (blockData.type === "text" || blockData.type === "code") {
+            const nodeJson = JSON.parse(blockData.content);
+            const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
+            const refs = getBlockRefs(pmNode);
+            for (const ref of refs) this.addInRef(ref, change.blockId);
+          }
         } else if (change.type === "block:delete") {
           const blockData = app.getBlockData(change.blockId, true);
           if (!blockData) continue;
-          const nodeJson = JSON.parse(blockData.content);
-          const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-          const refs = getBlockRefs(pmNode);
-          for (const ref of refs) this.removeInRef(ref, change.blockId);
+          if (blockData.type === "text" || blockData.type === "code") {
+            const nodeJson = JSON.parse(blockData.content);
+            const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
+            const refs = getBlockRefs(pmNode);
+            for (const ref of refs) this.removeInRef(ref, change.blockId);
+          }
         } else if (change.type === "block:update") {
-          console.log(change);
           const { blockId, newData, oldData } = change;
-          const oldJson = JSON.parse(oldData.content);
-          const newJson = JSON.parse(newData.content);
-          const oldPmNode = outlinerSchema.nodeFromJSON(oldJson);
-          const newPmNode = outlinerSchema.nodeFromJSON(newJson);
-          const oldRefs = getBlockRefs(oldPmNode);
-          const newRefs = getBlockRefs(newPmNode);
-          for (const ref of oldRefs) this.removeInRef(ref, blockId);
-          for (const ref of newRefs) this.addInRef(ref, blockId);
+          if (oldData.type === "text" || oldData.type === "code") {
+            const oldJson = JSON.parse(oldData.content);
+            const oldPmNode = outlinerSchema.nodeFromJSON(oldJson);
+            const oldRefs = getBlockRefs(oldPmNode);
+            for (const ref of oldRefs) this.removeInRef(ref, blockId);
+          }
+          if (newData && (newData.type === "text" || newData.type === "code")) {
+            const newJson = JSON.parse(newData.content);
+            const newPmNode = outlinerSchema.nodeFromJSON(newJson);
+            const refs = getBlockRefs(newPmNode);
+            for (const ref of refs) this.addInRef(ref, blockId);
+          }
         }
       }
     });

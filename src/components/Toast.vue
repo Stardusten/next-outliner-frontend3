@@ -62,7 +62,7 @@ const removeToast = (id: string) => {
   z-index: 3000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   pointer-events: none;
 }
 

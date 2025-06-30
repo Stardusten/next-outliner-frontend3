@@ -1,12 +1,5 @@
 // 导出所有 composables
 export { useLocalStorage } from "./useLocalStorage";
-export { useSystemTheme } from "./useSystemTheme";
-export { useTheme, type ThemeMode } from "./useTheme";
-export {
-  useLineSpacing,
-  type LineSpacing,
-  LINE_SPACING_OPTIONS,
-} from "./useLineSpacing";
 export { useBreadcrumb, type BreadcrumbItem } from "./useBreadcrumb";
 export { useBlockRefCompletion } from "./useBlockRefCompletion";
 export { useSearch, type SearchResult } from "./useSearch";
@@ -18,3 +11,33 @@ export {
   type ToastItem,
   type ToastOptions,
 } from "./useToast";
+export {
+  useAttachmentTaskList,
+  getTaskTypeText,
+  getTaskStatusText,
+  formatFileSize,
+  type AttachmentTask,
+  type AttachmentTaskType,
+  type AttachmentTaskStatus,
+  type ProgressInfo,
+} from "./useAttachmentTaskList";
+export { useAttachment } from "./useAttachment";
+export {
+  useContextMenu,
+  type ContextMenuItem,
+  type ContextMenuData,
+  type ContextMenuItemOrDivider,
+} from "./useContextMenu";
+export { useSettings } from "./useSettings";
+export type {
+  SettingType,
+  SettingItem,
+  ToggleSetting,
+  SingleSelectSetting,
+  MultiSelectSetting,
+  InputSetting,
+  NumberSetting,
+  SettingsGroup,
+  SettingsPageConfig,
+  SidebarSection,
+} from "./useSettings";

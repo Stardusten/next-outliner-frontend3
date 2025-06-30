@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import {
+  NodeSelection,
   TextSelection,
   type Command,
   type EditorState,
@@ -15,6 +16,9 @@ import { Node } from "prosemirror-model";
 import type { Editor } from "./interface";
 import type { App } from "../app/app";
 import type { BlockId, SelectionInfo } from "../common/types";
+import type { AttachmentTaskInfo } from "../app/attachment/storage";
+import { getFileType } from "./node-views/file/common";
+import { useAttachment } from "@/composables";
 
 export function findCurrListItem(state: EditorState) {
   const { $from } = state.selection;
@@ -529,6 +533,54 @@ export function mergeWithPreviousBlock(app: App): Command {
 }
 
 /**
+ * - h|<file> 这种情况下按 backspace ProseMirror 无法正常删除 h
+ * 因此我们手工删掉 h，然后聚焦到 file
+ */
+export function backspaceAfterCharBeforeExpandedFile(): Command {
+  return function (state, dispatch) {
+    const { $to } = state.selection as NodeSelection;
+    const afterNode = $to.nodeAfter;
+
+    if (afterNode && afterNode.type === outlinerSchema.nodes.file) {
+      const offset = $to.parentOffset;
+      if (offset === 1) {
+        let tr = state.tr.replaceWith($to.pos - 1, $to.pos + 1, afterNode);
+        tr = tr.setSelection(NodeSelection.create(tr.doc, $to.pos - 1));
+        dispatch && dispatch(tr);
+        return true;
+      }
+    }
+
+    return false;
+  };
+}
+
+/**
+ * 在 - |h<file> 这种情况下按 delete ProseMirror 无法正常删除 h
+ * 因此我们手工删掉 h，然后聚焦到 file
+ */
+export function deleteBeforeCharBeforeExpandedFile(): Command {
+  return function (state, dispatch) {
+    const { empty, $from } = state.selection as NodeSelection;
+    if (empty) {
+      const $afterFrom = state.doc.resolve($from.pos + 1);
+      const afterNode = $afterFrom.nodeAfter;
+
+      if (afterNode && afterNode.type === outlinerSchema.nodes.file) {
+        let tr = state.tr.replaceWith($from.pos, $from.pos + 2, afterNode);
+        tr = tr.setSelection(NodeSelection.create(tr.doc, $from.pos));
+        dispatch && dispatch(tr);
+        return true;
+      }
+    } else {
+      return backspaceAfterCharBeforeExpandedFile()(state, dispatch);
+    }
+
+    return false;
+  };
+}
+
+/**
  * 在代码块中插入换行，并继承上一行的缩进
  */
 export function codeblockInsertLineBreak(): Command {
@@ -787,5 +839,212 @@ export function undo(editor: Editor): Command {
 export function redo(editor: Editor): Command {
   return function (state, dispatch) {
     throw new Error("Redo is not currently supported");
+  };
+}
+
+export function insertLineBreak(): Command {
+  return function (state, dispatch) {
+    if (dispatch) {
+      const lineBreak = outlinerSchema.nodes.lineBreak.create();
+      const tr = state.tr.replaceSelectionWith(lineBreak);
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
+export function setImageWidth(pos: number, width: number): Command {
+  return function (state, dispatch) {
+    const fileType = outlinerSchema.nodes.file;
+    const node = state.doc.nodeAt(pos);
+    if (!node || node.type !== fileType) return false;
+
+    // 更新文件节点的 extraInfo
+    const newExtraInfo = JSON.stringify({
+      ...JSON.parse(node.attrs.extraInfo || "{}"),
+      width,
+    });
+    const newAttrs = {
+      ...node.attrs,
+      extraInfo: newExtraInfo,
+    };
+
+    if (dispatch) {
+      const tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
+      dispatch(tr);
+    }
+
+    return true;
+  };
+}
+
+export function uploadFile(app: App): Command {
+  return function (state, dispatch, view) {
+    const fileType = outlinerSchema.nodes.file;
+    // 检查当前是否在列表项中
+    const currListItem = findCurrListItem(state);
+    if (!currListItem) return false;
+
+    if (!dispatch || !view) return true;
+
+    // 当任务创建时插入文件节点
+    let taskId: string | null = null;
+    const onTaskCreated = (task: AttachmentTaskInfo) => {
+      // 开始执行就立刻移除监听器，确保只执行一次
+      app.attachmentStorage.off("task:created", onTaskCreated);
+
+      // 记录任务 ID，用于后续的文件节点更新
+      taskId = task.id;
+
+      // 插入 inline 文件节点，状态为 uploading-0
+      if (dispatch) {
+        const tr = view.state.tr;
+        const fileNode = fileType.create({
+          path: task.path,
+          displayMode: "inline",
+          filename: task.filename,
+          type: getFileType(task.path),
+          size: task.size,
+          status: "uploading-0",
+        });
+        tr.replaceSelectionWith(fileNode);
+        dispatch(tr);
+      }
+    };
+
+    // 注册进度监听器：更新上传进度
+    const onTaskProgress = (task: AttachmentTaskInfo) => {
+      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+      if (task.id !== taskId) return;
+
+      if (task.progress === undefined) return;
+
+      if (dispatch) {
+        let found: any = null;
+
+        view.state.doc.descendants((node, pos) => {
+          if (found) return false;
+          if (node.type === fileType && node.attrs.path === task.path) {
+            found = [node, pos];
+            return false;
+          }
+        });
+
+        if (found) {
+          const [fileNode, filePos]: [Node, number] = found;
+          const newAttrs = {
+            ...fileNode.attrs,
+            status: `uploading-${Math.round(task.progress)}`,
+          };
+
+          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+          dispatch(tr);
+        }
+      }
+    };
+
+    // 注册任务完成监听器：更新文件节点的 path 和状态
+    const onTaskCompleted = (task: AttachmentTaskInfo) => {
+      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+      if (task.id !== taskId) return;
+
+      // 移除监听器
+      app.attachmentStorage.off("task:completed", onTaskCompleted);
+      app.attachmentStorage.off("task:progress", onTaskProgress);
+
+      // 在文档中找到对应的文件节点并更新
+      if (dispatch) {
+        let found: any = null;
+
+        view.state.doc.descendants((node, pos) => {
+          if (found) return false;
+          if (node.type === fileType && node.attrs.path === task.path) {
+            found = [node, pos];
+            return false; // 停止遍历
+          }
+        });
+
+        if (found) {
+          const [fileNode, filePos]: [Node, number] = found;
+          const currentAttrs = fileNode.attrs as any;
+          const newAttrs = {
+            ...currentAttrs,
+            path: task.path, // 更新为真实的 path
+            status: "uploaded",
+          };
+
+          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+          dispatch(tr);
+        }
+      }
+    };
+
+    // 注册任务失败监听器：更新文件节点状态
+    const onTaskFailed = (task: AttachmentTaskInfo) => {
+      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+      if (task.id !== taskId) return;
+
+      // 移除监听器
+      app.attachmentStorage.off("task:failed", onTaskFailed);
+      app.attachmentStorage.off("task:progress", onTaskProgress);
+
+      // 在文档中找到对应的文件节点并更新状态
+      if (dispatch) {
+        let found: any = null;
+
+        view.state.doc.descendants((node, pos) => {
+          if (found) return false;
+          if (node.type === fileType && node.attrs.path === task.path) {
+            found = [node, pos];
+            return false;
+          }
+        });
+
+        if (found) {
+          const [fileNode, filePos]: [Node, number] = found;
+          const newAttrs = {
+            ...fileNode.attrs,
+            status: "failed-1",
+          };
+
+          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+          dispatch(tr);
+        }
+      }
+    };
+
+    // 注册所有事件监听器
+    app.attachmentStorage.on("task:created", onTaskCreated);
+    app.attachmentStorage.on("task:completed", onTaskCompleted);
+    app.attachmentStorage.on("task:failed", onTaskFailed);
+    app.attachmentStorage.on("task:progress", onTaskProgress);
+
+    // 触发上传
+    const attachment = useAttachment(() => app);
+    attachment.handleUpload();
+
+    return true;
+  };
+}
+
+export function changeFileDisplayMode(
+  pos: number,
+  displayMode: string
+): Command {
+  return function (state, dispatch) {
+    const node = state.doc.nodeAt(pos);
+    const fileType = outlinerSchema.nodes.file;
+    if (!node || node.type !== fileType) return false;
+
+    const newAttrs = {
+      ...node.attrs,
+      displayMode,
+    };
+
+    if (dispatch) {
+      const tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
+      dispatch(tr);
+    }
+    return true;
   };
 }

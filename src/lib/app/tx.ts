@@ -12,12 +12,15 @@ import {
 import type { App } from "./app";
 import type { TxOrigin } from "../common/types";
 import { txOriginToString } from "../common/origin-utils";
+import { AsyncTaskQueue } from "../common/taskQueue";
 
 export class TransactionManager {
   private app: App;
+  private txQueue: AsyncTaskQueue;
 
   constructor(app: App) {
     this.app = app;
+    this.txQueue = new AsyncTaskQueue();
   }
 
   private createTxObj(txOrigin: TxOrigin) {
@@ -32,23 +35,36 @@ export class TransactionManager {
       toggleFold: toggleFold(app),
       updateBlockData: updateBlockData(app),
       moveBlock: moveBlock(app),
-      updateOrigin: (patch: Partial<TxOrigin>) =>
-        Object.assign(txOrigin, patch),
+      updateOrigin: (
+        patch: Partial<Omit<TxOrigin, "txId" | "type" | "editorId">>
+      ) => Object.assign(txOrigin, patch),
     };
     return txObj;
   }
 
-  /**
-   * 所有对块的修改走这个方法
-   *
-   * （视图：ProseMirror View）
-   * - 结构性修改：先派发对应的结构性更改事务，然后触发视图重绘和更改持久化
-   * - 内容行修改：直接更新视图，然后派发对应的 update 事务，持久化更改
-   */
   async tx(
     cb: (txObj: ReturnType<typeof this.createTxObj>) => void | Promise<void>,
     origin: TxOrigin
   ) {
+    // 本地同一个块的内容更改应用防抖策略
+    // 也就是如果用户在一个块内连续打字，最后只触发一次 tx
+    // 但如果先在块 A 内打字，然后在块 B 内打字，则块 B 内的 tx 不会
+    // 与块 A 内的事务一起应用防抖
+    if (origin.type === "localEditorContent") {
+      this.txQueue.queueTask(() => this.execTx(cb, origin), {
+        key: `${origin.editorId}-${origin.blockId}`,
+        delay: 500,
+      });
+    } else {
+      this.txQueue.queueTask(() => this.execTx(cb, origin));
+    }
+  }
+
+  async execTx(
+    cb: (txObj: ReturnType<typeof this.createTxObj>) => void | Promise<void>,
+    origin: TxOrigin
+  ) {
+    console.log("execTx", origin);
     const { app } = this;
     const beforeFrontiers = app._doc.frontiers();
     try {
@@ -61,23 +77,17 @@ export class TransactionManager {
       return;
     }
     app._doc.commit({ origin: txOriginToString(origin) });
-    await new Promise((resolve) =>
-      setTimeout(() => {
-        // 可能我们的一个事务没有任何内容上的变更，只
-        // 通过 origin 修改了 selection 之类的东西
-        // 此时 this.doc.commit 就不会触发任何事件
-        // 因此我们在这里手工检查事件是否触发，如果
-        // 没有触发，则手工触发
-        const lastEvent = app._loroEventTransformer.lastEvent;
-        if (lastEvent == null || lastEvent.origin.txId !== origin.txId) {
-          // 手工触发
-          app._emit("tx-committed", {
-            changes: [], // 没有变更
-            origin,
-          });
-        }
-        resolve(undefined);
-      })
-    );
+    // 可能我们一个事务没有任何内容上的变更，只
+    // 通过 origin 修改了 selection 之类的东西
+    // 此时 this.doc.commit 就不会触发任何事件
+    // 因此我们在这里手工检查是否处于这种情况
+    // 如果处于这种情况，则手动派发 tx-committed 事件
+    const cmp = app._doc.cmpWithFrontiers(beforeFrontiers);
+    if (cmp < 1) {
+      app._emit("tx-committed", {
+        changes: [],
+        origin,
+      });
+    }
   }
 }

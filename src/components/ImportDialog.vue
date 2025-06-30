@@ -1,54 +1,50 @@
 <template>
-  <BaseModal
-    :visible="visible"
-    title="导入确认"
-    confirm-text="确认导入"
-    @confirm="handleConfirm"
-    @cancel="handleCancel"
-    @close="handleCancel"
-  >
-    <p class="message">
-      检测到 <strong>{{ blockCount }}</strong> 个块，是否确定导入？
-    </p>
-  </BaseModal>
+  <AlertDialog :open="importDialogVisible">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>导入确认</AlertDialogTitle>
+        <AlertDialogDescription>
+          检测到 <strong>{{ importBlockCount }}</strong> 个块，是否确定导入？
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel @click="handleImportCancel">取消</AlertDialogCancel>
+        <AlertDialogAction @click="handleImportConfirm"
+          >确认导入</AlertDialogAction
+        >
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 </template>
 
 <script setup lang="ts">
-import BaseModal from "./BaseModal.vue";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { useImportExport } from "@/composables";
 
-// Props
-defineProps<{
-  visible: boolean;
-  blockCount: number;
+const props = defineProps<{
+  importExport: ReturnType<typeof useImportExport>;
 }>();
 
-// Emits
-const emit = defineEmits<{
-  confirm: [];
-  cancel: [];
-}>();
-
-// 处理确认
-const handleConfirm = () => {
-  emit("confirm");
-};
-
-// 处理取消
-const handleCancel = () => {
-  emit("cancel");
-};
+const {
+  importDialogVisible,
+  importBlockCount,
+  handleImportConfirm,
+  handleImportCancel,
+} = props.importExport;
 </script>
 
 <style scoped>
-.message {
-  margin: 0;
-  color: var(--menu-text);
-  font-size: var(--ui-font-size);
-  line-height: 1.5;
-}
-
-.message strong {
-  color: var(--menu-text);
+strong {
+  color: var(--foreground);
   font-weight: 600;
 }
 </style>

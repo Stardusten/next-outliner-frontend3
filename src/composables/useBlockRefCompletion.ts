@@ -98,6 +98,7 @@ export function useBlockRefCompletion(
       for (const blockId of searchResults) {
         const blockNode = app.getBlockNode(blockId);
         if (blockNode) {
+          if (blockNode.data.get("type") !== "text") continue;
           const textContent = app.getTextContent(blockId);
           if (textContent && textContent.trim().length > 0) {
             // 当前块永远不会成为候选
@@ -142,14 +143,17 @@ export function useBlockRefCompletion(
 
   // 处理补全导航事件
   const handleCompletionNext = () => {
-    completionActiveIndex.value = Math.min(
-      completionActiveIndex.value + 1,
-      availableBlocks.value.length - 1
-    );
+    if (availableBlocks.value.length === 0) return;
+    completionActiveIndex.value =
+      (completionActiveIndex.value + 1) % availableBlocks.value.length;
   };
 
   const handleCompletionPrev = () => {
-    completionActiveIndex.value = Math.max(completionActiveIndex.value - 1, 0);
+    if (availableBlocks.value.length === 0) return;
+    completionActiveIndex.value = completionActiveIndex.value - 1;
+    if (completionActiveIndex.value < 0) {
+      completionActiveIndex.value = availableBlocks.value.length - 1;
+    }
   };
 
   const handleCompletionSelect = () => {
