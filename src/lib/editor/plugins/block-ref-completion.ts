@@ -1,7 +1,8 @@
 import { EditorState, Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import type { CompletionStatus, EditorEvent } from "../interface";
+import type { CompletionStatus, EditorEvents } from "../editor";
 import { outlinerSchema } from "../schema";
+import type { Emitter } from "mitt";
 
 /**
  * 检查当前状态是否应该显示补全
@@ -55,23 +56,21 @@ export function executeCompletion(blockId: string, view: EditorView): boolean {
   return true;
 }
 
-type Emitter = (e: EditorEvent) => void;
-
-export function createCompletionHelperPlugin(emit: Emitter) {
+export function createCompletionHelperPlugin(emitter: Emitter<EditorEvents>) {
   let editorView: EditorView | null = null;
 
   return new Plugin({
     state: {
       init(_, state) {
         const status = checkCompletionStatus(state);
-        emit({ type: "completion", status });
+        emitter.emit("completion", { status });
         return status;
       },
       apply(tr, val, _2, newState) {
         // 如果文档未改变获知 ime 激活，都不更新补全状态
         if (editorView?.composing) return val;
         const status = checkCompletionStatus(newState);
-        emit({ type: "completion", status });
+        emitter.emit("completion", { status });
         return status;
       },
     },
@@ -80,7 +79,7 @@ export function createCompletionHelperPlugin(emit: Emitter) {
 
       const handleCompositionEnd = () => {
         const status = checkCompletionStatus(view.state);
-        emit({ type: "completion", status });
+        emitter.emit("completion", { status });
         return status;
       };
       view.dom.addEventListener("compositionend", handleCompositionEnd);
@@ -101,19 +100,19 @@ export function createCompletionHelperPlugin(emit: Emitter) {
         switch (event.key) {
           case "ArrowDown":
             event.preventDefault();
-            emit({ type: "completion-next" });
+            emitter.emit("completion-next");
             return true;
           case "ArrowUp":
             event.preventDefault();
-            emit({ type: "completion-prev" });
+            emitter.emit("completion-prev");
             return true;
           case "Enter":
             event.preventDefault();
-            emit({ type: "completion-select" });
+            emitter.emit("completion-select");
             return true;
           case "Escape":
             event.preventDefault();
-            emit({ type: "completion", status: null });
+            emitter.emit("completion", { status: null });
             return true;
         }
 

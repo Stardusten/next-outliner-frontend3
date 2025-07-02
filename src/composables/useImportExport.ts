@@ -1,5 +1,5 @@
 import type { App } from "@/lib/app/app";
-import { BLOCKS_TREE_NAME } from "@/lib/app/local-storage";
+import { BLOCKS_TREE_NAME } from "@/lib/persistence/local-storage";
 import type { BlockDataInner, BlockNode, BlockType } from "@/lib/common/types";
 import { outlinerSchema } from "@/lib/editor/schema";
 import { LoroDoc } from "loro-crdt";
@@ -76,11 +76,10 @@ const pendingImport = shallowRef<PendingImport | null>(null);
 const clearStorageDialogVisible = ref(false);
 const clearHistoryDialogVisible = ref(false);
 
-export function useImportExport(getApp: () => App) {
+export function useImportExport(app: App) {
   // 导出功能
   const handleExport = (format: ExportFormat = "bsnapshot") => {
     if (format == "snapshot") {
-      const app = getApp();
       const snapshot = app.exportShallowSnapshot();
       const base64snapshot = uint8ToBase64(snapshot);
       const a = document.createElement("a");
@@ -89,7 +88,6 @@ export function useImportExport(getApp: () => App) {
       a.click();
       a.remove();
     } else if (format === "bsnapshot") {
-      const app = getApp();
       const snapshot = app.exportShallowSnapshot();
       const blob = new Blob([snapshot], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
@@ -193,7 +191,6 @@ export function useImportExport(getApp: () => App) {
   // 处理导入确认
   const handleImportConfirm = async () => {
     if (!pendingImport.value) return;
-    const app = getApp();
 
     try {
       if (pendingImport.value.format === "jsonl") {
@@ -324,10 +321,9 @@ export function useImportExport(getApp: () => App) {
 
   // 确认清空存储
   const handleClearStorageConfirm = () => {
-    const storage = getApp();
     try {
-      storage._persistence.clear();
-      storage._saver.forceSave();
+      app.persistence.clear();
+      app._saver.forceSave();
       // 刷新页面以重新加载
       window.location.reload();
     } catch (error) {
@@ -350,10 +346,9 @@ export function useImportExport(getApp: () => App) {
 
   // 新增：确认清空历史版本
   const handleClearHistoryConfirm = () => {
-    const storage = getApp();
     try {
-      storage._persistence.clearHistory(storage.docId);
-      storage.updateCounter.set(0);
+      app.persistence.clearHistory(app.docId);
+      app.updateCounter.set(0);
       toast.success("已清空历史版本！");
     } catch (error) {
       console.error("清空历史版本失败:", error);

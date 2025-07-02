@@ -215,32 +215,6 @@ export function createStateFromStorage(
 }
 
 /**
- * 将相对位置（块 ID + 块内偏移）转换为绝对位置（相对文档开头的偏移）
- */
-export function getAbsPos(
-  doc: Node,
-  blockId: BlockId,
-  offset: number
-): number | null {
-  let absolutePos: number | null = null;
-  doc.descendants((node, pos) => {
-    if (absolutePos !== null) return false; // 已找到，停止搜索
-
-    if (node.type.name === "listItem" && node.attrs.blockId === blockId) {
-      // listItem 的内容是 paragraph，文本从 pos + 2 开始。
-      const paragraphNode = node.firstChild;
-      if (paragraphNode) {
-        const maxOffset = paragraphNode.content.size;
-        const finalOffset = Math.min(offset, maxOffset);
-        absolutePos = pos + 1 + 1 + finalOffset;
-      }
-      return false; // 停止搜索
-    }
-  });
-  return absolutePos;
-}
-
-/**
  *  查找包含给定文档位置的 listItem 节点
  * @param doc Prosemirror 文档
  * @param pos 文档中的绝对位置

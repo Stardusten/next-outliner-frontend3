@@ -49,9 +49,9 @@
               </div>
             </div>
           </template>
-          <template v-else-if="currentPageConfig">
+          <template v-else-if="visiblePageConfig">
             <div
-              v-for="group in currentPageConfig.groups"
+              v-for="group in visiblePageConfig.groups"
               :key="group.id"
               class="flex flex-col gap-4"
             >
@@ -71,7 +71,11 @@
                 :key="setting.id"
                 class="flex flex-col"
               >
-                <Label class="mb-2">{{ setting.label }}</Label>
+                <Label
+                  v-if="setting.type !== 'custom' || !setting.noLabel"
+                  class="mb-2"
+                  >{{ setting.label }}</Label
+                >
                 <Label
                   class="text-[.8em] text-muted-foreground mb-2 whitespace-pre-wrap"
                   v-if="setting.description"
@@ -115,6 +119,12 @@
                   v-else-if="setting.type === 'font'"
                   :setting="setting"
                 />
+
+                <!-- 自定义渲染 -->
+                <component
+                  v-else-if="setting.type === 'custom'"
+                  :is="setting.render(renderContext)"
+                />
               </div>
             </div>
           </template>
@@ -129,6 +139,7 @@ import { useSettings } from "@/composables";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
+import { computed } from "vue";
 
 import SwitchComp from "./comps/SwitchComp.vue";
 import SelectComp from "./comps/SelectComp.vue";
@@ -137,8 +148,42 @@ import TextInputComp from "./comps/TextInputComp.vue";
 import NumberInputComp from "./comps/NumberInputComp.vue";
 import FontSelectorComp from "./comps/FontSelectorComp.vue";
 
-const { visible, currentPage, currentPageConfig, sidebarSections } =
-  useSettings();
+const {
+  visible,
+  currentPage,
+  currentPageConfig,
+  sidebarSections,
+  settings,
+  evaluateCondition,
+  getSetting,
+  saveSetting,
+  resetSetting,
+} = useSettings();
+
+// 创建渲染上下文
+const renderContext = computed(() => ({
+  settings,
+  getSetting,
+  saveSetting,
+  resetSetting,
+}));
+
+// 计算当前应该显示的分组和设置项
+const visiblePageConfig = computed(() => {
+  if (!currentPageConfig.value) return null;
+
+  return {
+    ...currentPageConfig.value,
+    groups: currentPageConfig.value.groups
+      .map((group) => ({
+        ...group,
+        settings: group.settings.filter((setting) =>
+          evaluateCondition(setting.condition, settings)
+        ),
+      }))
+      .filter((group) => group.settings.length > 0), // 过滤掉没有可见设置项的分组
+  };
+});
 
 // 处理对话框开关状态变化
 const handleOpenChange = (open: boolean) => {

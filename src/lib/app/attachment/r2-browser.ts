@@ -413,4 +413,60 @@ export class R2AttachmentStorage implements AttachmentStorage {
       id,
     };
   }
+
+  /** 测试连接配置是否有效 */
+  static async test_conn(
+    cfg: R2BrowserConfig
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const client = new S3Client({
+        region: cfg.region ?? "auto",
+        endpoint: cfg.endpoint,
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: cfg.accessKeyId,
+          secretAccessKey: cfg.secretAccessKey,
+        },
+      });
+
+      // 尝试列出存储桶中的对象（限制为1个，只是测试连接）
+      const { ListObjectsV2Command } = await import("@aws-sdk/client-s3");
+      const listCmd = new ListObjectsV2Command({
+        Bucket: cfg.bucket,
+        MaxKeys: 1,
+      });
+
+      await client.send(listCmd);
+
+      return {
+        success: true,
+        message: "连接成功",
+      };
+    } catch (error) {
+      let message = "连接失败";
+
+      if (error instanceof Error) {
+        // 根据错误类型提供更具体的信息
+        if (error.message.includes("NoSuchBucket")) {
+          message = "存储桶不存在";
+        } else if (error.message.includes("InvalidAccessKeyId")) {
+          message = "Access Key 无效";
+        } else if (error.message.includes("SignatureDoesNotMatch")) {
+          message = "Secret Key 无效";
+        } else if (
+          error.message.includes("NetworkingError") ||
+          error.message.includes("fetch")
+        ) {
+          message = "网络连接失败，请检查 Endpoint";
+        } else {
+          message = `连接失败: ${error.message}`;
+        }
+      }
+
+      return {
+        success: false,
+        message,
+      };
+    }
+  }
 }

@@ -41,3 +41,5 @@ export type {
   SettingsPageConfig,
   SidebarSection,
 } from "./useSettings";
+export { useRepoConfigs as useRepoSwitch } from "./useRepoConfigs";
+export { useRepoWizard } from "./useRepoWizard";

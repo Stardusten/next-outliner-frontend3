@@ -1,51 +1,85 @@
 import { App } from "../app/app";
+import { getAttachmentStorage } from "../app/attachment";
 import type { AttachmentStorage } from "../app/attachment/storage";
-import type { Persistence } from "../app/persistence";
+import { getPersistence } from "../persistence";
+import type { Persistence } from "../persistence/persistence";
 import { z } from "zod";
 
-const localStoragePersistenceParamsSchema = z.object({});
-
 const r2AttachmentStorageParamsSchema = z.object({
-  endpoint: z.string(),
-  bucket: z.string(),
-  accessKeyId: z.string(),
-  secretAccessKey: z.string(),
+  endpoint: z
+    .string()
+    .min(1, { message: "repoConfig.attachment.r2.endpointCannotBeEmpty" })
+    .default(""),
+  bucket: z
+    .string()
+    .min(1, { message: "repoConfig.attachment.r2.bucketCannotBeEmpty" })
+    .default(""),
+  accessKeyId: z
+    .string()
+    .min(1, { message: "repoConfig.attachment.r2.accessKeyIdCannotBeEmpty" })
+    .default(""),
+  secretAccessKey: z
+    .string()
+    .min(1, {
+      message: "repoConfig.attachment.r2.secretAccessKeyCannotBeEmpty",
+    })
+    .default(""),
   useSSL: z.boolean().optional(),
   region: z.string().optional(),
 });
 
-const repoConfigSchema = z.object({
-  id: z.string(),
-  title: z.string().optional(),
-  persistence: z.discriminatedUnion("type", [
-    z.object({
-      type: z.literal("local-storage"),
-      params: localStoragePersistenceParamsSchema,
-    }),
-  ]),
-  attachment: z.discriminatedUnion("type", [
+const attachmentStorageSchema = z.discriminatedUnion(
+  "type",
+  [
     z.object({
       type: z.literal("r2"),
       params: r2AttachmentStorageParamsSchema,
     }),
-  ]),
+    z.object({
+      type: z.literal("none"),
+      params: z.object({}).default({}),
+    }),
+  ],
+  {
+    errorMap: (issue) => ({
+      message: "repoConfig.attachment.invalidAttachmentStorageType",
+    }),
+  }
+);
+
+const persistenceSchema = z.discriminatedUnion(
+  "type",
+  [
+    z.object({
+      type: z.literal("local-storage"),
+      params: z.object({}).default({}),
+    }),
+  ],
+  {
+    errorMap: (issue) => ({
+      message: "repoConfig.persistence.invalidPersistenceType",
+    }),
+  }
+);
+
+export const repoConfigSchema = z.object({
+  id: z.string().min(1, { message: "repoConfig.idCannotBeEmpty" }).default(""),
+  title: z
+    .string()
+    .min(1, { message: "repoConfig.titleCannotBeEmpty" })
+    .default(""),
+  persistence: persistenceSchema,
+  attachment: attachmentStorageSchema,
 });
 
 export type RepoConfig = z.infer<typeof repoConfigSchema>;
 
-export type ProviderRegistry = {
-  persistence: Record<string, (config: RepoConfig) => Persistence>;
-  attachmentStorage: Record<string, (config: RepoConfig) => AttachmentStorage>;
-};
-
 export class Repo {
   readonly config: RepoConfig;
-  private providers: ProviderRegistry;
   private _app: App | null = null;
 
-  constructor(config: RepoConfig, providers: ProviderRegistry) {
+  constructor(config: RepoConfig) {
     this.config = config;
-    this.providers = providers;
   }
 
   /** 获取当前活跃的 App 实例（可能为空，需先调用 instantiateApp） */
@@ -58,25 +92,18 @@ export class Repo {
    * 如果之前已存在实例，会先 destroy 再重建。
    */
   instantiateApp(): App {
-    const { providers, config } = this;
-
-    const persistenceFac = providers.persistence[config.persistence.type];
-    if (!persistenceFac) {
-      throw new Error(`未注册 PersistenceProvider: ${config.persistence.type}`);
-    }
-
-    const attachmentFac = providers.attachmentStorage[config.attachment.type];
-    if (!attachmentFac) {
+    // persistence 是必须的
+    const persistence = getPersistence(this.config);
+    if (!persistence) {
       throw new Error(
-        `未注册 AttachmentStorageProvider: ${config.attachment.type}`
+        `Persistence not found! config: ${JSON.stringify(this.config)}`
       );
     }
+    console.log("persistence:", persistence);
 
-    const persistence = persistenceFac(config);
-    console.log("persistence instance created");
-
-    const attachmentStorage = attachmentFac(config);
-    console.log("attachment storage instance created");
+    // attachment storage 是可选的
+    const attachmentStorage = getAttachmentStorage(this.config);
+    console.log("attachment storage:", attachmentStorage);
 
     // 如果已有实例，先销毁
     if (this._app) {

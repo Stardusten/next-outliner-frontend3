@@ -79,7 +79,7 @@ export class Compacter {
 
     try {
       const before = app.updateCounter.get();
-      app._persistence.compact(app.docId);
+      app.persistence.compact(app.docId);
       app.updateCounter.set(0);
       console.debug(`已执行压缩，清理了 ${before} 个更新`);
     } catch (err) {

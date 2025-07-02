@@ -1,6 +1,6 @@
 import { ref, computed } from "vue";
 import type { FullTextIndex } from "@/lib/app/index/fulltext";
-import type { Editor } from "@/lib/editor/interface";
+import { locateBlock, type Editor } from "@/lib/editor/editor";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 
@@ -9,7 +9,7 @@ export interface SearchResult {
   score?: number;
 }
 
-export function useSearch(getEditor: () => Editor, getApp: () => App) {
+export function useSearch(app: App) {
   const searchVisible = ref(false);
   const searchQuery = ref("");
   const searchResults = ref<SearchResult[]>([]);
@@ -38,8 +38,6 @@ export function useSearch(getEditor: () => Editor, getApp: () => App) {
       activeIndex.value = 0;
       return;
     }
-
-    const app = getApp();
 
     // 使用全文索引搜索，获取带分数的结果
     const searchResultsWithScore = app.searchWithScore(query, 100);
@@ -89,8 +87,10 @@ export function useSearch(getEditor: () => Editor, getApp: () => App) {
     }
 
     // 处理实际的搜索结果选择 - 使用 locateBlock 定位到选择的块
-    const editor = getEditor();
-    editor.locateBlock(result.block.id);
+    const editor = app.getLastFocusedEditor();
+    if (editor) {
+      locateBlock(editor, result.block.id);
+    }
     hideSearch();
   };
 

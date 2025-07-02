@@ -8,9 +8,10 @@ import { outlinerSchema } from "../schema";
 import { nanoid } from "nanoid";
 import { serialize } from "../utils";
 import { Plugin } from "prosemirror-state";
-import { findCurrListItem, isEmptyListItem } from "../commands";
+import { isEmptyListItem } from "../commands";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
+import { findCurrListItem, type Editor } from "../editor";
 
 type Block = {
   id: string;
@@ -175,7 +176,7 @@ function parseHtml(html: string) {
   return [ctx, blocks] as const;
 }
 
-export function createPastePlugin(app: App) {
+export function createPastePlugin(editor: Editor) {
   const plugin = new Plugin({
     props: {
       handlePaste(view, event) {
@@ -217,7 +218,7 @@ export function createPastePlugin(app: App) {
             view.dispatch(tr);
           } else {
             const idMapping = new Map<string, BlockNode>(); // old id -> BlockNode
-            app.tx(
+            editor.app.tx(
               (tx) => {
                 // 粘贴了多于一个块，则粘贴所有块到当前块下方
                 const createTree = (block: Block, node: BlockNode) => {
@@ -273,6 +274,7 @@ export function createPastePlugin(app: App) {
 
                   tx.updateOrigin({
                     selection: {
+                      editorId: editor.id,
                       blockId: lastRoot!.id,
                       anchor: lastRootNode.nodeSize,
                       scrollIntoView: true,
@@ -311,7 +313,7 @@ export function createPastePlugin(app: App) {
             return true;
           } else {
             // 粘贴了多行文本
-            app.tx(
+            editor.app.tx(
               (tx) => {
                 let prevBlockId = currBlockId;
                 for (let i = 0; i < lines.length; i++) {
@@ -339,6 +341,7 @@ export function createPastePlugin(app: App) {
 
                 tx.updateOrigin({
                   selection: {
+                    editorId: editor.id,
                     blockId: prevBlockId,
                     anchor: 0,
                     scrollIntoView: true,
