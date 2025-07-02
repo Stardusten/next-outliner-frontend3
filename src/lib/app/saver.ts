@@ -59,7 +59,7 @@ export class Saver {
 
       // 只有在有增量内容时才写入
       if (update.length > 0) {
-        app._persistence.writeUpdate(this.app.docId, update);
+        app.persistence.writeUpdate(this.app.docId, update);
         app.updateCounter.inc();
         this.lastSave = this.app.getCurrentVersion();
         console.debug(`已保存更新，当前更新数量: ${app.updateCounter.get()}`);

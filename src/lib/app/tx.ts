@@ -1,18 +1,19 @@
+import { txOriginToString } from "../common/origin-utils";
+import { AsyncTaskQueue } from "../common/taskQueue";
+import type { TxOrigin } from "../common/types";
+import { getEditorSelectionInfo } from "../editor/editor";
+import type { App } from "./app";
 import {
+  deleteBlock,
+  demoteBlock,
   insertBlockAfter,
   insertBlockBefore,
   insertBlockUnder,
-  deleteBlock,
-  demoteBlock,
+  moveBlock,
   promoteBlock,
   toggleFold,
   updateBlockData,
-  moveBlock,
 } from "./commands";
-import type { App } from "./app";
-import type { TxOrigin } from "../common/types";
-import { txOriginToString } from "../common/origin-utils";
-import { AsyncTaskQueue } from "../common/taskQueue";
 
 export class TransactionManager {
   private app: App;
@@ -64,12 +65,25 @@ export class TransactionManager {
     cb: (txObj: ReturnType<typeof this.createTxObj>) => void | Promise<void>,
     origin: TxOrigin
   ) {
-    console.log("execTx", origin);
+    // console.log("execTx", origin);
     const { app } = this;
     const beforeFrontiers = app._doc.frontiers();
     try {
       const txObj = this.createTxObj(origin);
+
+      // 事务提交前，如果没有指定 beforeSelection，补上
+      const beforeSelection =
+        origin.beforeSelection ??
+        getEditorSelectionInfo(app.getLastFocusedEditor()!);
+
       await cb(txObj);
+
+      // 事务提交后，如果没有指定 selection，补上
+      const selection =
+        origin.selection ?? getEditorSelectionInfo(app.getLastFocusedEditor()!);
+
+      origin.beforeSelection = beforeSelection ?? undefined;
+      origin.selection = selection ?? undefined;
     } catch (e) {
       console.error("Error in transaction. err=", e);
       app._doc.revertTo(beforeFrontiers);
@@ -82,12 +96,14 @@ export class TransactionManager {
     // 此时 this.doc.commit 就不会触发任何事件
     // 因此我们在这里手工检查是否处于这种情况
     // 如果处于这种情况，则手动派发 tx-committed 事件
-    const cmp = app._doc.cmpWithFrontiers(beforeFrontiers);
-    if (cmp < 1) {
-      app._emit("tx-committed", {
-        changes: [],
-        origin,
-      });
+    if (origin.type !== "undoRedo") {
+      const cmp = app._doc.cmpWithFrontiers(beforeFrontiers);
+      if (cmp < 1) {
+        app._emit("tx-committed", {
+          changes: [],
+          origin,
+        });
+      }
     }
   }
 }

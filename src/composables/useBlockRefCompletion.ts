@@ -1,13 +1,16 @@
 import type { FullTextIndex } from "@/lib/app/index/fulltext";
-import type {
-  CompletionStatus,
-  Editor,
-  EditorEvent,
-} from "@/lib/editor/interface";
+import {
+  coordAtPos,
+  getFocusedBlockId,
+  type CompletionStatus,
+  type Editor,
+  type EditorEvents,
+} from "@/lib/editor/editor";
 import { onMounted, ref } from "vue";
 import { outlinerSchema } from "@/lib/editor/schema";
 import type { App } from "@/lib/app/app";
 import type { BlockDataInner, BlockNode } from "@/lib/common/types";
+import { executeCompletion } from "@/lib/editor/plugins/block-ref-completion";
 
 function isSingleRefBlock(block: BlockNode) {
   const data = block.data.toJSON() as BlockDataInner;
@@ -24,10 +27,7 @@ function isSingleRefBlock(block: BlockNode) {
   return false;
 }
 
-export function useBlockRefCompletion(
-  getEditor: () => Editor,
-  getApp: () => App
-) {
+export function useBlockRefCompletion(app: App) {
   // 补全相关状态
   const completionVisible = ref(false);
   const completionQuery = ref("");
@@ -36,10 +36,17 @@ export function useBlockRefCompletion(
   const completionActiveIndex = ref(0);
 
   // 编辑器事件处理
-  const handleCompletionRelatedEvent = (event: EditorEvent) => {
-    switch (event.type) {
+  function handleCompletionRelatedEvent(
+    editor: Editor,
+    key: keyof EditorEvents,
+    event: EditorEvents[keyof EditorEvents]
+  ) {
+    switch (key) {
       case "completion":
-        handleCompletionEvent(event.status);
+        handleCompletionEvent(
+          editor,
+          (event as EditorEvents["completion"]).status
+        );
         break;
       case "completion-next":
         handleCompletionNext();
@@ -48,29 +55,30 @@ export function useBlockRefCompletion(
         handleCompletionPrev();
         break;
       case "completion-select":
-        handleCompletionSelect();
+        handleCompletionSelect(editor);
         break;
     }
-  };
+  }
 
   // 处理补全事件
-  const handleCompletionEvent = (status: CompletionStatus | null) => {
-    const editor = getEditor();
-
+  const handleCompletionEvent = (
+    editor: Editor,
+    status: CompletionStatus | null
+  ) => {
     if (status) {
       // 显示补全窗口
       completionVisible.value = true;
       completionQuery.value = status.query;
 
       // 计算弹窗位置
-      const coords = editor.coordAtPos(status.from);
+      const coords = coordAtPos(editor, status.from);
       completionPosition.value = {
         x: coords.left,
         y: coords.bottom + 4,
       };
 
       // 获取可用的块列表
-      loadAvailableBlocks(status.query);
+      loadAvailableBlocks(editor, status.query);
 
       // 重置选中索引
       completionActiveIndex.value = 0;
@@ -83,16 +91,16 @@ export function useBlockRefCompletion(
   };
 
   // 加载可用的块列表
-  const loadAvailableBlocks = (query?: string) => {
-    const app = getApp();
-
+  const loadAvailableBlocks = (editor: Editor, query?: string) => {
     const blocks: BlockNode[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
       const searchResults = app.search(query, 100);
 
-      const editor = getEditor();
-      const focusedBlockId = editor.getFocusedBlockId();
+      const focusedEditor = app.getFocusedEditor();
+      const focusedBlockId = focusedEditor
+        ? getFocusedBlockId(focusedEditor)
+        : null;
 
       // 根据搜索结果获取具体的块
       for (const blockId of searchResults) {
@@ -129,9 +137,9 @@ export function useBlockRefCompletion(
   };
 
   // 补全相关函数
-  const handleBlockSelect = (block: BlockNode) => {
+  const handleBlockSelect = (editor: Editor, block: BlockNode) => {
     // 插入选中的块引用
-    getEditor().executeComplete(block.id);
+    editor.view && executeCompletion(block.id, editor.view);
     // 关闭补全窗口
     completionVisible.value = false;
   };
@@ -156,10 +164,10 @@ export function useBlockRefCompletion(
     }
   };
 
-  const handleCompletionSelect = () => {
+  const handleCompletionSelect = (editor: Editor) => {
     const selectedBlock = availableBlocks.value[completionActiveIndex.value];
     if (selectedBlock) {
-      handleBlockSelect(selectedBlock);
+      handleBlockSelect(editor, selectedBlock);
     }
   };
 

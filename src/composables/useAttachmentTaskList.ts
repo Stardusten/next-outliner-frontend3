@@ -72,13 +72,14 @@ export const formatFileSize = (bytes: number): string => {
 };
 
 // 主要的 composable 函数 - 接受 getApp 参数以访问 attachmentStorage
-export const useAttachmentTaskList = (getApp?: () => App) => {
+export const useAttachmentTaskList = (app: App) => {
   // 事件监听器引用
   let eventListeners: Array<() => void> = [];
 
   // 初始化事件监听
   const initializeEventListeners = (app: App) => {
     const storage = app.attachmentStorage;
+    if (!storage) return;
 
     // 监听任务创建
     const onTaskCreated = (task: AttachmentTask) => {
@@ -138,23 +139,12 @@ export const useAttachmentTaskList = (getApp?: () => App) => {
     tasks.value.push(...activeTasks);
   };
 
-  // 如果提供了 getApp 函数，在挂载时初始化事件监听
-  if (getApp) {
-    onMounted(() => {
-      try {
-        const app = getApp();
-        initializeEventListeners(app);
-      } catch (error) {
-        console.warn("Failed to initialize attachment task list:", error);
-      }
-    });
+  initializeEventListeners(app);
 
-    // 在卸载时清理事件监听器
-    onUnmounted(() => {
-      eventListeners.forEach((cleanup) => cleanup());
-      eventListeners = [];
-    });
-  }
+  const cleanup = () => {
+    eventListeners.forEach((cleanup) => cleanup());
+    eventListeners = [];
+  };
 
   // 获取任务
   const getTask = (taskId: string): AttachmentTask | undefined => {
@@ -206,5 +196,8 @@ export const useAttachmentTaskList = (getApp?: () => App) => {
     getTaskTypeText,
     getTaskStatusText,
     formatFileSize,
+
+    // 清理函数
+    cleanup,
   };
 };

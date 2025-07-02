@@ -1,6 +1,5 @@
 import { ref } from "vue";
-import { useAttachmentTaskList } from "./useAttachmentTaskList";
-import { useToast } from "./useToast";
+import { toast } from "vue-sonner";
 import type { App } from "@/lib/app/app";
 
 // 附件弹窗状态
@@ -11,9 +10,7 @@ const attachmentPosition = ref({ x: 0, y: 0 });
 const uploadConfirmVisible = ref(false);
 const selectedFile = ref<File | null>(null);
 
-export const useAttachment = (getApp: () => App) => {
-  const toast = useToast();
-
+export const useAttachment = (app: App) => {
   // 切换附件弹窗
   const toggleAttachment = (buttonElement?: HTMLElement) => {
     if (attachmentVisible.value) {
@@ -56,13 +53,6 @@ export const useAttachment = (getApp: () => App) => {
   // 处理浏览操作
   const handleBrowse = () => {
     console.log("浏览文件");
-    // TODO: 实现浏览逻辑
-  };
-
-  // 处理清空所有任务
-  const handleClearAll = () => {
-    console.log("清空所有任务");
-    // 任务清空逻辑已在 AttachmentPopup 中处理
   };
 
   // 处理上传确认
@@ -72,7 +62,6 @@ export const useAttachment = (getApp: () => App) => {
 
     try {
       // 获取附件存储实例
-      const app = getApp();
       const attachmentStorage = app.attachmentStorage;
       if (!attachmentStorage) {
         toast.error("附件存储未配置");
@@ -113,7 +102,6 @@ export const useAttachment = (getApp: () => App) => {
     closeAttachment,
     handleUpload,
     handleBrowse,
-    handleClearAll,
     handleUploadConfirm,
     handleUploadCancel,
   };

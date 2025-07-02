@@ -11,9 +11,9 @@
           variant="ghost"
           size="sm"
           class="h-6 px-2 text-xs"
-          @click="handleClearAll"
+          @click="clearCompletedTasks"
         >
-          清空所有
+          清空
         </Button>
       </div>
 
@@ -57,7 +57,9 @@
               <div class="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                 <div
                   class="h-full bg-primary rounded-full transition-all duration-300"
-                  :style="{ width: `${task.progress}%` }"
+                  :style="{
+                    width: `${task.progress ?? 0}%`,
+                  }"
                 ></div>
               </div>
               <span class="text-xs text-muted-foreground font-mono min-w-7"
@@ -139,9 +141,14 @@ const props = defineProps<{
   taskList: ReturnType<typeof useAttachmentTaskList>;
 }>();
 
-const { handleUpload, handleBrowse, handleClearAll } = props.attachment;
-const { tasks, getTaskTypeText, formatFileSize, getTaskStatusText } =
-  props.taskList;
+const { handleUpload, handleBrowse } = props.attachment;
+const {
+  tasks,
+  clearCompletedTasks,
+  getTaskTypeText,
+  formatFileSize,
+  getTaskStatusText,
+} = props.taskList;
 </script>
 
 <style scoped>

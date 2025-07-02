@@ -10,7 +10,11 @@ export function createFileNodeViewClass(app: App) {
   return class implements NodeView {
     dom: HTMLElement;
 
-    constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
+    constructor(
+      node: ProseMirrorNode,
+      view: EditorView,
+      getPos: any // TODO
+    ) {
       if (node.type !== outlinerSchema.nodes.file) {
         throw new Error("impossible. file nodeview get a node" + node);
       }

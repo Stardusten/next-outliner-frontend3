@@ -11,7 +11,6 @@ import {
   deleteEmptyListItem,
   deleteSelected,
   demoteSelected,
-  findCurrListItem,
   insertLineBreak,
   mergeWithPreviousBlock,
   moveBlockDown,
@@ -28,67 +27,85 @@ import {
 import type { Command, EditorState } from "prosemirror-state";
 import { chainCommands, toggleMark } from "prosemirror-commands";
 import { outlinerSchema } from "./schema";
-import type { Editor } from "./interface";
-import type { App } from "../app/app";
+import { findCurrListItem, type Editor } from "./editor";
 
-export function createKeymapPlugin(editor: Editor, app: App) {
-  const toggleFoldTrue = toggleFocusedFoldState(app, true, undefined);
-  const toggleFoldFalse = toggleFocusedFoldState(app, false, undefined);
+export function createKeymapPlugin(editor: Editor) {
+  const dispatchByBlockType =
+    (cmds: Record<string, Command>) =>
+    (state: EditorState, ...args: any[]) => {
+      if (!editor.view) return false;
+      const currListItem = findCurrListItem(state);
+      if (currListItem == null) return false;
+
+      const type = currListItem.node.attrs.type;
+      let cmd = cmds[type];
+
+      // 支持通配符 *
+      if (cmd == null) {
+        cmd = cmds["*"];
+      }
+      if (cmd == null) return false;
+
+      return cmd(state, ...args);
+    };
+
+  const toggleFoldTrue = toggleFocusedFoldState(editor, true, undefined);
+  const toggleFoldFalse = toggleFocusedFoldState(editor, false, undefined);
 
   return keymap({
     Tab: dispatchByBlockType({
-      text: chainCommands(demoteSelected(app), stop),
+      text: chainCommands(demoteSelected(editor), stop),
       code: codeblockIndent(),
     }),
     "Shift-Tab": dispatchByBlockType({
-      text: chainCommands(promoteSelected(app), stop),
+      text: chainCommands(promoteSelected(editor), stop),
       code: codeblockOutdent(),
     }),
     Enter: dispatchByBlockType({
-      text: chainCommands(splitListItem(app), stop),
+      text: chainCommands(splitListItem(editor), stop),
       code: codeblockInsertLineBreak(),
     }),
     Backspace: dispatchByBlockType({
       text: chainCommands(
-        deleteEmptyListItem(app),
-        mergeWithPreviousBlock(app),
+        deleteEmptyListItem(editor),
+        mergeWithPreviousBlock(editor),
         deleteSelected(),
         backspaceAfterCharBeforeExpandedFile()
       ),
       code: chainCommands(
-        deleteEmptyListItem(app),
+        deleteEmptyListItem(editor),
         deleteSelected(),
         backspaceAfterCharBeforeExpandedFile()
       ),
     }),
     Delete: dispatchByBlockType({
       text: chainCommands(
-        deleteEmptyListItem(app, "forward"),
+        deleteEmptyListItem(editor, "forward"),
         deleteSelected(),
         deleteBeforeCharBeforeExpandedFile()
       ),
       code: chainCommands(
-        deleteEmptyListItem(app),
+        deleteEmptyListItem(editor),
         deleteSelected(),
         deleteBeforeCharBeforeExpandedFile()
       ),
     }),
     "Mod-a": dispatchByBlockType({
-      text: selectCurrentListItem(),
-      code: codeblockSelectAll(),
+      text: selectCurrentListItem(editor),
+      code: codeblockSelectAll(editor),
     }),
     "Mod-ArrowUp": chainCommands(toggleFoldTrue, stop),
     "Mod-ArrowDown": chainCommands(toggleFoldFalse, stop),
-    "Alt-ArrowUp": chainCommands(moveBlockUp(app), stop),
-    "Alt-ArrowDown": chainCommands(moveBlockDown(app), stop),
+    "Alt-ArrowUp": chainCommands(moveBlockUp(editor), stop),
+    "Alt-ArrowDown": chainCommands(moveBlockDown(editor), stop),
     "Mod-b": toggleMark(outlinerSchema.marks.bold),
     "Mod-i": toggleMark(outlinerSchema.marks.italic),
     "Mod-u": toggleMark(outlinerSchema.marks.underline),
     "Mod-`": toggleMark(outlinerSchema.marks.code),
-    "Mod-Shift-l": copyBlockRef(),
+    "Mod-Shift-l": copyBlockRef(editor),
     // 代码块中的行首/行尾导航
     Home: dispatchByBlockType({
-      codeblock: codeblockMoveToLineStart(),
+      codeblock: codeblockMoveToLineStart(editor),
     }),
     End: dispatchByBlockType({
       codeblock: codeblockMoveToLineEnd(),
@@ -99,44 +116,26 @@ export function createKeymapPlugin(editor: Editor, app: App) {
     "Mod-z": undo(editor),
     "Mod-Shift-z": redo(editor),
     // 文件上传
-    "Mod-g": uploadFile(app),
-    "Mod-Shift-g": (state, dispatch) => {
-      const currListItem = findCurrListItem(state);
-      if (currListItem == null) return false;
+    "Mod-g": uploadFile(editor),
+    // "Mod-Shift-g": (state, dispatch) => {
+    //   const currListItem = findCurrListItem(state);
+    //   if (currListItem == null) return false;
 
-      if (dispatch) {
-        const tr = state.tr;
-        const fileNode = outlinerSchema.nodes.file.create({
-          path: "image.png__58EElIM8gOC7PaWjfg2yB.png__1751167844770__4x0awrsuVeeCCO6mAEt0H",
-          displayMode: "preview",
-          filename: "image.png__58EElIM8gOC7PaWjfg2yB.png",
-          type: "image",
-          size: 100,
-        });
-        tr.replaceSelectionWith(fileNode);
-        dispatch(tr);
-      }
-      return true;
-    },
+    //   if (dispatch) {
+    //     const tr = state.tr;
+    //     const fileNode = outlinerSchema.nodes.file.create({
+    //       path: "image.png__58EElIM8gOC7PaWjfg2yB.png__1751167844770__4x0awrsuVeeCCO6mAEt0H",
+    //       displayMode: "preview",
+    //       filename: "image.png__58EElIM8gOC7PaWjfg2yB.png",
+    //       type: "image",
+    //       size: 100,
+    //     });
+    //     tr.replaceSelectionWith(fileNode);
+    //     dispatch(tr);
+    //   }
+    //   return true;
+    // },
   });
 }
 
 const stop: Command = () => true;
-
-const dispatchByBlockType =
-  (cmds: Record<string, Command>) =>
-  (state: EditorState, ...args: any[]) => {
-    const currListItem = findCurrListItem(state);
-    if (currListItem == null) return false;
-
-    const type = currListItem.node.attrs.type;
-    let cmd = cmds[type];
-
-    // 支持通配符 *
-    if (cmd == null) {
-      cmd = cmds["*"];
-    }
-    if (cmd == null) return false;
-
-    return cmd(state, ...args);
-  };

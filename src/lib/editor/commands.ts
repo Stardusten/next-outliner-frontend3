@@ -1,46 +1,26 @@
+import { useAttachment } from "@/composables";
 import { nanoid } from "nanoid";
+import { Node } from "prosemirror-model";
+import { NodeSelection, TextSelection, type Command } from "prosemirror-state";
+import type { EditorId } from "../app/app";
+import type { AttachmentTaskInfo } from "../app/attachment/storage";
+import type { BlockId } from "../common/types";
 import {
-  NodeSelection,
-  TextSelection,
-  type Command,
-  type EditorState,
-} from "prosemirror-state";
+  canRedo as canRedoImpl,
+  canUndo as canUndoImpl,
+  findCurrListItem,
+  redo as redoImpl,
+  undo as undoImpl,
+  type Editor,
+} from "./editor";
+import { getFileType } from "./node-views/file/common";
+import { outlinerSchema } from "./schema";
 import {
   buildBlockRefStr,
   getSelectedListItemInfo,
-  oldSerialize,
   oldDeserialize,
+  oldSerialize,
 } from "./utils";
-import { outlinerSchema } from "./schema";
-import { Node } from "prosemirror-model";
-import type { Editor } from "./interface";
-import type { App } from "../app/app";
-import type { BlockId, SelectionInfo } from "../common/types";
-import type { AttachmentTaskInfo } from "../app/attachment/storage";
-import { getFileType } from "./node-views/file/common";
-import { useAttachment } from "@/composables";
-
-export function findCurrListItem(state: EditorState) {
-  const { $from } = state.selection;
-  for (let i = $from.depth; i > 0; i--) {
-    const node = $from.node(i);
-    if (node.type.name === "listItem") {
-      return { node, depth: i, pos: $from.before(i) };
-    }
-  }
-  return null;
-}
-
-export function getCurrSelection(state: EditorState): SelectionInfo | null {
-  const sel = state.selection;
-  const listItemInfo = findCurrListItem(state);
-  return listItemInfo && listItemInfo.node.attrs.blockId
-    ? {
-        blockId: listItemInfo.node.attrs.blockId,
-        anchor: sel.from - (listItemInfo.pos + 2),
-      }
-    : null;
-}
 
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
@@ -48,7 +28,7 @@ export function isEmptyListItem(node: Node): boolean {
   return pNode.content.size === 0;
 }
 
-export function promoteSelected(app: App): Command {
+export function promoteSelected(editor: Editor): Command {
   return function (state, dispatch) {
     const { start, end, cross } = getSelectedListItemInfo(state);
     if (!start || !end || cross) return true;
@@ -60,16 +40,16 @@ export function promoteSelected(app: App): Command {
     // 缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    app.tx((tx) => tx.promoteBlock(blockId), {
+    editor.app.tx((tx) => tx.promoteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
-      selection: { blockId, anchor },
+      selection: { editorId: editor.id, blockId, anchor },
     });
     return true;
   };
 }
 
-export function demoteSelected(app: App): Command {
+export function demoteSelected(editor: Editor): Command {
   return function (state, dispatch) {
     const { start, end, cross } = getSelectedListItemInfo(state);
     if (!start || !end || cross) return true;
@@ -81,26 +61,27 @@ export function demoteSelected(app: App): Command {
     // 反缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    app.tx((tx) => tx.demoteBlock(blockId), {
+    editor.app.tx((tx) => tx.demoteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
-      selection: { blockId, anchor },
+      selection: { editorId: editor.id, blockId, anchor },
     });
     return true;
   };
 }
 
-export function splitListItem(app: App): Command {
+export function splitListItem(editor: Editor): Command {
   return function (state, dispatch) {
-    const { $from } = state.selection;
+    if (!editor.view) return false;
 
+    const { $from } = state.selection;
     const currListItem = findCurrListItem(state);
     if (!currListItem) return false;
 
     const { node: listItem } = currListItem;
     const currBlockId = listItem.attrs.blockId as BlockId;
 
-    const currentBlockNode = app.getBlockNode(currBlockId);
+    const currentBlockNode = editor.app.getBlockNode(currBlockId);
     if (!currentBlockNode) return false;
 
     const paragraphNode = listItem.firstChild;
@@ -108,7 +89,7 @@ export function splitListItem(app: App): Command {
 
     const splitPos = $from.parentOffset;
     if (splitPos === 0) {
-      app.tx(
+      editor.app.tx(
         (tx) => {
           // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
           const newNode = tx.insertBlockBefore(currBlockId, (dataMap) => {
@@ -120,7 +101,9 @@ export function splitListItem(app: App): Command {
             dataMap.set("content", newContent);
           });
           // 要求聚焦到新块
-          tx.updateOrigin({ selection: { blockId: newNode.id, anchor: 0 } });
+          tx.updateOrigin({
+            selection: { editorId: editor.id, blockId: newNode.id, anchor: 0 },
+          });
         },
         {
           type: "localEditorStructural",
@@ -128,7 +111,7 @@ export function splitListItem(app: App): Command {
         }
       );
     } else {
-      app.tx(
+      editor.app.tx(
         (tx) => {
           // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
           const beforeContent = paragraphNode.cut(0, splitPos);
@@ -142,7 +125,9 @@ export function splitListItem(app: App): Command {
             dataMap.set("content", afterSerialized);
           });
           // 要求聚焦到新块开头
-          tx.updateOrigin({ selection: { blockId: newNode.id, anchor: 0 } });
+          tx.updateOrigin({
+            selection: { editorId: editor.id, blockId: newNode.id, anchor: 0 },
+          });
         },
         {
           type: "localEditorStructural",
@@ -156,10 +141,11 @@ export function splitListItem(app: App): Command {
 }
 
 export function deleteEmptyListItem(
-  app: App,
+  editor: Editor,
   direction: "backward" | "forward" = "backward"
 ): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const { $from, empty } = state.selection;
     // 该命令只在光标位于块开头且没有选中内容时触发
     if (!empty || $from.parentOffset !== 0) return false;
@@ -173,7 +159,7 @@ export function deleteEmptyListItem(
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const currentBlockNode = app.getBlockNode(blockId);
+    const currentBlockNode = editor.app.getBlockNode(blockId);
     if (!currentBlockNode) return false;
 
     const children = currentBlockNode.children() ?? [];
@@ -182,7 +168,11 @@ export function deleteEmptyListItem(
     if (children.length > 0) return false;
 
     // 确定删除后要聚焦的块 - 直接在 ProseMirror 文档中查找
-    let focusTarget: { blockId: BlockId; anchor: number } | null = null;
+    let focusTarget: {
+      editorId: EditorId;
+      blockId: BlockId;
+      anchor: number;
+    } | null = null;
 
     if (direction === "forward") {
       // Delete 键：找下一个 listItem
@@ -199,7 +189,11 @@ export function deleteEmptyListItem(
         const nextListItem = state.doc.nodeAt(nextListItemPos);
         if (nextListItem) {
           const nextBlockId = nextListItem.attrs.blockId as BlockId;
-          focusTarget = { blockId: nextBlockId, anchor: 0 };
+          focusTarget = {
+            editorId: editor.id,
+            blockId: nextBlockId,
+            anchor: 0,
+          };
         }
       }
     } else {
@@ -215,10 +209,14 @@ export function deleteEmptyListItem(
         const prevListItem = state.doc.nodeAt(prevListItemPos);
         if (prevListItem) {
           const prevBlockId = prevListItem.attrs.blockId as BlockId;
-          const prevBlockData = app.getBlockData(prevBlockId);
+          const prevBlockData = editor.app.getBlockData(prevBlockId);
           if (prevBlockData) {
-            const content = app.getTextContent(prevBlockId);
-            focusTarget = { blockId: prevBlockId, anchor: content.length };
+            const content = editor.app.getTextContent(prevBlockId);
+            focusTarget = {
+              editorId: editor.id,
+              blockId: prevBlockId,
+              anchor: content.length,
+            };
           }
         }
       }
@@ -227,7 +225,7 @@ export function deleteEmptyListItem(
     // 如果这是编辑器中唯一的根块，则不删除
     if (!focusTarget) return false;
 
-    app.tx((tx) => tx.deleteBlock(blockId), {
+    editor.app.tx((tx) => tx.deleteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
       selection: focusTarget,
@@ -237,8 +235,10 @@ export function deleteEmptyListItem(
   };
 }
 
-export function selectCurrentListItem(): Command {
+export function selectCurrentListItem(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
+
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
 
@@ -309,11 +309,12 @@ export function deleteSelected(): Command {
 }
 
 export function toggleFocusedFoldState(
-  app: App,
+  editor: Editor,
   targetState?: boolean,
   blockId?: BlockId
 ): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
 
@@ -322,12 +323,12 @@ export function toggleFocusedFoldState(
       if (!blockId) return false;
     }
 
-    const currentBlockData = app.getBlockData(blockId);
+    const currentBlockData = editor.app.getBlockData(blockId);
     if (!currentBlockData || targetState === currentBlockData.folded) {
       return true;
     }
 
-    app.tx((tx) => tx.toggleFold(blockId!, targetState), {
+    editor.app.tx((tx) => tx.toggleFold(blockId!, targetState), {
       type: "localEditorStructural",
       txId: nanoid(),
     });
@@ -336,8 +337,9 @@ export function toggleFocusedFoldState(
   };
 }
 
-export function copyBlockRef(): Command {
+export function copyBlockRef(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (listItemInfo == null) return true;
 
@@ -360,8 +362,9 @@ export function copyBlockRef(): Command {
   };
 }
 
-export function moveBlockUp(app: App): Command {
+export function moveBlockUp(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) {
       return false;
@@ -370,23 +373,27 @@ export function moveBlockUp(app: App): Command {
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const blockNode = app.getBlockNode(blockId);
+    const blockNode = editor.app.getBlockNode(blockId);
     if (!blockNode) return false;
 
     const index = blockNode.index()!;
     if (index === 0) return false; // 已经是第一个块
 
-    app.tx((tx) => tx.moveBlock(blockId, blockNode.parent()!, index - 1), {
-      type: "localEditorStructural",
-      txId: nanoid(),
-    });
+    editor.app.tx(
+      (tx) => tx.moveBlock(blockId, blockNode.parent()!, index - 1),
+      {
+        type: "localEditorStructural",
+        txId: nanoid(),
+      }
+    );
 
     return true;
   };
 }
 
-export function moveBlockDown(app: App): Command {
+export function moveBlockDown(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) {
       return false;
@@ -395,14 +402,14 @@ export function moveBlockDown(app: App): Command {
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const blockNode = app.getBlockNode(blockId);
+    const blockNode = editor.app.getBlockNode(blockId);
     if (!blockNode) return false;
 
     const index = blockNode.index()!;
     const parentNode = blockNode.parent()!;
     if (index >= parentNode.children()!.length - 1) return false; // 已经是最后一个块
 
-    app.tx((tx) => tx.moveBlock(blockId, parentNode, index + 1), {
+    editor.app.tx((tx) => tx.moveBlock(blockId, parentNode, index + 1), {
       type: "localEditorStructural",
       txId: nanoid(),
     });
@@ -411,13 +418,14 @@ export function moveBlockDown(app: App): Command {
   };
 }
 
-export function mergeWithPreviousBlock(app: App): Command {
+export function mergeWithPreviousBlock(editor: Editor): Command {
   return function (state, dispatch) {
     const { $from, empty } = state.selection;
 
     // 只在光标位于块开头且没有选中内容时触发
     if (!empty || $from.parentOffset !== 0) return false;
 
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
 
@@ -425,10 +433,10 @@ export function mergeWithPreviousBlock(app: App): Command {
     const currentBlockId = currentListItem.attrs.blockId as BlockId;
     if (!currentBlockId) return false;
 
-    const currentBlockNode = app.getBlockNode(currentBlockId);
+    const currentBlockNode = editor.app.getBlockNode(currentBlockId);
     if (!currentBlockNode) return false;
 
-    const currentBlockData = app.getBlockData(currentBlockId);
+    const currentBlockData = editor.app.getBlockData(currentBlockId);
     if (!currentBlockData) return false;
 
     // 不能合并有子块的块
@@ -453,7 +461,7 @@ export function mergeWithPreviousBlock(app: App): Command {
     // 找到前一个兄弟块（同级别）
     const prevBlockNode = siblings[currentIndex - 1];
     const prevBlockId = prevBlockNode.id;
-    const prevBlockData = app.getBlockData(prevBlockId);
+    const prevBlockData = editor.app.getBlockData(prevBlockId);
     if (!prevBlockData) return false;
 
     // 只能合并同类型的文本块
@@ -478,7 +486,7 @@ export function mergeWithPreviousBlock(app: App): Command {
       }
     } catch (error) {
       // 如果解析失败，创建包含纯文本的段落
-      const prevTextContent = app.getTextContent(prevBlockId);
+      const prevTextContent = editor.app.getTextContent(prevBlockId);
       prevParagraphNode = outlinerSchema.nodes.paragraph.create(
         null,
         prevTextContent ? [outlinerSchema.text(prevTextContent)] : []
@@ -512,14 +520,18 @@ export function mergeWithPreviousBlock(app: App): Command {
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
 
-    app.tx(
+    editor.app.tx(
       (tx) => {
         // 1. 更新前一个块的内容为合并后的内容
         tx.updateBlockData(prevBlockId, { content: mergedSerialized });
         // 2. 删除当前块
         tx.deleteBlock(currentBlockId);
         // 3. 设置光标位置
-        const selection = { blockId: prevBlockId, anchor: mergePoint };
+        const selection = {
+          editorId: editor.id,
+          blockId: prevBlockId,
+          anchor: mergePoint,
+        };
         tx.updateOrigin({ selection });
       },
       {
@@ -730,8 +742,9 @@ export function codeblockOutdent(): Command {
 /**
  * 在代码块中选择全部内容
  */
-export function codeblockSelectAll(): Command {
+export function codeblockSelectAll(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) {
       return false;
@@ -760,8 +773,9 @@ export function codeblockSelectAll(): Command {
 /**
  * 在代码块中移动到行首
  */
-export function codeblockMoveToLineStart(): Command {
+export function codeblockMoveToLineStart(editor: Editor): Command {
   return function (state, dispatch) {
+    if (!editor.view) return false;
     const { from } = state.selection;
     const doc = state.doc;
     const $from = doc.resolve(from);
@@ -832,13 +846,17 @@ export function codeblockMoveToLineEnd(): Command {
 
 export function undo(editor: Editor): Command {
   return function (state, dispatch) {
-    throw new Error("Undo is not currently supported");
+    const canUndo = canUndoImpl(editor);
+    if (dispatch && canUndo) undoImpl(editor);
+    return canUndo;
   };
 }
 
 export function redo(editor: Editor): Command {
   return function (state, dispatch) {
-    throw new Error("Redo is not currently supported");
+    const canRedo = canRedoImpl(editor);
+    if (dispatch && canRedo) redoImpl(editor);
+    return canRedo;
   };
 }
 
@@ -878,8 +896,12 @@ export function setImageWidth(pos: number, width: number): Command {
   };
 }
 
-export function uploadFile(app: App): Command {
+export function uploadFile(editor: Editor): Command {
   return function (state, dispatch, view) {
+    if (!editor.view) return false;
+    // 如果 app 没有 attachmentStorage，则不执行上传
+    if (!editor.app.attachmentStorage) return false;
+
     const fileType = outlinerSchema.nodes.file;
     // 检查当前是否在列表项中
     const currListItem = findCurrListItem(state);
@@ -891,7 +913,7 @@ export function uploadFile(app: App): Command {
     let taskId: string | null = null;
     const onTaskCreated = (task: AttachmentTaskInfo) => {
       // 开始执行就立刻移除监听器，确保只执行一次
-      app.attachmentStorage.off("task:created", onTaskCreated);
+      editor.app.attachmentStorage?.off("task:created", onTaskCreated);
 
       // 记录任务 ID，用于后续的文件节点更新
       taskId = task.id;
@@ -949,8 +971,8 @@ export function uploadFile(app: App): Command {
       if (task.id !== taskId) return;
 
       // 移除监听器
-      app.attachmentStorage.off("task:completed", onTaskCompleted);
-      app.attachmentStorage.off("task:progress", onTaskProgress);
+      editor.app.attachmentStorage?.off("task:completed", onTaskCompleted);
+      editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
 
       // 在文档中找到对应的文件节点并更新
       if (dispatch) {
@@ -985,8 +1007,8 @@ export function uploadFile(app: App): Command {
       if (task.id !== taskId) return;
 
       // 移除监听器
-      app.attachmentStorage.off("task:failed", onTaskFailed);
-      app.attachmentStorage.off("task:progress", onTaskProgress);
+      editor.app.attachmentStorage?.off("task:failed", onTaskFailed);
+      editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
 
       // 在文档中找到对应的文件节点并更新状态
       if (dispatch) {
@@ -1014,13 +1036,13 @@ export function uploadFile(app: App): Command {
     };
 
     // 注册所有事件监听器
-    app.attachmentStorage.on("task:created", onTaskCreated);
-    app.attachmentStorage.on("task:completed", onTaskCompleted);
-    app.attachmentStorage.on("task:failed", onTaskFailed);
-    app.attachmentStorage.on("task:progress", onTaskProgress);
+    editor.app.attachmentStorage?.on("task:created", onTaskCreated);
+    editor.app.attachmentStorage?.on("task:completed", onTaskCompleted);
+    editor.app.attachmentStorage?.on("task:failed", onTaskFailed);
+    editor.app.attachmentStorage?.on("task:progress", onTaskProgress);
 
     // 触发上传
-    const attachment = useAttachment(() => app);
+    const attachment = useAttachment(editor.app);
     attachment.handleUpload();
 
     return true;

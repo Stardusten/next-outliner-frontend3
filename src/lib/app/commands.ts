@@ -223,31 +223,31 @@ function updateBlockData(app: App) {
 function _moveBlock(app: App) {
   return function (
     targetNode: BlockNode,
-    newParent: BlockNode,
+    newParent: BlockNode | null,
     index?: number
   ) {
     if (targetNode.parent() == null) {
       throw new Error(`不允许移动根块 ${targetNode.id}`);
     }
-    app._tree.move(targetNode.id, newParent.id, index);
+    app._tree.move(targetNode.id, newParent?.id, index);
   };
 }
 
 function moveBlock(app: App) {
   return function (
     target: BlockId | BlockNode,
-    newParent: BlockId | BlockNode,
+    newParent: BlockId | BlockNode | null,
     index?: number
   ) {
     const targetNode =
       typeof target === "string" ? app.getBlockNode(target) : target;
-    const newParentNode =
-      typeof newParent === "string" ? app.getBlockNode(newParent) : newParent;
-    if (!targetNode || !newParentNode) {
+    if (!targetNode) {
       throw new Error(
         `target 块 ${target} 或 newParent 块 ${newParent} 不存在`
       );
     }
+    const newParentNode =
+      typeof newParent === "string" ? app.getBlockNode(newParent) : newParent;
     return _moveBlock(app)(targetNode, newParentNode, index);
   };
 }

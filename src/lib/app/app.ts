@@ -12,14 +12,16 @@ import type {
 } from "../common/types";
 import { Compacter } from "./compacter";
 import { LoroEventTransformer } from "./loro-event-transformer";
-import type { Persistence } from "./persistence";
+import type { Persistence } from "../persistence/persistence";
 import { Saver } from "./saver";
 import { TransactionManager } from "./tx";
 import { UpdateCounter } from "./update-counter";
 import { FullTextIndex } from "./index/fulltext";
 import type { AttachmentStorage } from "./attachment/storage";
+import { createEditor, isFocused, type Editor } from "../editor/editor";
+import { nanoid } from "nanoid";
 
-export type BlockChanges =
+export type BlockChange =
   | {
       type: "block:create";
       blockId: BlockId;
@@ -30,6 +32,7 @@ export type BlockChanges =
   | {
       type: "block:delete";
       blockId: BlockId;
+      oldData: BlockDataInner;
       oldParent: BlockId | null;
       oldIndex: number;
     }
@@ -51,17 +54,21 @@ export type BlockChanges =
 export type AppEvents = {
   "tx-committed": {
     origin: TxOrigin;
-    changes: BlockChanges[];
+    changes: BlockChange[];
   };
   save: {};
   compact: {};
 };
 
+export type EditorId = string;
+
+const PM_EDITOR_ID_PREFIX = "prosemirror-editor";
+
 export class App {
   _doc: LoroDoc;
   _tree: LoroTree;
-  _persistence: Persistence;
-  _attachmentStorage: AttachmentStorage;
+  persistence: Persistence;
+  attachmentStorage: AttachmentStorage | null;
   docId: string;
 
   _eb: Emitter<AppEvents>;
@@ -91,15 +98,18 @@ export class App {
   _txManager: TransactionManager;
   tx: TransactionManager["tx"];
 
+  editor: Record<EditorId, Editor> = {};
+  lastFocusedEditorId: EditorId | null = null;
+
   constructor(params: {
     docId: string;
     persistence: Persistence;
-    attachmentStorage: AttachmentStorage;
+    attachmentStorage: AttachmentStorage | null;
   }) {
     const { docId, persistence, attachmentStorage } = params;
 
     this.docId = docId;
-    this._attachmentStorage = attachmentStorage;
+    this.attachmentStorage = attachmentStorage;
 
     // 初始化事件总线
     this._eb = mitt<AppEvents>();
@@ -108,8 +118,8 @@ export class App {
     this.off = this._eb.off.bind(this._eb);
 
     // 初始化持久化层，并从存储加载数据
-    this._persistence = persistence;
-    const [doc, tree] = this._persistence.load();
+    this.persistence = persistence;
+    const [doc, tree] = this.persistence.load();
     this._doc = doc;
     this._tree = tree;
 
@@ -137,7 +147,7 @@ export class App {
 
     // 初始化更新计数器
     this.updateCounter = new UpdateCounter();
-    const stat = this._persistence.getStorageStats(this.docId);
+    const stat = this.persistence.getStorageStats(this.docId);
     this.updateCounter.set(stat.updatesCount);
 
     // 初始化 saver 和 compacter
@@ -151,6 +161,37 @@ export class App {
     // 初始化事务管理器
     this._txManager = new TransactionManager(this);
     this.tx = this._txManager.tx.bind(this._txManager);
+  }
+
+  getEditor(editorId: EditorId, rootBlockIds?: BlockId[]): Editor {
+    const editor = this.editor[editorId];
+    if (editor) return editor;
+    else {
+      const id = `${PM_EDITOR_ID_PREFIX}-${nanoid()}`;
+      const newEditor = createEditor(this, id, rootBlockIds);
+      this.editor[id] = newEditor;
+
+      // 监听编辑器聚焦事件，更新 lastFocusedEditorId
+      newEditor.on("focus", () => {
+        this.lastFocusedEditorId = newEditor.id;
+      });
+
+      return newEditor;
+    }
+  }
+
+  getLastFocusedEditor(): Editor | null {
+    return this.lastFocusedEditorId
+      ? this.editor[this.lastFocusedEditorId]
+      : null;
+  }
+
+  getFocusedEditor(): Editor | null {
+    const lastFocused = this.lastFocusedEditorId
+      ? this.editor[this.lastFocusedEditorId]
+      : null;
+    if (!lastFocused) return null;
+    return isFocused(lastFocused) ? lastFocused : null;
   }
 
   getRootBlockNodes(): BlockNode[] {
@@ -254,10 +295,6 @@ export class App {
 
   getAllNodes(withDeleted = false): BlockNode[] {
     return this._tree.getNodes({ withDeleted });
-  }
-
-  get attachmentStorage(): AttachmentStorage {
-    return this._attachmentStorage;
   }
 
   /**

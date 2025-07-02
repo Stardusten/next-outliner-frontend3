@@ -6,7 +6,11 @@
       :type="setting.hidden ? 'password' : 'text'"
       :placeholder="setting.placeholder"
       :maxlength="setting.maxLength"
-      class="w-[240px] text-sm"
+      :readonly="setting.readonly"
+      :class="[
+        'w-[200px] text-sm',
+        setting.readonly && 'bg-muted cursor-not-allowed',
+      ]"
     />
     <ResetButton :setting="setting" />
   </div>

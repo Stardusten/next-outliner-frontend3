@@ -1,3 +1,6 @@
+import Button from "@/components/ui/button/Button.vue";
+import TestConnection from "@/components/settings-panel/TestConnection.vue";
+import TestLocalStorage from "@/components/settings-panel/TestLocalStorage.vue";
 import {
   Brain,
   Database,
@@ -7,7 +10,15 @@ import {
   PaintRoller,
   Settings,
 } from "lucide-vue-next";
-import { computed, reactive, ref, watch, type Component } from "vue";
+import {
+  computed,
+  reactive,
+  ref,
+  watch,
+  type Component,
+  type VNode,
+  h,
+} from "vue";
 
 // 设置项类型
 export type SettingType =
@@ -16,13 +27,25 @@ export type SettingType =
   | "multi-select"
   | "input"
   | "number"
-  | "font";
+  | "font"
+  | "custom";
 
 // 选项类型
 export interface SettingOption {
   id: string;
   label: string;
   description?: string;
+}
+
+// 条件显示类型
+export type SettingCondition = (settings: Record<string, any>) => boolean;
+
+// 渲染上下文
+export interface SettingRenderContext {
+  settings: Record<string, any>;
+  getSetting: (key: string) => any;
+  saveSetting: (key: string, value: any) => void;
+  resetSetting: (key: string) => void;
 }
 
 // 基础设置项接口
@@ -32,6 +55,7 @@ export interface BaseSetting {
   label: string;
   description?: string;
   storageKey: string; // localStorage 键名
+  condition?: SettingCondition;
 }
 
 // Toggle 设置项
@@ -61,6 +85,7 @@ export interface InputSetting extends BaseSetting {
   placeholder?: string;
   hidden?: boolean;
   maxLength?: number;
+  readonly?: boolean; // 是否只读
 }
 
 // 数字设置项
@@ -79,6 +104,14 @@ export interface FontSetting extends BaseSetting {
   fontList?: string[]; // 可选的自定义字体列表
 }
 
+// 自定义设置项
+export interface CustomSetting extends BaseSetting {
+  type: "custom";
+  render: (context: SettingRenderContext) => VNode | Component;
+  noLabel?: boolean;
+  defaultValue?: undefined; // 可选的默认值（通常为 undefined）
+}
+
 // 联合类型
 export type SettingItem =
   | ToggleSetting
@@ -86,7 +119,8 @@ export type SettingItem =
   | MultiSelectSetting
   | InputSetting
   | NumberSetting
-  | FontSetting;
+  | FontSetting
+  | CustomSetting;
 
 // 设置分组
 export interface SettingsGroup {
@@ -298,20 +332,118 @@ const settingsConfig: SettingsPageConfig[] = [
     ],
   },
   {
-    id: "attachment",
+    id: "repo",
     groups: [
       {
-        id: "对象存储",
-        title: "对象存储",
-        description:
-          "Next Outliner 使用对象存储来存储附件，请在下面指定你的对象存储服务的信息。注意：如果知识库中已上传附件不在指定的对象存储服务中，则这些附件将无法访问。",
+        id: "basicInfo",
+        title: "基本信息",
         settings: [
+          {
+            id: "repoId",
+            type: "input",
+            label: "知识库 ID",
+            storageKey: "repoId",
+            defaultValue: "doc01",
+            readonly: true,
+          },
+          {
+            id: "repoName",
+            type: "input",
+            label: "知识库名称",
+            storageKey: "repoName",
+            defaultValue: "我的知识库",
+          },
+          {
+            id: "repoActions",
+            type: "custom",
+            label: "知识库操作",
+            storageKey: "repoActions",
+            noLabel: true,
+            render: (context) => {
+              return h(
+                "div",
+                {
+                  class: "flex gap-2",
+                },
+                [
+                  h(
+                    Button,
+                    {
+                      variant: "outline",
+                      onClick: () => {
+                        console.log("切换知识库");
+                      },
+                    },
+                    "切换知识库"
+                  ),
+                  h(
+                    Button,
+                    {
+                      variant: "outline",
+                      onClick: () => {
+                        console.log("导出当前知识库配置");
+                      },
+                    },
+                    "导出当前知识库配置"
+                  ),
+                ]
+              );
+            },
+          },
+        ],
+      },
+      {
+        id: "persistence",
+        title: "块存储",
+        settings: [
+          {
+            id: "persistenceType",
+            type: "single-select",
+            label: "存储方式",
+            storageKey: "persistenceType",
+            defaultValue: "localStorage",
+            options: [
+              { id: "localStorage", label: "Local Storage" },
+              // { id: "indexedDB", label: "IndexedDB" },
+              // { id: "oss", label: "对象存储" },
+            ],
+          },
+          {
+            id: "localStorageTest",
+            type: "custom",
+            label: "检测本地知识库",
+            storageKey: "localStorageTest",
+            noLabel: true,
+            condition: (settings) =>
+              settings.persistenceType === "localStorage",
+            render: (context) => {
+              return h(TestLocalStorage, { context });
+            },
+          },
+        ],
+      },
+      {
+        id: "attachment",
+        title: "附件存储",
+        settings: [
+          {
+            id: "attachmentStorageType",
+            type: "single-select",
+            label: "存储方式",
+            storageKey: "attachmentStorageType",
+            defaultValue: "unset",
+            options: [
+              { id: "oss", label: "对象存储" },
+              { id: "unset", label: "不设置" },
+            ],
+          },
           {
             id: "ossEndpoint",
             type: "input",
             label: "对象存储服务地址",
             storageKey: "ossEndpoint",
             defaultValue: "",
+            condition: (settings) => settings.attachmentStorageType === "oss",
           },
           {
             id: "ossAccessKey",
@@ -320,6 +452,7 @@ const settingsConfig: SettingsPageConfig[] = [
             storageKey: "ossAccessKey",
             defaultValue: "",
             hidden: true,
+            condition: (settings) => settings.attachmentStorageType === "oss",
           },
           {
             id: "ossSecretKey",
@@ -328,6 +461,7 @@ const settingsConfig: SettingsPageConfig[] = [
             storageKey: "ossSecretKey",
             defaultValue: "",
             hidden: true,
+            condition: (settings) => settings.attachmentStorageType === "oss",
           },
           {
             id: "ossBucket",
@@ -335,6 +469,18 @@ const settingsConfig: SettingsPageConfig[] = [
             label: "存储桶名",
             storageKey: "ossBucket",
             defaultValue: "",
+            condition: (settings) => settings.attachmentStorageType === "oss",
+          },
+          {
+            id: "ossTest",
+            type: "custom",
+            label: "测试对象存储连接",
+            storageKey: "ossTest",
+            noLabel: true,
+            condition: (settings) => settings.attachmentStorageType === "oss",
+            render: (context) => {
+              return h(TestConnection, { context });
+            },
           },
         ],
       },
@@ -353,8 +499,7 @@ const sidebarSections: SidebarSection[] = [
     items: [
       { id: "appearance", label: "外观", icon: PaintRoller },
       { id: "editor", label: "编辑器", icon: Settings },
-      { id: "database", label: "知识库", icon: Database },
-      { id: "attachment", label: "附件", icon: Folder },
+      { id: "repo", label: "知识库", icon: Database },
       { id: "ai", label: "AI", icon: Brain },
       { id: "about", label: "软件信息", icon: Info },
     ],
@@ -374,6 +519,9 @@ const loadSettings = () => {
   settingsConfig.forEach((page) => {
     page.groups.forEach((group) => {
       group.settings.forEach((setting) => {
+        // 跳过自定义设置项
+        if (setting.type === "custom") return;
+
         const stored = localStorage.getItem(setting.storageKey);
         if (stored !== null) {
           try {
@@ -406,7 +554,7 @@ const getSetting = (storageKey: string) => settings[storageKey];
 // 重置设置为默认值
 const resetSetting = (storageKey: string) => {
   const setting = findSettingByStorageKey(storageKey);
-  if (setting) {
+  if (setting && setting.type !== "custom") {
     saveSetting(storageKey, setting.defaultValue);
   }
 };
@@ -423,6 +571,23 @@ const findSettingByStorageKey = (storageKey: string): SettingItem | null => {
     }
   }
   return null;
+};
+
+// 评估设置项条件
+const evaluateCondition = (
+  condition: SettingCondition | undefined,
+  settings: Record<string, any>
+): boolean => {
+  if (!condition) {
+    return true; // 没有条件则始终显示
+  }
+
+  try {
+    return condition(settings);
+  } catch (error) {
+    console.warn("条件评估函数执行出错:", error);
+    return true; // 出错时默认显示
+  }
 };
 
 // 初始化副作用
@@ -500,5 +665,6 @@ export function useSettings() {
     getSetting,
     saveSetting,
     resetSetting,
+    evaluateCondition,
   };
 }

@@ -1,7 +1,7 @@
 import { InputRule } from "prosemirror-inputrules";
-import { findCurrListItem } from "../commands";
 import { outlinerSchema } from "../schema";
 import { TextSelection } from "prosemirror-state";
+import { findCurrListItem } from "../editor";
 
 export const toCodeblock: InputRule = new InputRule(
   /^[·`]{3}([a-z]+) $/,
@@ -29,12 +29,12 @@ export const toCodeblock: InputRule = new InputRule(
     tr.replaceWith(
       currListItem.pos + 1,
       currListItem.pos + currListItem.node.nodeSize - 1,
-      codeblock,
+      codeblock
     );
 
     // 将光标移动到代码块的第一个字符
     tr.setSelection(TextSelection.create(tr.doc, currListItem.pos + 2));
 
     return tr;
-  },
+  }
 );

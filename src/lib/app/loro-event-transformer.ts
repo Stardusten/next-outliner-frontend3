@@ -1,6 +1,6 @@
 import { txOriginFromString } from "../common/origin-utils";
 import type { BlockDataInner, BlockId } from "../common/types";
-import type { App, BlockChanges, AppEvents } from "./app";
+import type { App, BlockChange, AppEvents } from "./app";
 
 /**
  * 负责将 Loro 的事件转换为块事件
@@ -27,13 +27,13 @@ export class LoroEventTransformer {
 
       const origin = txOriginFromString(eb.origin);
 
-      const changes: BlockChanges[] = [];
+      const changes: BlockChange[] = [];
       // 事件定义中，create 事件要求 data 字段
       // 但实际从 tree 的 create 事件中我们拿不到 data
       // 所以这里先收集 create 事件，之后拿到 map 的
       // create 事件时拼起来
       type TempCreateChange = Omit<
-        BlockChanges & { type: "block:create" },
+        BlockChange & { type: "block:create" },
         "data"
       >;
       const tempCreateChanges: Record<BlockId, TempCreateChange> = {};
@@ -50,9 +50,13 @@ export class LoroEventTransformer {
                 index: item.index,
               };
             } else if (item.action === "delete") {
+              const blockId = item.target;
+              const oldData = app.getBlockData(blockId, false, eb.from);
+              if (!oldData) return;
               changes.push({
                 type: "block:delete",
-                blockId: item.target,
+                blockId,
+                oldData,
                 oldParent: item.oldParent ?? null,
                 oldIndex: item.oldIndex,
               });

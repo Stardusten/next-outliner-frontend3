@@ -1,8 +1,10 @@
-import type { Editor, EditorEvent } from "@/lib/editor/interface";
-import { useLocalStorage } from "./useLocalStorage";
-import type { BlockId, BlockNode } from "@/lib/common/types";
 import type { App } from "@/lib/app/app";
+import type { BlockId, BlockNode } from "@/lib/common/types";
+import type { Editor, EditorEvents } from "@/lib/editor/editor";
+import { setRootBlockIds } from "@/lib/editor/editor";
+import type { RepoConfig } from "@/lib/repo/repo";
 import { computed } from "vue";
+import { useLocalStorage } from "./useLocalStorage";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -11,18 +13,13 @@ export interface BreadcrumbItem {
   title: string;
 }
 
-export function useBreadcrumb(
-  getEditor: () => Editor,
-  getBlockStorage: () => App
-) {
-  const [rootBlockIds, setRootBlockIds] = useLocalStorage<BlockId[]>(
-    ROOT_BLOCKS_KEY,
-    []
-  );
+export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
+  const [rootBlockIds, setRootBlockIdsToLocalStorage] = useLocalStorage<
+    BlockId[]
+  >(ROOT_BLOCKS_KEY, []);
 
   const breadcrumbItems = computed((): BreadcrumbItem[] => {
-    const app = getBlockStorage();
-    const items: BreadcrumbItem[] = [{ title: "我的笔记" }];
+    const items: BreadcrumbItem[] = [{ title: repoConfig.title }];
 
     if (rootBlockIds.value.length === 1) {
       const rootBlockId = rootBlockIds.value[0];
@@ -52,18 +49,24 @@ export function useBreadcrumb(
     return items;
   });
 
-  const handleBreadcrumbClick = (item: BreadcrumbItem): void => {
-    const editor = getEditor();
+  const handleBreadcrumbClick = (
+    editor: Editor,
+    item: BreadcrumbItem
+  ): void => {
     if (item.blockId) {
-      editor.setRootBlocks([item.blockId]);
+      setRootBlockIds(editor, [item.blockId]);
     } else {
-      editor.setRootBlocks([]);
+      setRootBlockIds(editor, []);
     }
   };
 
-  const handleEditorEvent = (event: EditorEvent): void => {
-    if (event.type === "root-blocks-changed") {
-      setRootBlockIds(event.rootBlockIds);
+  const handleEditorEvent = (
+    key: keyof EditorEvents,
+    event: EditorEvents[keyof EditorEvents]
+  ): void => {
+    if (key === "root-blocks-changed") {
+      const typedEvent = event as EditorEvents["root-blocks-changed"];
+      setRootBlockIdsToLocalStorage(typedEvent.rootBlockIds);
     }
   };
 
