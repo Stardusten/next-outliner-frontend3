@@ -24,6 +24,8 @@ import {
   serialize,
 } from "./utils";
 import mitt from "mitt";
+import { tx } from "../app/tx";
+import { getBlockPath, getRootBlockIds } from "../app/block-manage";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -90,6 +92,10 @@ export function createEditor(
     redoStack: [],
     idMapping: {},
   };
+
+  startViewUpdater(editor);
+  startUndoRedoListener(editor);
+
   return editor;
 }
 
@@ -130,7 +136,8 @@ export function undo(editor: Editor) {
   if (editor.undoStack.length === 0) return;
   const lastSeq = editor.undoStack.pop()!;
 
-  editor.app.tx(
+  tx(
+    editor.app,
     (txObj) => {
       // 逆序执行逆操作
       for (let i = lastSeq.changes.length - 1; i >= 0; i--) {
@@ -184,7 +191,8 @@ export function redo(editor: Editor) {
   if (editor.redoStack.length === 0) return;
   const lastSeq = editor.redoStack.pop()!;
 
-  editor.app.tx(
+  tx(
+    editor.app,
     (txObj) => {
       // 正序执行正操作
       for (const change of lastSeq.changes) {
@@ -446,7 +454,8 @@ export function syncContentChangesToApp(
       updatedIds.add(blockId);
 
       const newData = serialize(listItem.node.firstChild!);
-      editor.app.tx(
+      tx(
+        editor.app,
         (tx) => {
           tx.updateBlockData(blockId, newData);
         },
@@ -470,10 +479,11 @@ export function syncContentChangesToApp(
  * 选区设置为这个块末尾，并且滚动到这个块
  */
 export function locateBlock(editor: Editor, blockId: BlockId) {
-  return editor.app.tx(
+  return tx(
+    editor.app,
     (tx) => {
       // 1. 获取目标块的完整路径
-      const targetPath = editor.app.getBlockPath(blockId);
+      const targetPath = getBlockPath(editor.app, blockId);
       if (!targetPath) {
         return;
       }
@@ -489,7 +499,7 @@ export function locateBlock(editor: Editor, blockId: BlockId) {
       const currentRoots =
         editor.rootBlockIds.length > 0
           ? editor.rootBlockIds
-          : editor.app.getRootBlockIds();
+          : getRootBlockIds(editor.app);
 
       let newRootBlocks: BlockId[] = [];
 
@@ -501,7 +511,7 @@ export function locateBlock(editor: Editor, blockId: BlockId) {
         let commonAncestor: BlockId | null = null;
 
         for (const rootId of currentRoots) {
-          const rootPath = editor.app.getBlockPath(rootId);
+          const rootPath = getBlockPath(editor.app, rootId);
           if (!rootPath) continue;
 
           for (

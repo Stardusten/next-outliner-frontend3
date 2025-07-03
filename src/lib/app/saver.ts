@@ -2,77 +2,73 @@ import type { BlocksVersion } from "../common/types";
 import type { App } from "./app";
 import { DebouncedTimer } from "@/lib/common/timer/debounced";
 
+const saveDelay = 500; // 500ms
+const saveMaxDelay = 5000; // 最长 5s
+
 /**
- * 负责将 App 中的修改持久化到 storage
+ * 初始化保存器，负责将 App 中的修改持久化到 storage
  * 所有保存相关的时序、防抖、错误重试逻辑都集中在这里。
  */
-export class Saver {
-  private app: App;
-  private lastSave: BlocksVersion;
-  private hasUnsavedChanges = false;
-  private timer: DebouncedTimer;
-  private isStarted = false;
-  private readonly saveDelay = 500; // 500ms
-  private readonly saveMaxDelay = 5000; // 最长 5s
+export function initSaver(app: App) {
+  app.lastSave = app.doc.version();
+  app.hasUnsavedChanges = false;
+  app.saveTimer = new DebouncedTimer(saveDelay, saveMaxDelay);
+  app.saveDelay = saveDelay;
+  app.saveMaxDelay = saveMaxDelay;
 
-  constructor(app: App) {
-    this.app = app;
-    this.lastSave = app.getCurrentVersion();
-    this.timer = new DebouncedTimer(this.saveDelay, this.saveMaxDelay);
-    this.isStarted = true;
+  // 当文档事务提交时触发防抖保存
+  app.on("tx-committed", () => {
+    app.hasUnsavedChanges = true;
+    scheduleSave(app);
+  });
+}
 
-    // 当文档事务提交时触发防抖保存
-    this.app.on("tx-committed", () => {
-      if (!this.isStarted) return;
-      this.hasUnsavedChanges = true;
-      this.scheduleSave();
-    });
-  }
+/**
+ * 手动触发一次保存
+ */
+export function forceSave(app: App): void {
+  app.saveTimer.flush();
+}
 
-  /** 手动触发一次保存 */
-  forceSave(): void {
-    if (!this.isStarted) {
-      throw new Error("Saver 已停止，无法保存");
+/**
+ * 停止保存器，保证最后一次保存成功
+ */
+export function stopSaver(app: App): void {
+  app.saveTimer.cancel();
+  save(app);
+}
+
+/**
+ * 调度保存
+ */
+function scheduleSave(app: App): void {
+  app.saveTimer.trigger(() => save(app));
+}
+
+/**
+ * 真正的保存逻辑
+ */
+function save(app: App): void {
+  if (!app.hasUnsavedChanges) return;
+
+  try {
+    const update = app.doc.export({ mode: "update", from: app.lastSave });
+
+    // 只有在有增量内容时才写入
+    if (update.length > 0) {
+      app.persistence.writeUpdate(app.docId, update);
+      app.updatesCount++;
+      app.lastSave = app.doc.version();
+      console.debug(`已保存更新，当前更新数量: ${app.updatesCount}`);
     }
-    this.timer.flush();
-  }
 
-  /** 停止 saver，保证最后一次保存成功 */
-  stop(): void {
-    if (!this.isStarted) return;
-    this.isStarted = false;
-    this.timer.cancel();
-    this.save();
-  }
-
-  private scheduleSave(): void {
-    this.timer.trigger(() => this.save());
-  }
-
-  private save(): void {
-    const { app } = this;
-    if (!this.isStarted) return;
-    if (!this.hasUnsavedChanges) return;
-
-    try {
-      const update = this.app.exportUpdateFrom(this.lastSave);
-
-      // 只有在有增量内容时才写入
-      if (update.length > 0) {
-        app.persistence.writeUpdate(this.app.docId, update);
-        app.updateCounter.inc();
-        this.lastSave = this.app.getCurrentVersion();
-        console.debug(`已保存更新，当前更新数量: ${app.updateCounter.get()}`);
-      }
-
-      this.hasUnsavedChanges = false;
-    } catch (error) {
-      console.error("保存数据失败:", error);
-      // 保存失败时稍后重试
-      this.hasUnsavedChanges = true;
-      setTimeout(() => {
-        if (this.hasUnsavedChanges) this.scheduleSave();
-      }, 1000);
-    }
+    app.hasUnsavedChanges = false;
+  } catch (error) {
+    console.error("保存数据失败:", error);
+    // 保存失败时稍后重试
+    app.hasUnsavedChanges = true;
+    setTimeout(() => {
+      if (app.hasUnsavedChanges) scheduleSave(app);
+    }, 1000);
   }
 }

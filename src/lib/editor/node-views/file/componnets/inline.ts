@@ -75,6 +75,7 @@ export function fileInline(
             label: "下载文件",
             action: async () => {
               try {
+                if (app.attachmentStorage == null) return;
                 const blob = await app.attachmentStorage.download(path);
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");

@@ -4,6 +4,7 @@ import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { outlinerSchema } from "../schema";
 import type { Observable } from "@/lib/common/observable";
 import type { App } from "@/lib/app/app";
+import { getInRefs } from "@/lib/app/index/in-refs";
 
 export function createListItemNodeViewClass(app: App) {
   return class implements NodeView {
@@ -40,7 +41,7 @@ export function createListItemNodeViewClass(app: App) {
 
       const refCounter = document.createElement("div");
       refCounter.classList.add("ref-counter");
-      this.inRefs = app.getInRefs(node.attrs.blockId);
+      this.inRefs = getInRefs(app, node.attrs.blockId);
 
       this.refCounterUnsub = this.inRefs.subscribe(
         (refs) => {

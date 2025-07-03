@@ -2,9 +2,11 @@ import type { App } from "@/lib/app/app";
 import type { BlockId, BlockNode } from "@/lib/common/types";
 import type { Editor, EditorEvents } from "@/lib/editor/editor";
 import { setRootBlockIds } from "@/lib/editor/editor";
-import type { RepoConfig } from "@/lib/repo/repo";
 import { computed } from "vue";
 import { useLocalStorage } from "./useLocalStorage";
+import type { RepoConfig } from "@/lib/repo/schema";
+import { getBlockNode } from "@/lib/app/block-manage";
+import { getTextContent } from "@/lib/app/index/text-content";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -23,7 +25,7 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
 
     if (rootBlockIds.value.length === 1) {
       const rootBlockId = rootBlockIds.value[0];
-      const rootBlock = app.getBlockNode(rootBlockId);
+      const rootBlock = getBlockNode(app, rootBlockId);
       if (rootBlock) {
         const path: BlockId[] = [];
         let currentBlock: BlockNode | null = rootBlock;
@@ -34,10 +36,10 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
         }
 
         path.forEach((blockId) => {
-          const block = app.getBlockNode(blockId);
+          const block = getBlockNode(app, blockId);
           if (block) {
             const title =
-              app.getTextContent(blockId) || `块 ${blockId.slice(0, 8)}`;
+              getTextContent(app, blockId) || `块 ${blockId.slice(0, 8)}`;
             items.push({ blockId, title });
           }
         });

@@ -58,7 +58,6 @@ import {
   type Editor,
   type EditorEvents,
 } from "@/lib/editor/editor";
-import type { Repo, RepoConfig } from "@/lib/repo/repo";
 import { useToast } from "@/composables/useToast";
 import { useBlockRefCompletion } from "@/composables/useBlockRefCompletion";
 import { useBreadcrumb } from "@/composables/useBreadcrumb";
@@ -67,6 +66,8 @@ import { useImportExport } from "@/composables/useImportExport";
 import { useAttachment } from "@/composables/useAttachment";
 import { useAttachmentTaskList } from "@/composables/useAttachmentTaskList";
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import type { RepoConfig } from "@/lib/repo/schema";
+import { getEditorFromApp } from "@/lib/app/editors";
 
 const props = defineProps<{
   app: App;
@@ -85,32 +86,37 @@ const importExport = useImportExport(app);
 const attachment = useAttachment(app);
 const taskList = useAttachmentTaskList(app);
 
-let cb: (
+let editorEventCb: (
   key: keyof EditorEvents,
   event: EditorEvents[keyof EditorEvents]
 ) => void;
+
 onMounted(() => {
   if (!wrapper.value) throw new Error("Wrapper not found");
 
   const rootBlockIds = breadcrumb.rootBlockIds.value ?? [];
 
-  const mainEditor = app.getEditor("main");
+  const mainEditor = getEditorFromApp(app, "main");
   setRootBlockIds(mainEditor, rootBlockIds);
   mount(mainEditor, wrapper.value);
 
-  cb = (key: keyof EditorEvents, event: EditorEvents[keyof EditorEvents]) => {
+  editorEventCb = (
+    key: keyof EditorEvents,
+    event: EditorEvents[keyof EditorEvents]
+  ) => {
     completion.handleCompletionRelatedEvent(mainEditor, key, event);
     breadcrumb.handleEditorEvent(key, event);
   };
-  mainEditor.on("*", cb);
+  mainEditor.on("*", editorEventCb);
 
-  (globalThis as any).editor = app.editor;
+  (globalThis as any).mainEditor = mainEditor;
   (globalThis as any).app = app;
 });
 
 onUnmounted(() => {
-  const mainEditor = app.getEditor("main");
-  mainEditor.off("*", cb);
+  // TODO 更好的 cleanup 逻辑
+  const mainEditor = getEditorFromApp(app, "main");
+  mainEditor.off("*", editorEventCb);
   unmount(mainEditor);
   taskList.cleanup();
 });

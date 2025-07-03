@@ -5,6 +5,7 @@ import type {
   BlockDataInner,
 } from "../common/types";
 import type { App } from "./app";
+import { getBlockNode } from "./block-manage";
 
 function _insertBlockAfter(app: App) {
   return function (
@@ -15,7 +16,7 @@ function _insertBlockAfter(app: App) {
     const index = afterNode.index()!;
     const newNode =
       parentNode == null
-        ? app._tree.createNode(undefined, index + 1) // 创建新的根块
+        ? app.tree.createNode(undefined, index + 1) // 创建新的根块
         : parentNode.createNode(index + 1); // 非根块
     dataSetter(newNode.data as BlockData);
     return newNode;
@@ -28,7 +29,7 @@ function insertBlockAfter(app: App) {
     dataSetter: (data: BlockData) => void
   ) {
     if (typeof after === "string") {
-      const afterNode = app.getBlockNode(after);
+      const afterNode = getBlockNode(app, after);
       if (!afterNode) throw new Error(`after 块 ${after} 不存在`);
       return _insertBlockAfter(app)(afterNode, dataSetter);
     } else {
@@ -46,7 +47,7 @@ function _insertBlockBefore(app: App) {
     const index = beforeNode.index()!;
     const newNode =
       parentNode == null
-        ? app._tree.createNode(undefined, index) // 创建新的根块
+        ? app.tree.createNode(undefined, index) // 创建新的根块
         : parentNode.createNode(index); // 非根块
     dataSetter(newNode.data as BlockData);
     return newNode;
@@ -59,7 +60,7 @@ function insertBlockBefore(app: App) {
     dataSetter: (data: BlockData) => void
   ) {
     if (typeof before === "string") {
-      const beforeNode = app.getBlockNode(before);
+      const beforeNode = getBlockNode(app, before);
       if (!beforeNode) throw new Error(`before 块 ${before} 不存在`);
       return _insertBlockBefore(app)(beforeNode, dataSetter);
     } else {
@@ -76,7 +77,7 @@ function _insertBlockUnder(app: App) {
   ) {
     const newNode =
       underNode == null
-        ? app._tree.createNode(undefined, index)
+        ? app.tree.createNode(undefined, index)
         : underNode.createNode(index);
     dataSetter(newNode.data as BlockData);
     return newNode;
@@ -92,7 +93,7 @@ function insertBlockUnder(app: App) {
     if (under == null) {
       return _insertBlockUnder(app)(null, dataSetter, index);
     } else if (typeof under === "string") {
-      const underNode = app.getBlockNode(under);
+      const underNode = getBlockNode(app, under);
       if (!underNode) throw new Error(`under 块 ${under} 不存在`);
       return _insertBlockUnder(app)(underNode, dataSetter, index);
     } else {
@@ -103,14 +104,14 @@ function insertBlockUnder(app: App) {
 
 function _deleteBlock(app: App) {
   return function (targetNode: BlockNode) {
-    app._tree.delete(targetNode.id);
+    app.tree.delete(targetNode.id);
   };
 }
 
 function deleteBlock(app: App) {
   return function (target: BlockId | BlockNode) {
     if (typeof target === "string") {
-      const targetNode = app.getBlockNode(target);
+      const targetNode = getBlockNode(app, target);
       if (!targetNode) throw new Error(`target 块 ${target} 不存在`);
       return _deleteBlock(app)(targetNode);
     } else {
@@ -128,15 +129,15 @@ function _demoteBlock(app: App) {
     }
     const prevNode = parentNode
       ? parentNode.children()![index - 1]
-      : app._tree.roots()[index - 1];
-    app._tree.move(targetNode.id, prevNode.id);
+      : app.tree.roots()[index - 1];
+    app.tree.move(targetNode.id, prevNode.id);
   };
 }
 
 function demoteBlock(app: App) {
   return function (target: BlockId | BlockNode) {
     if (typeof target === "string") {
-      const targetNode = app.getBlockNode(target);
+      const targetNode = getBlockNode(app, target);
       if (!targetNode) throw new Error(`target 块 ${target} 不存在`);
       return _demoteBlock(app)(targetNode);
     } else {
@@ -153,9 +154,9 @@ function _promoteBlock(app: App) {
     const parentIndex = parentNode.index()!;
     const grandParentNode = parentNode.parent();
     if (!grandParentNode) {
-      app._tree.move(targetNode.id, undefined, parentIndex + 1);
+      app.tree.move(targetNode.id, undefined, parentIndex + 1);
     } else {
-      app._tree.move(targetNode.id, grandParentNode.id, parentIndex + 1);
+      app.tree.move(targetNode.id, grandParentNode.id, parentIndex + 1);
     }
   };
 }
@@ -163,7 +164,7 @@ function _promoteBlock(app: App) {
 function promoteBlock(app: App) {
   return function (target: BlockId | BlockNode) {
     if (typeof target === "string") {
-      const targetNode = app.getBlockNode(target);
+      const targetNode = getBlockNode(app, target);
       if (!targetNode) throw new Error(`target 块 ${target} 不存在`);
       return _promoteBlock(app)(targetNode);
     } else {
@@ -184,7 +185,7 @@ function _toggleFold(app: App) {
 function toggleFold(app: App) {
   return function (target: BlockId | BlockNode, folded?: boolean) {
     if (typeof target === "string") {
-      const targetNode = app.getBlockNode(target);
+      const targetNode = getBlockNode(app, target);
       if (!targetNode) throw new Error(`target 块 ${target} 不存在`);
       return _toggleFold(app)(targetNode, folded);
     } else {
@@ -211,7 +212,7 @@ function updateBlockData(app: App) {
     patch: Partial<Omit<BlockDataInner, "fold">>
   ) {
     if (typeof target === "string") {
-      const targetNode = app.getBlockNode(target);
+      const targetNode = getBlockNode(app, target);
       if (!targetNode) throw new Error(`target 块 ${target} 不存在`);
       return _updateBlockData(app)(targetNode, patch);
     } else {
@@ -229,7 +230,7 @@ function _moveBlock(app: App) {
     if (targetNode.parent() == null) {
       throw new Error(`不允许移动根块 ${targetNode.id}`);
     }
-    app._tree.move(targetNode.id, newParent?.id, index);
+    app.tree.move(targetNode.id, newParent?.id, index);
   };
 }
 
@@ -240,14 +241,14 @@ function moveBlock(app: App) {
     index?: number
   ) {
     const targetNode =
-      typeof target === "string" ? app.getBlockNode(target) : target;
+      typeof target === "string" ? getBlockNode(app, target) : target;
     if (!targetNode) {
       throw new Error(
         `target 块 ${target} 或 newParent 块 ${newParent} 不存在`
       );
     }
     const newParentNode =
-      typeof newParent === "string" ? app.getBlockNode(newParent) : newParent;
+      typeof newParent === "string" ? getBlockNode(app, newParent) : newParent;
     return _moveBlock(app)(targetNode, newParentNode, index);
   };
 }

@@ -1,4 +1,3 @@
-import type { FullTextIndex } from "@/lib/app/index/fulltext";
 import {
   coordAtPos,
   getFocusedBlockId,
@@ -11,6 +10,10 @@ import { outlinerSchema } from "@/lib/editor/schema";
 import type { App } from "@/lib/app/app";
 import type { BlockDataInner, BlockNode } from "@/lib/common/types";
 import { executeCompletion } from "@/lib/editor/plugins/block-ref-completion";
+import { searchBlocks } from "@/lib/app/index/fulltext";
+import { getFocusingEditor } from "@/lib/app/editors";
+import { getAllNodes, getBlockNode } from "@/lib/app/block-manage";
+import { getTextContent } from "@/lib/app/index/text-content";
 
 function isSingleRefBlock(block: BlockNode) {
   const data = block.data.toJSON() as BlockDataInner;
@@ -95,19 +98,19 @@ export function useBlockRefCompletion(app: App) {
     const blocks: BlockNode[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
-      const searchResults = app.search(query, 100);
+      const searchResults = searchBlocks(app, query, 100);
 
-      const focusedEditor = app.getFocusedEditor();
+      const focusedEditor = getFocusingEditor(app);
       const focusedBlockId = focusedEditor
         ? getFocusedBlockId(focusedEditor)
         : null;
 
       // 根据搜索结果获取具体的块
       for (const blockId of searchResults) {
-        const blockNode = app.getBlockNode(blockId);
+        const blockNode = getBlockNode(app, blockId);
         if (blockNode) {
           if (blockNode.data.get("type") !== "text") continue;
-          const textContent = app.getTextContent(blockId);
+          const textContent = getTextContent(app, blockId);
           if (textContent && textContent.trim().length > 0) {
             // 当前块永远不会成为候选
             if (focusedBlockId && blockNode.id === focusedBlockId) continue;
@@ -121,10 +124,10 @@ export function useBlockRefCompletion(app: App) {
     } else {
       // 没有查询时，显示最近的一些块
       let count = 0;
-      for (const blockNode of app.getAllNodes()) {
+      for (const blockNode of getAllNodes(app)) {
         if (count >= 10) return false; // 最多显示10个
 
-        const textContent = app.getTextContent(blockNode.id);
+        const textContent = getTextContent(app, blockNode.id);
         if (textContent && textContent.trim().length > 0) {
           blocks.push(blockNode);
           count++;
