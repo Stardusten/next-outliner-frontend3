@@ -22,8 +22,11 @@ export function getEditorFromApp(app: App, editorId: EditorId) {
   }
 }
 
-export function getLastFocusedEditor(app: App) {
-  return app.lastFocusedEditorId ? app.editors[app.lastFocusedEditorId] : null;
+export function getLastFocusedEditor(app: App, rollback: string = "main") {
+  const res = app.lastFocusedEditorId
+    ? app.editors[app.lastFocusedEditorId]
+    : null;
+  return res ?? app.editors[rollback];
 }
 
 export function getFocusingEditor(app: App) {
