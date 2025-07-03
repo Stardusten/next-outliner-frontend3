@@ -14,6 +14,7 @@ import {
   toggleFold,
   updateBlockData,
 } from "./commands";
+import { getLastFocusedEditor } from "./editors";
 
 /**
  * 初始化事务管理器
@@ -79,9 +80,7 @@ async function execTx(
     const txObj = createTxObj(app, origin);
 
     // 事务提交前，如果没有指定 beforeSelection，补上
-    const lastFocusedEditor = app.lastFocusedEditorId
-      ? app.editors[app.lastFocusedEditorId]
-      : null;
+    const lastFocusedEditor = getLastFocusedEditor(app);
     const beforeSelection =
       origin.beforeSelection ?? getEditorSelectionInfo(lastFocusedEditor!);
 
@@ -89,7 +88,7 @@ async function execTx(
 
     // 事务提交后，如果没有指定 selection，补上
     const selection =
-      origin.selection ?? getEditorSelectionInfo(lastFocusedEditor!);
+      origin.selection ?? getEditorSelectionInfo(lastFocusedEditor);
 
     origin.beforeSelection = beforeSelection ?? undefined;
     origin.selection = selection ?? undefined;
