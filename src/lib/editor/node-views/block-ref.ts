@@ -3,6 +3,7 @@ import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { outlinerSchema } from "../schema";
 import type { App } from "@/lib/app/app";
 import type { BlockId } from "@/lib/common/types";
+import { getTextContentReactive } from "@/lib/app/index/text-content";
 
 export function createBlockRefNodeViewClass(app: App) {
   return class implements NodeView {
@@ -23,7 +24,7 @@ export function createBlockRefNodeViewClass(app: App) {
       this.dom.dataset.blockId = node.attrs.blockId as BlockId;
 
       const blockId = node.attrs.blockId as BlockId;
-      const textContent = app.getTextContentReactive(blockId);
+      const textContent = getTextContentReactive(app, blockId);
       textContent.subscribe(
         (textContent) => {
           this.dom.innerText = textContent;

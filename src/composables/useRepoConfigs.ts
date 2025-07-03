@@ -1,8 +1,8 @@
 import { ref, computed, readonly } from "vue";
 import { useRouter } from "vue-router";
-import { repoConfigSchema, type RepoConfig } from "@/lib/repo/repo";
 import { z } from "zod";
 import { toast } from "vue-sonner";
+import { repoConfigSchema, type RepoConfig } from "@/lib/repo/schema";
 
 const REPO_CONFIGS_STORAGE_KEY = "repo-configs";
 const _configs = ref<RepoConfig[]>([]);

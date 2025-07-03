@@ -21,6 +21,9 @@ import {
   oldDeserialize,
   oldSerialize,
 } from "./utils";
+import { tx } from "../app/tx";
+import { getBlockData, getBlockNode } from "../app/block-manage";
+import { getTextContent } from "../app/index/text-content";
 
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
@@ -40,7 +43,7 @@ export function promoteSelected(editor: Editor): Command {
     // 缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    editor.app.tx((tx) => tx.promoteBlock(blockId), {
+    tx(editor.app, (tx) => tx.promoteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
       selection: { editorId: editor.id, blockId, anchor },
@@ -61,7 +64,7 @@ export function demoteSelected(editor: Editor): Command {
     // 反缩进后，光标位置仍然保持在当前块的相同位置
     const anchor = state.selection.from - (pos + 2);
 
-    editor.app.tx((tx) => tx.demoteBlock(blockId), {
+    tx(editor.app, (tx) => tx.demoteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
       selection: { editorId: editor.id, blockId, anchor },
@@ -81,7 +84,7 @@ export function splitListItem(editor: Editor): Command {
     const { node: listItem } = currListItem;
     const currBlockId = listItem.attrs.blockId as BlockId;
 
-    const currentBlockNode = editor.app.getBlockNode(currBlockId);
+    const currentBlockNode = getBlockNode(editor.app, currBlockId);
     if (!currentBlockNode) return false;
 
     const paragraphNode = listItem.firstChild;
@@ -89,7 +92,8 @@ export function splitListItem(editor: Editor): Command {
 
     const splitPos = $from.parentOffset;
     if (splitPos === 0) {
-      editor.app.tx(
+      tx(
+        editor.app,
         (tx) => {
           // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
           const newNode = tx.insertBlockBefore(currBlockId, (dataMap) => {
@@ -111,7 +115,8 @@ export function splitListItem(editor: Editor): Command {
         }
       );
     } else {
-      editor.app.tx(
+      tx(
+        editor.app,
         (tx) => {
           // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
           const beforeContent = paragraphNode.cut(0, splitPos);
@@ -159,7 +164,7 @@ export function deleteEmptyListItem(
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const currentBlockNode = editor.app.getBlockNode(blockId);
+    const currentBlockNode = getBlockNode(editor.app, blockId);
     if (!currentBlockNode) return false;
 
     const children = currentBlockNode.children() ?? [];
@@ -209,9 +214,9 @@ export function deleteEmptyListItem(
         const prevListItem = state.doc.nodeAt(prevListItemPos);
         if (prevListItem) {
           const prevBlockId = prevListItem.attrs.blockId as BlockId;
-          const prevBlockData = editor.app.getBlockData(prevBlockId);
+          const prevBlockData = getBlockData(editor.app, prevBlockId);
           if (prevBlockData) {
-            const content = editor.app.getTextContent(prevBlockId);
+            const content = getTextContent(editor.app, prevBlockId);
             focusTarget = {
               editorId: editor.id,
               blockId: prevBlockId,
@@ -225,7 +230,7 @@ export function deleteEmptyListItem(
     // 如果这是编辑器中唯一的根块，则不删除
     if (!focusTarget) return false;
 
-    editor.app.tx((tx) => tx.deleteBlock(blockId), {
+    tx(editor.app, (tx) => tx.deleteBlock(blockId), {
       type: "localEditorStructural",
       txId: nanoid(),
       selection: focusTarget,
@@ -323,12 +328,12 @@ export function toggleFocusedFoldState(
       if (!blockId) return false;
     }
 
-    const currentBlockData = editor.app.getBlockData(blockId);
+    const currentBlockData = getBlockData(editor.app, blockId);
     if (!currentBlockData || targetState === currentBlockData.folded) {
       return true;
     }
 
-    editor.app.tx((tx) => tx.toggleFold(blockId!, targetState), {
+    tx(editor.app, (tx) => tx.toggleFold(blockId!, targetState), {
       type: "localEditorStructural",
       txId: nanoid(),
     });
@@ -373,13 +378,14 @@ export function moveBlockUp(editor: Editor): Command {
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const blockNode = editor.app.getBlockNode(blockId);
+    const blockNode = getBlockNode(editor.app, blockId);
     if (!blockNode) return false;
 
     const index = blockNode.index()!;
     if (index === 0) return false; // 已经是第一个块
 
-    editor.app.tx(
+    tx(
+      editor.app,
       (tx) => tx.moveBlock(blockId, blockNode.parent()!, index - 1),
       {
         type: "localEditorStructural",
@@ -402,14 +408,14 @@ export function moveBlockDown(editor: Editor): Command {
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
 
-    const blockNode = editor.app.getBlockNode(blockId);
+    const blockNode = getBlockNode(editor.app, blockId);
     if (!blockNode) return false;
 
     const index = blockNode.index()!;
     const parentNode = blockNode.parent()!;
     if (index >= parentNode.children()!.length - 1) return false; // 已经是最后一个块
 
-    editor.app.tx((tx) => tx.moveBlock(blockId, parentNode, index + 1), {
+    tx(editor.app, (tx) => tx.moveBlock(blockId, parentNode, index + 1), {
       type: "localEditorStructural",
       txId: nanoid(),
     });
@@ -433,10 +439,10 @@ export function mergeWithPreviousBlock(editor: Editor): Command {
     const currentBlockId = currentListItem.attrs.blockId as BlockId;
     if (!currentBlockId) return false;
 
-    const currentBlockNode = editor.app.getBlockNode(currentBlockId);
+    const currentBlockNode = getBlockNode(editor.app, currentBlockId);
     if (!currentBlockNode) return false;
 
-    const currentBlockData = editor.app.getBlockData(currentBlockId);
+    const currentBlockData = getBlockData(editor.app, currentBlockId);
     if (!currentBlockData) return false;
 
     // 不能合并有子块的块
@@ -461,7 +467,7 @@ export function mergeWithPreviousBlock(editor: Editor): Command {
     // 找到前一个兄弟块（同级别）
     const prevBlockNode = siblings[currentIndex - 1];
     const prevBlockId = prevBlockNode.id;
-    const prevBlockData = editor.app.getBlockData(prevBlockId);
+    const prevBlockData = getBlockData(editor.app, prevBlockId);
     if (!prevBlockData) return false;
 
     // 只能合并同类型的文本块
@@ -486,7 +492,7 @@ export function mergeWithPreviousBlock(editor: Editor): Command {
       }
     } catch (error) {
       // 如果解析失败，创建包含纯文本的段落
-      const prevTextContent = editor.app.getTextContent(prevBlockId);
+      const prevTextContent = getTextContent(editor.app, prevBlockId);
       prevParagraphNode = outlinerSchema.nodes.paragraph.create(
         null,
         prevTextContent ? [outlinerSchema.text(prevTextContent)] : []
@@ -520,7 +526,8 @@ export function mergeWithPreviousBlock(editor: Editor): Command {
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
 
-    editor.app.tx(
+    tx(
+      editor.app,
       (tx) => {
         // 1. 更新前一个块的内容为合并后的内容
         tx.updateBlockData(prevBlockId, { content: mergedSerialized });

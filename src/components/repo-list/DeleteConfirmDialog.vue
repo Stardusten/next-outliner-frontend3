@@ -35,8 +35,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { useRepoConfigs } from "@/composables/useRepoConfigs";
-import type { RepoConfig } from "@/lib/repo/repo";
 import { Button } from "../ui/button";
+import type { RepoConfig } from "@/lib/repo/schema";
 
 interface Props {
   toDelete: RepoConfig;

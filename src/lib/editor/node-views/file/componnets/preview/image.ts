@@ -183,13 +183,14 @@ function setupImageLoader(
   filename: string,
   type: string
 ): void {
+  if (app.attachmentStorage == null) return;
   const loadImage = async () => {
     try {
       // 检查缓存
       let url = imageUrlCache.get(path);
       if (!url) {
         // 缓存未命中，下载文件并创建 URL
-        const blob = await app.attachmentStorage.download(path);
+        const blob = await app.attachmentStorage!.download(path);
         url = URL.createObjectURL(blob);
         imageUrlCache.set(path, url);
       }

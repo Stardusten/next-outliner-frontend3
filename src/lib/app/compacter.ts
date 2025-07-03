@@ -1,89 +1,79 @@
 import type { App } from "./app";
 import { DebouncedTimer } from "@/lib/common/timer/debounced";
-import type { Saver } from "./saver";
+
+const compactDelay = 10000; // 10 秒空闲后压缩
+const compactMaxDelay = 60000; // 最长 1min 必须压缩一次
+const maxUpdatesBeforeCompact = 50; // 超过 50 次更新立即压缩
 
 /**
- * Compacter 负责将文档中的更新压缩到持久化层，
+ * 初始化压缩器，负责将文档中的更新压缩到持久化层，
  * 从而避免 localStorage 中存储过多的增量更新。
  */
-export class Compacter {
-  private app: App;
-  private saver: Saver;
-  private timer: DebouncedTimer;
-  private isStarted = false;
+export function initCompacter(app: App) {
+  app.compactTimer = new DebouncedTimer(compactDelay, compactMaxDelay);
+  app.compactDelay = compactDelay;
+  app.compactMaxDelay = compactMaxDelay;
+  app.maxUpdatesBeforeCompact = maxUpdatesBeforeCompact;
 
-  private readonly compactDelay = 10000; // 10 秒空闲后压缩
-  private readonly compactMaxDelay = 60000; // 最长 1min 必须压缩一次
-  private readonly maxUpdatesBeforeCompact = 50; // 超过 50 次更新立即压缩
+  // 监听事务提交事件，决定是否调度压缩
+  app.on("tx-committed", () => {
+    scheduleCompactIfNeeded(app);
+  });
 
-  constructor(app: App, saver: Saver) {
-    this.app = app;
-    this.saver = saver;
-    this.timer = new DebouncedTimer(this.compactDelay, this.compactMaxDelay);
-    this.isStarted = true;
+  // 启动时若已存在较多更新，则立即安排压缩
+  if (app.updatesCount > 0) {
+    console.debug(`发现 ${app.updatesCount} 个现有更新，安排压缩任务`);
+    scheduleCompactIfNeeded(app);
+  }
+}
 
-    // 监听事务提交事件，决定是否调度压缩
-    app.on("tx-committed", () => {
-      if (!this.isStarted) return;
-      this.scheduleIfNeeded();
-    });
+/**
+ * 调度一次压缩（满足阈值立即执行，否则防抖）
+ */
+export function scheduleCompactIfNeeded(app: App): void {
+  // 达到阈值立即执行
+  if (app.updatesCount >= app.maxUpdatesBeforeCompact) {
+    console.debug(
+      `更新数量达到阈值 ${app.maxUpdatesBeforeCompact}，立即执行压缩`
+    );
+    app.compactTimer.flush();
+  } else {
+    // 否则延迟压缩
+    app.compactTimer.trigger(() => performCompact(app));
+  }
+}
 
-    // 启动时若已存在较多更新，则立即安排压缩
-    if (app.updateCounter.get() > 0) {
-      console.debug(`发现 ${app.updateCounter.get()} 个现有更新，安排压缩任务`);
-      this.scheduleIfNeeded();
-    }
+/**
+ * 立即执行一次压缩
+ */
+export function forceCompact(app: App): void {
+  app.compactTimer.flush();
+}
+
+/**
+ * 停止压缩器，并尽可能完成最后一次压缩
+ */
+export function stopCompacter(app: App): void {
+  app.compactTimer.cancel();
+  // 最后努力执行一次压缩
+  performCompact(app);
+}
+
+/**
+ * 真正的压缩逻辑
+ */
+function performCompact(app: App): void {
+  if (app.updatesCount === 0) {
+    console.debug("没有更新需要压缩");
+    return;
   }
 
-  /** 调度一次压缩（满足阈值立即执行，否则防抖） */
-  public scheduleIfNeeded(): void {
-    const { app } = this;
-    if (!this.isStarted) return;
-
-    // 达到阈值立即执行
-    if (app.updateCounter.get() >= this.maxUpdatesBeforeCompact) {
-      console.debug(
-        `更新数量达到阈值 ${this.maxUpdatesBeforeCompact}，立即执行压缩`
-      );
-      this.timer.flush();
-    } else {
-      // 否则延迟压缩
-      this.timer.trigger(() => this.performCompact());
-    }
-  }
-
-  /** 立即执行一次压缩 */
-  public forceCompact(): void {
-    if (!this.isStarted) {
-      throw new Error("Compacter 已停止，无法压缩");
-    }
-    this.timer.flush();
-  }
-
-  /** 停止 Compacter，并尽可能完成最后一次压缩 */
-  public stop(): void {
-    if (!this.isStarted) return;
-    this.isStarted = false;
-    this.timer.cancel();
-    // 最后努力执行一次压缩
-    this.performCompact();
-  }
-
-  /** 真正的压缩逻辑 */
-  private performCompact(): void {
-    const { app } = this;
-    if (app.updateCounter.get() === 0) {
-      console.debug("没有更新需要压缩");
-      return;
-    }
-
-    try {
-      const before = app.updateCounter.get();
-      app.persistence.compact(app.docId);
-      app.updateCounter.set(0);
-      console.debug(`已执行压缩，清理了 ${before} 个更新`);
-    } catch (err) {
-      console.error("压缩失败:", err);
-    }
+  try {
+    const before = app.updatesCount;
+    app.persistence.compact(app.docId);
+    app.updatesCount = 0;
+    console.debug(`已执行压缩，清理了 ${before} 个更新`);
+  } catch (err) {
+    console.error("压缩失败:", err);
   }
 }

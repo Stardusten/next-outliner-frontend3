@@ -1,10 +1,10 @@
 import { ref, computed } from "vue";
 import { nanoid } from "nanoid";
 import { toTypedSchema } from "@vee-validate/zod";
-import { repoConfigSchema } from "@/lib/repo/repo";
 import { useForm } from "vee-validate";
 import { useRepoConfigs } from "./useRepoConfigs";
 import z from "zod";
+import { repoConfigSchema } from "@/lib/repo/schema";
 
 export const useRepoWizard = () => {
   const totalSteps = 3;

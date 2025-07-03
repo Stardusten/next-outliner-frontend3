@@ -9,6 +9,8 @@ import type {
   BlockType,
 } from "../common/types";
 import type { App } from "../app/app";
+import { getTextContent } from "../app/index/text-content";
+import { getBlockNode, getRootBlockNodes } from "../app/block-manage";
 
 /**
  * 将当前文档转换为 Markdown
@@ -132,7 +134,7 @@ export function deserialize(
   } catch (error) {
     // 如果反序列化失败，尝试使用纯文本内容创建段落节点
     console.warn("Failed to deserialize block content");
-    const textContent = storage ? storage.getTextContent(blockNode.id) : "";
+    const textContent = storage ? getTextContent(storage, blockNode.id) : "";
     const paragraphNode = paragraphType.create(
       null,
       textContent ? [outlinerSchema.text(textContent)] : []
@@ -202,10 +204,10 @@ export function createStateFromStorage(
   let rootBlocks: BlockNode[];
   if (rootBlockIds.length > 0) {
     rootBlocks = rootBlockIds
-      .map((id) => storage.getBlockNode(id))
+      .map((id) => getBlockNode(storage, id))
       .filter((b): b is BlockNode => b !== null);
   } else {
-    rootBlocks = storage.getRootBlockNodes();
+    rootBlocks = getRootBlockNodes(storage);
   }
 
   const flatNodes = flattenBlocks(rootBlocks, 0);

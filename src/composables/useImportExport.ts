@@ -7,6 +7,8 @@ import { nanoid } from "nanoid";
 import { Fragment, type Node } from "prosemirror-model";
 import { ref, shallowRef } from "vue";
 import { toast } from "./useToast";
+import { tx } from "@/lib/app/tx";
+import { forceSave } from "@/lib/app/saver";
 
 type Block = {
   id: string;
@@ -80,7 +82,7 @@ export function useImportExport(app: App) {
   // 导出功能
   const handleExport = (format: ExportFormat = "bsnapshot") => {
     if (format == "snapshot") {
-      const snapshot = app.exportShallowSnapshot();
+      const snapshot = app.doc.export({ mode: "snapshot" });
       const base64snapshot = uint8ToBase64(snapshot);
       const a = document.createElement("a");
       a.href = `data:application/json;base64,${base64snapshot}`;
@@ -88,7 +90,7 @@ export function useImportExport(app: App) {
       a.click();
       a.remove();
     } else if (format === "bsnapshot") {
-      const snapshot = app.exportShallowSnapshot();
+      const snapshot = app.doc.export({ mode: "snapshot" });
       const blob = new Blob([snapshot], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -211,7 +213,8 @@ export function useImportExport(app: App) {
 
         const idMapping = new Map<string, string>();
         const blockNodes: [Block, BlockNode][] = [];
-        app.tx(
+        tx(
+          app,
           (tx) => {
             const createTree = (block: Block, node: BlockNode) => {
               for (let i = 0; i < block.children.length; i++) {
@@ -249,13 +252,14 @@ export function useImportExport(app: App) {
         );
 
         toast.success("导入成功！");
-        app._saver.forceSave();
+        forceSave(app);
       } else if (
         pendingImport.value.format === "snapshot" ||
         pendingImport.value.format === "bsnapshot"
       ) {
         const importedDoc = pendingImport.value.doc;
-        app.tx(
+        tx(
+          app,
           (tx) => {
             const idMapping = new Map<string, string>();
             const blockNodes: [BlockNode, BlockNode][] = [];
@@ -323,7 +327,7 @@ export function useImportExport(app: App) {
   const handleClearStorageConfirm = () => {
     try {
       app.persistence.clear();
-      app._saver.forceSave();
+      forceSave(app);
       // 刷新页面以重新加载
       window.location.reload();
     } catch (error) {
@@ -348,7 +352,7 @@ export function useImportExport(app: App) {
   const handleClearHistoryConfirm = () => {
     try {
       app.persistence.clearHistory(app.docId);
-      app.updateCounter.set(0);
+      app.updatesCount = 0;
       toast.success("已清空历史版本！");
     } catch (error) {
       console.error("清空历史版本失败:", error);

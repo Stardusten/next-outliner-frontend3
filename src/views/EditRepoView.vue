@@ -11,10 +11,10 @@ import { computed, watch } from "vue";
 
 import { useRepoConfigs } from "@/composables/useRepoConfigs";
 import type { App } from "@/lib/app/app";
-import { Repo } from "@/lib/repo/repo";
 import { useRoute } from "vue-router";
 import MainEditor from "./edit-repo/MainEditor.vue";
 import RepoNotFound from "./edit-repo/RepoNotFound.vue";
+import { createRepo, instantiateApp, type Repo } from "@/lib/repo/repo";
 
 const route = useRoute();
 const repoConfigs = useRepoConfigs();
@@ -39,10 +39,10 @@ watch(
     if (!repoConfig.value) return;
     console.info("repoConfig changed", repoConfig.value);
 
-    repo = new Repo(repoConfig.value);
+    repo = createRepo(repoConfig.value);
     console.info("repo instantiated successfully!");
 
-    app = repo.instantiateApp();
+    app = instantiateApp(repo);
     console.info("app instantiated successfully!");
   },
   { immediate: true }

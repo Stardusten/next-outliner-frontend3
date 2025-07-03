@@ -1,9 +1,9 @@
 import type { Persistence } from "./persistence";
-import type { RepoConfig } from "../repo/repo";
 import {
   LocalStoragePersistence,
   checkExistsLocalStorage,
 } from "./local-storage";
+import type { RepoConfig } from "../repo/schema";
 
 export function getPersistence(config: RepoConfig): Persistence | null {
   if (config.persistence.type === "local-storage") {
