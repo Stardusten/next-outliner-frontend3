@@ -335,6 +335,7 @@ export function imagePreview(
       ]).then(([ArrowRightIcon, DownloadIcon, InfoIcon]) => {
         const menuItems = [
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为引用",
             action: () => {
@@ -342,8 +343,9 @@ export function imagePreview(
               const command = changeFileDisplayMode(pos, "inline");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为卡片",
             action: () => {
@@ -351,9 +353,10 @@ export function imagePreview(
               const command = changeFileDisplayMode(pos, "expanded");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           { type: "divider" } as const,
           {
+            type: "item",
             icon: DownloadIcon,
             label: "下载图片",
             action: () => {
@@ -366,15 +369,16 @@ export function imagePreview(
                 a.click();
               }
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: InfoIcon,
             label: "详细信息",
             action: () => {},
-          },
+          } as const,
         ];
 
-        contextMenu.handleContextMenu(e, { items: menuItems });
+        contextMenu.show(e.clientX, e.clientY, menuItems);
       });
     });
   };

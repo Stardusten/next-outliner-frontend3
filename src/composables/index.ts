@@ -24,9 +24,8 @@ export {
 export { useAttachment } from "./useAttachment";
 export {
   useContextMenu,
-  type ContextMenuItem,
-  type ContextMenuData,
-  type ContextMenuItemOrDivider,
+  type MenuItem as ContextMenuItem,
+  type MenuItemDef as ContextMenuItemOrDivider,
 } from "./useContextMenu";
 export { useSettings } from "./useSettings";
 export type {

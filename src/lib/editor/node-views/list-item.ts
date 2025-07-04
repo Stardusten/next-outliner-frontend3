@@ -29,12 +29,19 @@ export function createListItemNodeViewClass(app: App) {
       el.dataset.folded = String(node.attrs.folded);
       el.dataset.hasChildren = String(node.attrs.hasChildren);
       el.dataset.type = node.attrs.type;
+      el.dataset.thinking = String(node.attrs.thinking);
       el.style.setProperty("--level", node.attrs.level);
 
       const left = document.createElement("div");
       left.classList.add("list-item-left");
       left.appendChild(getTriangleDiv("fold-btn"));
-      left.appendChild(getDotDiv("bullet"));
+
+      // 根据 thinking 属性决定显示普通 bullet 还是旋转 loader
+      if (node.attrs.thinking) {
+        left.appendChild(getThinkingLoaderDiv("bullet", "thinking-loader"));
+      } else {
+        left.appendChild(getDotDiv("bullet"));
+      }
 
       const content = document.createElement("div");
       content.classList.add("list-item-content");
@@ -110,6 +117,53 @@ function getDotDiv(className?: string) {
 
   if (className) {
     svg.classList.add(className);
+  }
+
+  return svg;
+}
+
+function getThinkingLoaderDiv(className?: string, loaderClassName?: string) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 15 15");
+
+  const circle = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "circle"
+  );
+  circle.setAttribute("cx", "7.5");
+  circle.setAttribute("cy", "7.5");
+  circle.setAttribute("r", "2.5");
+  circle.setAttribute("fill", "var(--color-muted-foreground)");
+
+  // 外围的加载圆环（有缺口的圆环）
+  const loader = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "circle"
+  );
+  loader.setAttribute("cx", "7.5");
+  loader.setAttribute("cy", "7.5");
+  loader.setAttribute("r", "6.5");
+  loader.setAttribute("fill", "none");
+  loader.setAttribute("stroke", "var(--color-primary)");
+  loader.setAttribute("stroke-width", "1.5");
+  loader.setAttribute("stroke-linecap", "round");
+
+  // 设置圆环的周长，留出缺口
+  const circumference = 2 * Math.PI * 6; // 2π * r
+  const dashLength = circumference * 0.75; // 圆环占75%
+  const gapLength = circumference * 0.25; // 缺口占25%
+  loader.setAttribute("stroke-dasharray", `${dashLength} ${gapLength}`);
+  loader.setAttribute("stroke-dashoffset", "0");
+
+  svg.appendChild(circle);
+  svg.appendChild(loader);
+
+  if (className) {
+    svg.classList.add(className);
+  }
+
+  if (loaderClassName) {
+    svg.classList.add(loaderClassName);
   }
 
   return svg;

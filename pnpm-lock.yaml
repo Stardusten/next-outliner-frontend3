@@ -17,6 +17,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.11
         version: 4.1.11(vite@6.3.5(@types/node@22.15.33)(jiti@2.4.2)(lightningcss@1.30.1))
+      '@themaximalist/llm.js':
+        specifier: ^1.0.1
+        version: 1.0.1
       '@vee-validate/zod':
         specifier: ^4.15.1
         version: 4.15.1(vue@3.5.17(typescript@5.8.3))(zod@3.25.67)
@@ -1359,6 +1362,9 @@ packages:
     resolution: {integrity: sha512-vhF7kEU9EXWXh+HdAwKJ2m3xaOnTTmgcdXcF2pim8g4GvI7eRrk2YRuV5nUlZnd/NbCIX4/Ja2OZu5EjJL06Ww==}
     peerDependencies:
       vue: ^2.7.0 || ^3.0.0
+
+  '@themaximalist/llm.js@1.0.1':
+    resolution: {integrity: sha512-xH8+54FlGMA+RJuwTCVCWE/JqvpW0PNem6jZ6qZId4NoKeqGYF5vSmoWqsLu0aSRzW4WcThzJxMO1T/dBRvDVg==}
 
   '@tsconfig/node22@22.0.2':
     resolution: {integrity: sha512-Kmwj4u8sDRDrMYRoN9FDEcXD8UpBSaPQQ24Gz+Gamqfm7xxn+GBR7ge/Z7pK8OXNGyUzbSwJj+TH6B+DS/epyA==}
@@ -4621,6 +4627,8 @@ snapshots:
     dependencies:
       '@tanstack/virtual-core': 3.13.12
       vue: 3.5.17(typescript@5.8.3)
+
+  '@themaximalist/llm.js@1.0.1': {}
 
   '@tsconfig/node22@22.0.2': {}
 

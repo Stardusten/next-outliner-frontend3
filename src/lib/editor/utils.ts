@@ -11,29 +11,27 @@ import type {
 import type { App } from "../app/app";
 import { getTextContent } from "../app/index/text-content";
 import { getBlockNode, getRootBlockNodes } from "../app/block-manage";
+import { useLlm } from "@/composables/use-llm.ts/useLlm";
 
-/**
- * 将当前文档转换为 Markdown
- */
-export function toMarkdown(doc: Node): string {
-  const listItemType = outlinerSchema.nodes.listItem;
-  if (listItemType == null) {
-    throw new Error("Invalid schema, listItem type is not defined");
-  }
+export function toMarkdown(app: App, rootBlockIds: BlockId[]): string {
+  const recur = (rootBlockNode: BlockNode, level: number) => {
+    const textContent = getTextContent(app, rootBlockNode.id);
+    lines.push("  ".repeat(level) + "- " + textContent);
+
+    // 递归处理子节点
+    for (const child of rootBlockNode.children() ?? []) {
+      recur(child, level + 1);
+    }
+  };
 
   const lines: string[] = [];
-  doc.content.forEach((node) => {
-    if (node.type === listItemType) {
-      const level = node.attrs.level;
-      const content = node.textContent;
-      lines.push("  ".repeat(level) + "- " + content);
-    } else {
-      throw new Error(
-        "Invalid document, unexpected node type: " + node.type.name
-      );
+  for (const rootBlockId of rootBlockIds) {
+    const rootBlockNode = getBlockNode(app, rootBlockId);
+    if (rootBlockNode == null) {
+      throw new Error("Block not found: " + rootBlockId);
     }
-  });
-
+    recur(rootBlockNode, 0);
+  }
   return lines.join("\n");
 }
 
@@ -170,15 +168,11 @@ export function deserialize(
 }
 
 export function createStateFromStorage(
-  storage: App,
+  app: App,
   rootBlockIds: BlockId[],
   rootOnly: boolean = false
 ): Node {
-  const {
-    listItem: listItemType,
-    paragraph: paragraphType,
-    doc: docType,
-  } = outlinerSchema.nodes;
+  const { thinkingBlockIds } = useLlm(app);
 
   // 将嵌套的 block 转换为扁平的 listItem 节点数组
   function flattenBlocks(blockNodes: BlockNode[], level: number): Node[] {
@@ -188,7 +182,9 @@ export function createStateFromStorage(
       const blockData = blockNode.data.toJSON() as BlockDataInner;
       const children = blockNode.children();
       const hasChildren = children != null && children.length > 0;
-      nodes.push(deserialize(blockNode, level, storage));
+
+      const isThinking = thinkingBlockIds.value.has(blockNode.id);
+      nodes.push(deserialize(blockNode, level, app, { thinking: isThinking }));
 
       // 如果块有子节点且未被折叠，并且 rootOnly 为 false，则递归渲染子节点
       if (!rootOnly && hasChildren && !blockData.folded) {
@@ -204,15 +200,16 @@ export function createStateFromStorage(
   let rootBlocks: BlockNode[];
   if (rootBlockIds.length > 0) {
     rootBlocks = rootBlockIds
-      .map((id) => getBlockNode(storage, id))
+      .map((id) => getBlockNode(app, id))
       .filter((b): b is BlockNode => b !== null);
   } else {
-    rootBlocks = getRootBlockNodes(storage);
+    rootBlocks = getRootBlockNodes(app);
   }
 
   const flatNodes = flattenBlocks(rootBlocks, 0);
 
   // 创建文档节点
+  const { doc: docType } = outlinerSchema.nodes;
   return docType.create(null, flatNodes);
 }
 
@@ -292,3 +289,18 @@ export function normalizeSelection(tr: Transaction): Transaction {
   }
   return tr;
 }
+
+export function buildTextContent(s: string) {
+  const textNode = s === "" ? undefined : outlinerSchema.text(s);
+  const paragraphNode = outlinerSchema.nodes.paragraph.create({}, textNode);
+  return serialize(paragraphNode);
+}
+
+export const clipboard = {
+  writeText(text: string) {
+    navigator.clipboard.writeText(text);
+  },
+  readText() {
+    return navigator.clipboard.readText();
+  },
+};

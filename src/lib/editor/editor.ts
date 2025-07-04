@@ -18,14 +18,18 @@ import { createHighlightCodeblockPlugin } from "./plugins/highlight-codeblock";
 import { createPastePlugin } from "./plugins/paste-text";
 import { outlinerSchema } from "./schema";
 import {
+  clipboard,
   createStateFromStorage,
   findListItemAtPos,
   normalizeSelection,
   serialize,
+  toMarkdown,
 } from "./utils";
 import mitt from "mitt";
 import { tx } from "../app/tx";
 import { getBlockPath, getRootBlockIds } from "../app/block-manage";
+import { useLlm } from "@/composables/use-llm.ts/useLlm";
+import { watch } from "vue";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -58,6 +62,7 @@ export type Editor = {
   // 事件监听器
   storageEventHandler: ((event: AppEvents["tx-committed"]) => void) | null;
   clickHandler: ((e: MouseEvent) => void) | null;
+  contextMenuHandler: ((e: MouseEvent) => void) | null;
   // 事件总线
   eb: Emitter<EditorEvents>;
   on: Emitter<EditorEvents>["on"];
@@ -85,6 +90,7 @@ export function createEditor(
     rootBlockIds: rootBlockIds ?? [],
     storageEventHandler: null,
     clickHandler: null,
+    contextMenuHandler: null,
     eb,
     on: eb.on,
     off: eb.off,
@@ -92,10 +98,6 @@ export function createEditor(
     redoStack: [],
     idMapping: {},
   };
-
-  startViewUpdater(editor);
-  startUndoRedoListener(editor);
-
   return editor;
 }
 
@@ -246,7 +248,7 @@ export function redo(editor: Editor) {
 /**
  * 注册存储事件监听器，用于在（非内容变更）事务提交后更新视图
  */
-export function startViewUpdater(editor: Editor) {
+export function startTxCommittedListener(editor: Editor) {
   editor.app.on("tx-committed", (event) => {
     if (!editor.view) return;
 
@@ -266,6 +268,28 @@ export function startViewUpdater(editor: Editor) {
     // 更新视图
     updateViewWithNewDocument(newDoc, editor.view, selection, true);
   });
+}
+
+/**
+ * 注册 thinkingBlockIds 事件监听器，用于在 thinkingBlockIds 变化时更新视图
+ */
+export function startThinkingStateListener(editor: Editor) {
+  const { thinkingBlockIds } = useLlm(editor.app);
+  watch(
+    thinkingBlockIds,
+    () => {
+      if (!editor.view) return;
+      console.log("thinkingBlockIds changed", thinkingBlockIds.value);
+
+      // 计算新状态
+      const newDoc = createStateFromStorage(editor.app, editor.rootBlockIds);
+      const selection = getEditorSelectionInfo(editor) ?? undefined;
+
+      // 更新视图
+      updateViewWithNewDocument(newDoc, editor.view, selection, true);
+    },
+    { deep: true }
+  );
 }
 
 /**
@@ -572,6 +596,85 @@ export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
   editor.eb.emit("root-blocks-changed", { rootBlockIds });
 }
 
+export function getContextMenuHandler(editor: Editor) {
+  return (e: MouseEvent) => {
+    let tgt = e.target;
+
+    let clickedBlockId: BlockId | null = null;
+    let clickedBullet = false;
+
+    while (tgt instanceof Node) {
+      if (tgt instanceof HTMLElement && tgt.classList.contains("list-item")) {
+        clickedBlockId = tgt.dataset.blockId as BlockId;
+      } else if (
+        tgt instanceof SVGElement &&
+        tgt.classList.contains("bullet")
+      ) {
+        clickedBullet = true;
+      }
+      tgt = tgt.parentNode;
+    }
+
+    // 右键点击 bullet 时，显示上下文菜单
+    if (clickedBlockId && clickedBullet) {
+      e.preventDefault();
+
+      // 动态导入 composable 和图标
+      import("@/composables").then(({ useContextMenu }) => {
+        const contextMenu = useContextMenu();
+
+        // 动态导入图标
+        Promise.all([
+          import("lucide-vue-next").then((icons) => icons.Download),
+          import("lucide-vue-next").then((icons) => icons.Copy),
+          import("lucide-vue-next").then((icons) => icons.Trash2),
+          import("lucide-vue-next").then((icons) => icons.Link),
+        ]).then(([DownloadIcon, CopyIcon, Trash2Icon, LinkIcon]) => {
+          const menuItems = [
+            {
+              type: "item",
+              label: "以 Markdown 格式复制子树",
+              icon: CopyIcon,
+              action: () => {
+                const markdown = toMarkdown(editor.app, [clickedBlockId]);
+                clipboard.writeText(markdown);
+              },
+            } as const,
+            {
+              type: "item",
+              label: "导出子树",
+              icon: DownloadIcon,
+              action: () => {},
+            } as const,
+            {
+              type: "item",
+              label: "复制块引用",
+              icon: LinkIcon,
+              action: () => {
+                // TODO
+                console.log("复制块引用");
+              },
+            } as const,
+            {
+              type: "item",
+              label: "删除子树",
+              icon: Trash2Icon,
+              action: () => {
+                // TODO
+                console.log("删除子树");
+              },
+              danger: true,
+            } as const,
+          ];
+
+          console.log("show context menu", e.clientX, e.clientY);
+          contextMenu.show(e.clientX, e.clientY, menuItems);
+        });
+      });
+    }
+  };
+}
+
 export function getClickHandler(editor: Editor) {
   return (e: MouseEvent) => {
     let tgt = e.target;
@@ -657,10 +760,15 @@ export function mount(editor: Editor, dom: HTMLElement) {
 
   editor.clickHandler = getClickHandler(editor);
   editor.view.dom.addEventListener("click", editor.clickHandler);
+
+  editor.contextMenuHandler = getContextMenuHandler(editor);
+  editor.view.dom.addEventListener("contextmenu", editor.contextMenuHandler);
+
   editor.view.dom.addEventListener("focus", () => editor.eb.emit("focus"));
 
   startUndoRedoListener(editor);
-  startViewUpdater(editor);
+  startTxCommittedListener(editor);
+  startThinkingStateListener(editor);
 }
 
 export function unmount(editor: Editor) {

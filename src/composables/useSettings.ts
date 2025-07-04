@@ -1,23 +1,15 @@
-import Button from "@/components/ui/button/Button.vue";
-import TestConnection from "@/components/settings-panel/TestConnection.vue";
-import TestLocalStorage from "@/components/settings-panel/TestLocalStorage.vue";
-import {
-  Brain,
-  Database,
-  Folder,
-  FolderCog,
-  Info,
-  PaintRoller,
-  Settings,
-} from "lucide-vue-next";
+import RepoInfo from "@/components/settings-panel/RepoInfo.vue";
+import TestLlmConnection from "@/components/settings-panel/TestLlmConnection.vue";
+import TestOssConnection from "@/components/settings-panel/TestOssConnection.vue";
+import { Brain, Database, Info, PaintRoller, Settings } from "lucide-vue-next";
 import {
   computed,
+  h,
   reactive,
   ref,
   watch,
   type Component,
   type VNode,
-  h,
 } from "vue";
 
 // 设置项类型
@@ -336,88 +328,16 @@ const settingsConfig: SettingsPageConfig[] = [
     groups: [
       {
         id: "basicInfo",
-        title: "基本信息",
+        title: "知识库信息",
         settings: [
           {
-            id: "repoId",
-            type: "input",
-            label: "知识库 ID",
-            storageKey: "repoId",
-            defaultValue: "doc01",
-            readonly: true,
-          },
-          {
-            id: "repoName",
-            type: "input",
-            label: "知识库名称",
-            storageKey: "repoName",
-            defaultValue: "我的知识库",
-          },
-          {
-            id: "repoActions",
+            id: "basicInfoComponent",
             type: "custom",
-            label: "知识库操作",
-            storageKey: "repoActions",
+            label: "知识库信息",
+            storageKey: "basicInfoComponent",
             noLabel: true,
             render: (context) => {
-              return h(
-                "div",
-                {
-                  class: "flex gap-2",
-                },
-                [
-                  h(
-                    Button,
-                    {
-                      variant: "outline",
-                      onClick: () => {
-                        console.log("切换知识库");
-                      },
-                    },
-                    "切换知识库"
-                  ),
-                  h(
-                    Button,
-                    {
-                      variant: "outline",
-                      onClick: () => {
-                        console.log("导出当前知识库配置");
-                      },
-                    },
-                    "导出当前知识库配置"
-                  ),
-                ]
-              );
-            },
-          },
-        ],
-      },
-      {
-        id: "persistence",
-        title: "块存储",
-        settings: [
-          {
-            id: "persistenceType",
-            type: "single-select",
-            label: "存储方式",
-            storageKey: "persistenceType",
-            defaultValue: "localStorage",
-            options: [
-              { id: "localStorage", label: "Local Storage" },
-              // { id: "indexedDB", label: "IndexedDB" },
-              // { id: "oss", label: "对象存储" },
-            ],
-          },
-          {
-            id: "localStorageTest",
-            type: "custom",
-            label: "检测本地知识库",
-            storageKey: "localStorageTest",
-            noLabel: true,
-            condition: (settings) =>
-              settings.persistenceType === "localStorage",
-            render: (context) => {
-              return h(TestLocalStorage, { context });
+              return h(RepoInfo);
             },
           },
         ],
@@ -479,7 +399,84 @@ const settingsConfig: SettingsPageConfig[] = [
             noLabel: true,
             condition: (settings) => settings.attachmentStorageType === "oss",
             render: (context) => {
-              return h(TestConnection, { context });
+              return h(TestOssConnection, { context });
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "ai",
+    groups: [
+      {
+        id: "llm",
+        title: "接入大模型",
+        settings: [
+          {
+            id: "llmServiceProvider",
+            type: "single-select",
+            label: "模型提供商",
+            storageKey: "llmServiceProvider",
+            defaultValue: "openai",
+            options: [
+              { id: "openai", label: "OpenAI" },
+              { id: "anthropic", label: "Anthropic" },
+              { id: "google", label: "Google" },
+              { id: "xai", label: "XAI" },
+              { id: "grok", label: "Grok" },
+              { id: "deepseek", label: "DeepSeek" },
+              { id: "ollama", label: "Ollama" },
+              { id: "custom", label: "自定义" },
+            ],
+          },
+          {
+            id: "llmBaseUrl",
+            type: "input",
+            label: "模型服务地址",
+            storageKey: "llmBaseUrl",
+            defaultValue: "",
+            condition: (settings) => settings.llmServiceProvider === "custom",
+          },
+          {
+            id: "llmApiKey",
+            type: "input",
+            label: "API Key",
+            storageKey: "llmApiKey",
+            defaultValue: "",
+          },
+          {
+            id: "llmModelName",
+            type: "input",
+            label: "模型名称",
+            storageKey: "llmModelName",
+            defaultValue: "",
+          },
+          {
+            id: "llmTemperature",
+            type: "number",
+            label: "模型温度",
+            storageKey: "llmTemperature",
+            defaultValue: 1,
+            min: 0,
+            max: 2,
+            step: 0.1,
+          },
+          {
+            id: "llmEnableThinking",
+            type: "toggle",
+            label: "启用思考",
+            storageKey: "llmEnableThinking",
+            defaultValue: true,
+          },
+          {
+            id: "llmTestConnection",
+            type: "custom",
+            label: "测试大模型连接",
+            storageKey: "llmTestConnection",
+            noLabel: true,
+            render: (context) => {
+              return h(TestLlmConnection, { context });
             },
           },
         ],

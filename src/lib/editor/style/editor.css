@@ -313,3 +313,23 @@ div.list-item.has-in-refs {
 div.list-item > div.ref-counter[data-nref="0"] {
   display: none;
 }
+
+/* thinking loader 动画 */
+@keyframes thinking-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(720deg);
+  }
+}
+
+div.list-item > div.list-item-left > svg.thinking-loader {
+  animation: thinking-spin 2s linear infinite;
+  color: var(--color-primary);
+}
+
+div.list-item[data-thinking="true"] > div.list-item-left > svg.thinking-loader {
+  animation: thinking-spin 2s linear infinite;
+  color: var(--color-primary);
+}
