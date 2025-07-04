@@ -116,6 +116,9 @@ export type App = {
 
   // 更新计数
   updatesCount: number;
+
+  // thinkingBlockIds
+  thinkingBlockIds: Set<BlockId>;
 };
 
 export function createApp(

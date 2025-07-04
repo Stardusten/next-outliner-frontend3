@@ -57,12 +57,12 @@ export async function tx(
   // 但如果先在块 A 内打字，然后在块 B 内打字，则块 B 内的 tx 不会
   // 与块 A 内的事务一起应用防抖
   if (origin.type === "localEditorContent") {
-    app.txQueue.queueTask(() => execTx(app, cb, origin), {
+    return app.txQueue.queueTaskAndWait(() => execTx(app, cb, origin), {
       key: `${origin.editorId}-${origin.blockId}`,
       delay: 500,
     });
   } else {
-    app.txQueue.queueTask(() => execTx(app, cb, origin));
+    return app.txQueue.queueTaskAndWait(() => execTx(app, cb, origin));
   }
 }
 

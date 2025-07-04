@@ -46,4 +46,14 @@ export const zhCN_messages = {
     openRepo: "打开知识库",
     deleteRepo: "删除知识库",
   },
+  settings: {
+    repo: {
+      basicInfo: {
+        repoName: "知识库名称",
+        repoId: "知识库 ID",
+        exportAsJson: "导出知识库配置",
+        switchRepo: "切换知识库",
+      },
+    },
+  },
 };

@@ -9,7 +9,7 @@
       <!-- 面包屑 -->
       <Breadcrumb
         :breadcrumb-items="breadcrumb.breadcrumbItems.value"
-        @item-click="breadcrumb.handleBreadcrumbClick"
+        @item-click="breadcrumb.handleBreadcrumbClick(editor, $event)"
       />
     </div>
 
@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { Menu, Search, Folder, MoreHorizontal } from "lucide-vue-next";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import MoreMenu from "./more-menu/MoreMenu.vue";
 import AttachmentPopup from "./attachment-popup/AttachmentPopup.vue";
 import Breadcrumb from "./breadcrumb/Breadcrumb.vue";
@@ -52,9 +52,10 @@ import type {
 } from "@/composables";
 import type { App } from "@/lib/app/app";
 import { Button } from "../ui/button";
+import { getLastFocusedEditor } from "@/lib/app/editors";
 
 const props = defineProps<{
-  app?: App;
+  app: App;
   breadcrumb: ReturnType<typeof useBreadcrumb>;
   search: ReturnType<typeof useSearch>;
   attachment: ReturnType<typeof useAttachment>;
@@ -62,6 +63,9 @@ const props = defineProps<{
   importExport: ReturnType<typeof useImportExport>;
   settings: ReturnType<typeof useSettings>;
 }>();
+
+// TODO
+const editor = computed(() => getLastFocusedEditor(props.app!));
 </script>
 
 <style scoped>

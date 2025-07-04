@@ -52,6 +52,7 @@ export function fileInline(
       ]).then(([ArrowRightIcon, DownloadIcon, InfoIcon]) => {
         const menuItems = [
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为卡片",
             action: () => {
@@ -59,8 +60,9 @@ export function fileInline(
               const command = changeFileDisplayMode(pos, "expanded");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为预览",
             action: () => {
@@ -68,9 +70,10 @@ export function fileInline(
               const command = changeFileDisplayMode(pos, "preview");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           { type: "divider" } as const,
           {
+            type: "item",
             icon: DownloadIcon,
             label: "下载文件",
             action: async () => {
@@ -87,8 +90,9 @@ export function fileInline(
                 console.error("下载文件失败:", error);
               }
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: InfoIcon,
             label: "详细信息",
             action: () => {
@@ -101,10 +105,10 @@ export function fileInline(
               ].join("\n");
               alert(info);
             },
-          },
+          } as const,
         ];
 
-        contextMenu.handleContextMenu(e, { items: menuItems });
+        contextMenu.show(e.clientX, e.clientY, menuItems);
       });
     });
   };

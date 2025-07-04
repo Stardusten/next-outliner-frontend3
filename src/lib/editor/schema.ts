@@ -108,6 +108,8 @@ const listItem: NodeSpec = {
     hasChildren: { default: false },
     // 类型
     type: {},
+    // 大模型是否正在针对此块思考
+    thinking: { default: false },
   },
   parseDOM: [
     {

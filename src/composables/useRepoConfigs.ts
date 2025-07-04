@@ -1,5 +1,5 @@
 import { ref, computed, readonly } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { z } from "zod";
 import { toast } from "vue-sonner";
 import { repoConfigSchema, type RepoConfig } from "@/lib/repo/schema";
@@ -51,6 +51,7 @@ loadConfigsFromStorage();
 
 export const useRepoConfigs = () => {
   const router = useRouter();
+  const route = useRoute();
   const configs = readonly(_configs);
 
   // 重新加载配置
@@ -115,9 +116,15 @@ export const useRepoConfigs = () => {
     }
   };
 
+  const currentRepo = computed(() => {
+    const repoId = route.params.repoId as string;
+    return getConfig(repoId);
+  });
+
   return {
     // 状态
     configs,
+    currentRepo,
 
     // 方法
     loadConfigs,

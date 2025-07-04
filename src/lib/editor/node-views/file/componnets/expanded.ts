@@ -175,6 +175,7 @@ function actions(
       ]).then(([ArrowRightIcon, DownloadIcon, InfoIcon]) => {
         const menuItems = [
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为引用",
             action: () => {
@@ -182,8 +183,9 @@ function actions(
               const command = changeFileDisplayMode(pos, "inline");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: ArrowRightIcon,
             label: "转为预览",
             action: () => {
@@ -191,9 +193,10 @@ function actions(
               const command = changeFileDisplayMode(pos, "preview");
               command(view.state, view.dispatch);
             },
-          },
+          } as const,
           { type: "divider" } as const,
           {
+            type: "item",
             icon: DownloadIcon,
             label: "下载文件",
             action: async () => {
@@ -210,8 +213,9 @@ function actions(
                 console.error("下载文件失败:", error);
               }
             },
-          },
+          } as const,
           {
+            type: "item",
             icon: InfoIcon,
             label: "详细信息",
             action: () => {
@@ -224,10 +228,10 @@ function actions(
               ].join("\n");
               alert(info);
             },
-          },
+          } as const,
         ];
 
-        contextMenu.handleContextMenu(e, { items: menuItems });
+        contextMenu.show(e.clientX, e.clientY, menuItems);
       });
     });
   };

@@ -28,6 +28,10 @@ import type { Command, EditorState } from "prosemirror-state";
 import { chainCommands, toggleMark } from "prosemirror-commands";
 import { outlinerSchema } from "./schema";
 import { findCurrListItem, type Editor } from "./editor";
+import {
+  useLlm,
+  type LlmAppendChildrenTask,
+} from "@/composables/use-llm.ts/useLlm";
 
 export function createKeymapPlugin(editor: Editor) {
   const dispatchByBlockType =
@@ -135,6 +139,18 @@ export function createKeymapPlugin(editor: Editor) {
     //   }
     //   return true;
     // },
+    "Mod-k": (state, dispatch, view) => {
+      const currListItem = findCurrListItem(state);
+      if (currListItem == null) return false;
+
+      if (dispatch) {
+        const llm = useLlm(editor.app);
+        const blockId = currListItem.node.attrs.blockId;
+        const task = llm.createAppendChildrenTask(blockId);
+        task.start();
+      }
+      return true;
+    },
   });
 }
 
