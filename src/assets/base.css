@@ -90,9 +90,9 @@
   --color-block-ref: var(--color-link);
   --color-file-inline: var(--color-block-ref);
   --editor-codeblock-font-family:
-    LXGWWenKaiMono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
-  --editor-codeblock-font-size: 15px;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  --editor-codeblock-font-size: 14px;
   --editor-codeblock-line-height: 1.4;
   --highlight-keep: #ffe066;
 
@@ -141,17 +141,12 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
 
-  --editor-font-family: LXGWWenKai, sans-serif;
   --editor-font-size: 16px;
   --color-guide-line: #30363d;
   --color-bullet-background-collapsed: var(--muted);
   --color-link: var(--color-primary);
   --color-block-ref: var(--color-link);
   --color-file-inline: var(--color-block-ref);
-  --editor-codeblock-font-family:
-    LXGWWenKaiMono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
-  --editor-codeblock-font-size: 15px;
   --editor-codeblock-line-height: 1.4;
   --highlight-keep: rgb(0, 102, 153);
 
