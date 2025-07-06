@@ -27,7 +27,11 @@ import {
 } from "./utils";
 import mitt from "mitt";
 import { tx } from "../app/tx";
-import { getBlockPath, getRootBlockIds } from "../app/block-manage";
+import {
+  getBlockPath,
+  getRootBlockIds,
+  getRootBlockNodes,
+} from "../app/block-manage";
 import { useLlm } from "@/composables/use-llm.ts/useLlm";
 import { watch } from "vue";
 
@@ -422,7 +426,7 @@ export function getDispatchTransaction(editor: Editor) {
     const beforeSelection = getEditorSelectionInfo(editor) ?? undefined;
 
     // 立即应用事务
-    transaction = normalizeSelection(transaction); // 先规范化选区
+    // transaction = normalizeSelection(transaction); // 先规范化选区
     const newState = editor.view.state.apply(transaction);
     editor.view.updateState(newState);
 
@@ -743,6 +747,17 @@ export function mount(editor: Editor, dom: HTMLElement) {
     console.warn("Editor already mounted, unmount it");
     unmount(editor);
   }
+
+  const updateNRoots = () => {
+    const nRoots =
+      editor.rootBlockIds.length === 0
+        ? getRootBlockNodes(editor.app).length
+        : editor.rootBlockIds.length;
+    dom.dataset.nRoots = String(nRoots);
+  };
+
+  updateNRoots();
+  editor.on("root-blocks-changed", updateNRoots);
 
   const doc = createStateFromStorage(editor.app, editor.rootBlockIds);
 
