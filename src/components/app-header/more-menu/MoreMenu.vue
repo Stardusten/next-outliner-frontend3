@@ -102,6 +102,14 @@
         <Trash2 :size="14" />
         <span>清空块存储</span>
       </DropdownMenuItem>
+
+      <!-- <DropdownMenuItem
+        variant="destructive"
+        @click="handleClearLocalStorage()"
+      >
+        <Trash2 :size="14" />
+        <span>清空 LocalStorage</span>
+      </DropdownMenuItem> -->
     </DropdownMenuContent>
   </DropdownMenu>
 </template>
@@ -164,5 +172,9 @@ const openImportDialog = () => {
     }
   };
   input.click();
+};
+
+const handleClearLocalStorage = () => {
+  localStorage.clear();
 };
 </script>
