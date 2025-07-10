@@ -10,7 +10,7 @@ import { serialize } from "../utils";
 import { Plugin } from "prosemirror-state";
 import { isEmptyListItem } from "../commands";
 import type { App } from "@/lib/app/app";
-import type { BlockNode } from "@/lib/common/types";
+import type { BlockId, BlockNode } from "@/lib/common/types";
 import { findCurrListItem, type Editor } from "../editor";
 import { withTx } from "@/lib/app/tx";
 
@@ -218,45 +218,45 @@ export function createPastePlugin(editor: Editor) {
             tr.replaceSelectionWith(pNode);
             view.dispatch(tr);
           } else {
-            const idMapping = new Map<string, BlockNode>(); // old id -> BlockNode
+            const idMapping = new Map<string, BlockId>(); // old id -> new id
             withTx(
               editor.app,
               (tx) => {
                 // 粘贴了多于一个块，则粘贴所有块到当前块下方
-                const createTree = (block: Block, node: BlockNode) => {
+                const createTree = (block: Block, newBlockId: BlockId) => {
                   for (let i = 0; i < block.children.length; i++) {
                     const child = block.children[i];
-                    const childNode = tx.insertBlockUnder(
-                      node,
-                      (dataMap) => {
-                        dataMap.set("type", child.type);
-                        dataMap.set("folded", child.folded);
-                        dataMap.set("content", child.content);
-                      },
-                      i
+                    const newChildId = tx.createBlockUnder(
+                      newBlockId,
+                      i,
+                      {
+                        type: child.type,
+                        folded: child.folded,
+                        content: child.content,
+                      }
                     );
-                    idMapping.set(child.id, childNode);
-                    createTree(child, childNode);
+                    idMapping.set(child.id, newChildId);
+                    createTree(child, newChildId);
                   }
                 };
 
-                let lastRoot: BlockNode | null = null;
+                let lastRootId: BlockId | null = null;
                 let prevBlockId = currBlockId;
                 for (let i = 0; i < parsedTree.length; i++) {
                   const block = parsedTree[i];
                   if (block.parentId == null) {
-                    const rootNode = tx.insertBlockAfter(
+                    const rootBlockId = tx.createBlockAfter(
                       prevBlockId,
-                      (dataMap) => {
-                        dataMap.set("type", block.type);
-                        dataMap.set("folded", block.folded);
-                        dataMap.set("content", block.content);
+                      {
+                        type: block.type,
+                        folded: block.folded,
+                        content: block.content,
                       }
                     );
-                    lastRoot = rootNode;
-                    prevBlockId = rootNode.id;
-                    idMapping.set(block.id, rootNode);
-                    createTree(block, rootNode);
+                    lastRootId = rootBlockId;
+                    prevBlockId = rootBlockId;
+                    idMapping.set(block.id, rootBlockId);
+                    createTree(block, rootBlockId);
                   }
                 }
 
@@ -266,28 +266,22 @@ export function createPastePlugin(editor: Editor) {
                 }
 
                 // 插入后，将光标移动到插入的最后一个块的末尾
-                if (lastRoot != null) {
-                  const lastRootContent = lastRoot.data.get(
-                    "content"
-                  ) as string;
+                if (lastRootId != null) {
+                  const lastRootContent = tx.getBlockData(lastRootId)!.content;
                   const lastRootJson = JSON.parse(lastRootContent);
                   const lastRootNode =
                     outlinerSchema.nodeFromJSON(lastRootJson);
 
-                  tx.updateOrigin({
-                    selection: {
-                      editorId: editor.id,
-                      blockId: lastRoot!.id,
-                      anchor: lastRootNode.nodeSize,
-                      scrollIntoView: true,
-                    },
-                  });
+                  tx.setSelection({
+                    editorId: editor.id,
+                    blockId: lastRootId,
+                    anchor: lastRootNode.nodeSize,
+                    scrollIntoView: true,
+                  })
                 }
+
+                tx.setOrigin("localEditorStructural");
               },
-              {
-                type: "localEditorStructural",
-                txId: nanoid(),
-              }
             );
           }
           return true;
@@ -326,15 +320,15 @@ export function createPastePlugin(editor: Editor) {
                     {},
                     tNode
                   );
-                  const newBlockNode = tx.insertBlockAfter(
+                  const newBlockId = tx.createBlockAfter(
                     prevBlockId,
-                    (dataMap) => {
-                      dataMap.set("type", "text");
-                      dataMap.set("folded", false);
-                      dataMap.set("content", serialize(pNode).content);
+                    {
+                      type: "text",
+                      folded: false,
+                      content: serialize(pNode).content,
                     }
                   );
-                  prevBlockId = newBlockNode.id;
+                  prevBlockId = newBlockId;
                 }
 
                 // 如果当前块为空，则删除当前块
@@ -342,19 +336,14 @@ export function createPastePlugin(editor: Editor) {
                   tx.deleteBlock(currBlockId);
                 }
 
-                tx.updateOrigin({
-                  selection: {
-                    editorId: editor.id,
-                    blockId: prevBlockId,
-                    anchor: 0,
-                    scrollIntoView: true,
-                  },
+                tx.setSelection({
+                  editorId: editor.id,
+                  blockId: prevBlockId,
+                  anchor: 0,
+                  scrollIntoView: true,
                 });
+                tx.setOrigin("localEditorStructural");
               },
-              {
-                type: "localEditorStructural",
-                txId: nanoid(),
-              }
             );
           }
         }

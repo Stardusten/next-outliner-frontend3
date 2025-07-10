@@ -109,12 +109,10 @@ export function splitListItem(editor: Editor): Command {
     if (splitPos === 0) {
       withTx(editor.app, (tx) => {
         // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
-        const index = tx.getIndex(currBlockId)!;
-        const parentId = tx.getParentId(currBlockId);
         const newContent = oldSerialize(
           outlinerSchema.nodes.paragraph.create()
         );
-        const newBlockId = tx.createBlock(parentId, index, {
+        const newBlockId = tx.createBlockBefore(currBlockId, {
           type: "text",
           folded: false,
           content: newContent,
@@ -135,9 +133,7 @@ export function splitListItem(editor: Editor): Command {
         const beforeSerialized = oldSerialize(beforeContent);
         const afterSerialized = oldSerialize(afterContent);
         tx.updateBlock(currBlockId, { content: beforeSerialized });
-        const index = tx.getIndex(currBlockId)!;
-        const parentId = tx.getParentId(currBlockId);
-        const newBlockId = tx.createBlock(parentId, index + 1, {
+        const newBlockId = tx.createBlockAfter(currBlockId, {
           type: "text",
           folded: false,
           content: afterSerialized,
@@ -345,7 +341,7 @@ export function toggleFocusedFoldState(
     }
 
     withTx(editor.app, (tx) => {
-      tx.updateBlock(blockId!, { folded: targetState });
+      tx.updateBlock(blockId!, { folded: targetState ?? !currentBlockData.folded });
       tx.setOrigin("localEditorStructural");
     });
 
