@@ -2,6 +2,7 @@ import { AsyncTaskQueue } from "../common/taskQueue";
 import type { BlockDataInner, BlockId, SelectionInfo } from "../common/types";
 import { getEditorSelectionInfo } from "../editor/editor";
 import type { App } from "./app";
+import type { getBlockPath } from "./block-manage";
 import { getLastFocusedEditor } from "./editors";
 
 export type TxExecutedOperation =
@@ -75,7 +76,7 @@ export type Transaction = {
 
 export type TxObj = {
   getStatus(): TxStatus;
-  createBlock: (
+  createBlockUnder: (
     parent: BlockId | null,
     index: number,
     data: BlockDataInner
@@ -89,7 +90,10 @@ export type TxObj = {
   getIndex: (blockId: BlockId) => number | null;
   getChildrenIds: (blockId: BlockId | null) => BlockId[];
   getParentId: (blockId: BlockId) => BlockId | null;
+  getBlockPath: (blockId: BlockId) => BlockId[] | null;
   getBlockData: (blockId: BlockId) => BlockDataInner | null;
+  createBlockAfter: (baseId: BlockId, data: BlockDataInner) => BlockId;
+  createBlockBefore: (baseId: BlockId, data: BlockDataInner) => BlockId;
 };
 
 /**
@@ -157,6 +161,28 @@ function addUpdateOpToTx(
   tx.ops.push(op);
 }
 
+function createBlockAfterToTx(
+  app: App,
+  tx: Transaction,
+  baseId: BlockId,
+  data: BlockDataInner
+) {
+  const parentId = getParentIdFromTx(app, tx, baseId);
+  const index = getIndexFromTx(app, tx, baseId)!;
+  return addCreateOpToTx(tx, parentId, index + 1, data);
+}
+
+function createBlockBeforeToTx(
+  app: App,
+  tx: Transaction,
+  baseId: BlockId,
+  data: BlockDataInner
+) {
+  const parentId = getParentIdFromTx(app, tx, baseId);
+  const index = getIndexFromTx(app, tx, baseId)!;
+  return addCreateOpToTx(tx, parentId, index, data);
+}
+
 function execTx(app: App, tx: Transaction) {
   if (tx.status !== "notCommit")
     throw new Error(`Transaction already ${tx.status}`);
@@ -183,6 +209,9 @@ function execTx(app: App, tx: Transaction) {
             ? (idMapping[op.parent] ?? op.parent)
             : undefined;
           const newNode = app.tree.createNode(parentId, op.index);
+          for (const [k, v] of Object.entries(op.data)) {
+            newNode.data.set(k, v);
+          }
           idMapping[op.tempId] = newNode.id;
           tx.executedOps.push({
             type: "block:create",
@@ -338,6 +367,18 @@ export function getParentIdFromTx(app: App, tx: Transaction, blockId: BlockId) {
   return parentId;
 }
 
+export function getBlockPathFromTx(app: App, tx: Transaction, blockId: BlockId) {
+  const path: BlockId[] = [];
+  let curr = getParentIdFromTx(app, tx, blockId);
+
+  while (curr !== null) {
+    path.unshift(curr);
+    curr = getParentIdFromTx(app, tx, curr);
+  }
+
+  return path;
+}
+
 export function getChildrenIdsFromTx(
   app: App,
   tx: Transaction,
@@ -422,7 +463,7 @@ function createTxObj(app: App): TxObj & { _tx: Transaction } {
   return {
     _tx: tx,
     getStatus: () => tx.status,
-    createBlock: (parent, index, data) =>
+    createBlockUnder: (parent, index, data) =>
       addCreateOpToTx(tx, parent, index, data),
     deleteBlock: (blockId) => addDeleteOpToTx(tx, blockId),
     moveBlock: (blockId, parent, index) =>
@@ -434,6 +475,9 @@ function createTxObj(app: App): TxObj & { _tx: Transaction } {
     getBlockData: (blockId) => getBlockDataFromTx(app, tx, blockId),
     getParentId: (blockId) => getParentIdFromTx(app, tx, blockId),
     getChildrenIds: (blockId) => getChildrenIdsFromTx(app, tx, blockId),
+    getBlockPath: (blockId) => getBlockPathFromTx(app, tx, blockId),
     getIndex: (blockId) => getIndexFromTx(app, tx, blockId),
+    createBlockAfter: (baseId, data) => createBlockAfterToTx(app, tx, baseId, data),
+    createBlockBefore: (baseId, data) => createBlockBeforeToTx(app, tx, baseId, data),
   };
 }

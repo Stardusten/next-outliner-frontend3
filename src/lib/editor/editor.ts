@@ -492,83 +492,81 @@ export function syncContentChangesToApp(
  * 选区设置为这个块末尾，并且滚动到这个块
  */
 export function locateBlock(editor: Editor, blockId: BlockId) {
-  throw new Error("Not implemented");
-  // return withTx(
-  //   editor.app,
-  //   (tx) => {
-  //     // 1. 获取目标块的完整路径
-  //     const targetPath = getBlockPath(editor.app, blockId);
-  //     if (!targetPath) {
-  //       return;
-  //     }
+  return withTx(
+    editor.app,
+    (tx) => {
+      // 1. 获取目标块的完整路径
+      const targetPath = tx.getBlockPath(blockId);
+      if (!targetPath) {
+        return;
+      }
 
-  //     // 2. 展开所有祖先块中折叠的块
-  //     // targetPath 包含目标块本身，所以我们需要排除最后一个元素
-  //     const ancestors = targetPath.slice(0, -1);
-  //     for (const ancestorId of ancestors) {
-  //       tx.toggleFold(ancestorId, false);
-  //     }
+      // 2. 展开所有祖先块中折叠的块
+      // targetPath 包含目标块本身，所以我们需要排除最后一个元素
+      const ancestors = targetPath.slice(0, -1);
+      for (const ancestorId of ancestors) {
+        tx.updateBlock(ancestorId, { folded: false });
+      }
 
-  //     // 3. 确定根块：找到当前根块与目标块的公共父块
-  //     const currentRoots =
-  //       editor.rootBlockIds.length > 0
-  //         ? editor.rootBlockIds
-  //         : getRootBlockIds(editor.app);
+      // 3. 确定根块：找到当前根块与目标块的公共父块
+      const currentRoots =
+        editor.rootBlockIds.length > 0
+          ? editor.rootBlockIds
+          : getRootBlockIds(editor.app); // todo
 
-  //     let newRootBlocks: BlockId[] = [];
+      let newRootBlocks: BlockId[] = [];
 
-  //     if (currentRoots.length === 0 || currentRoots.length > 1) {
-  //       // 如果当前没有根块，显示所有根块
-  //       newRootBlocks = [];
-  //     } else {
-  //       // 寻找公共父块
-  //       let commonAncestor: BlockId | null = null;
+      if (currentRoots.length === 0 || currentRoots.length > 1) {
+        // 如果当前没有根块，显示所有根块
+        newRootBlocks = [];
+      } else {
+        // 寻找公共父块
+        let commonAncestor: BlockId | null = null;
 
-  //       for (const rootId of currentRoots) {
-  //         const rootPath = getBlockPath(editor.app, rootId);
-  //         if (!rootPath) continue;
+        for (const rootId of currentRoots) {
+          const rootPath = tx.getBlockPath(rootId);
+          if (!rootPath) continue;
 
-  //         for (
-  //           let i = 0;
-  //           i < Math.min(rootPath.length, targetPath.length);
-  //           i++
-  //         ) {
-  //           if (rootPath[i] === targetPath[i]) {
-  //             commonAncestor = rootPath[i];
-  //           } else {
-  //             break;
-  //           }
-  //         }
+          for (
+            let i = 0;
+            i < Math.min(rootPath.length, targetPath.length);
+            i++
+          ) {
+            if (rootPath[i] === targetPath[i]) {
+              commonAncestor = rootPath[i];
+            } else {
+              break;
+            }
+          }
 
-  //         if (commonAncestor) {
-  //           break;
-  //         }
-  //       }
+          if (commonAncestor) {
+            break;
+          }
+        }
 
-  //       // 如果找到公共祖先，使用它作为新的根块
-  //       if (commonAncestor) {
-  //         newRootBlocks = [commonAncestor];
-  //       } else {
-  //         // 如果没有公共祖先，显示所有根块
-  //         newRootBlocks = [];
-  //       }
-  //     }
+        // 如果找到公共祖先，使用它作为新的根块
+        if (commonAncestor) {
+          newRootBlocks = [commonAncestor];
+        } else {
+          // 如果没有公共祖先，显示所有根块
+          newRootBlocks = [];
+        }
+      }
 
-  //     // 4. 设置新的根块
-  //     setRootBlockIds(editor, newRootBlocks);
+      // 4. 设置新的根块
+      setRootBlockIds(editor, newRootBlocks);
 
-  //     // 5. 滚动到目标块然后聚焦
-  //     tx.updateOrigin({
-  //       selection: {
-  //         editorId: editor.id,
-  //         blockId,
-  //         anchor: 0,
-  //         scrollIntoView: true,
-  //       },
-  //     });
-  //   },
-  //   { type: "localEditorStructural", editorId: editor.id, txId: nanoid() }
-  // );
+      // 5. 滚动到目标块然后聚焦
+      tx.setSelection({
+          editorId: editor.id,
+          blockId,
+          anchor: 0,
+          scrollIntoView: true,
+        }
+      );
+      tx.setOrigin("localEditorStructural");
+    }
+  );
 }
 
 export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
