@@ -21,9 +21,9 @@ import {
   oldDeserialize,
   oldSerialize,
 } from "./utils";
-import { tx } from "../app/tx";
 import { getBlockData, getBlockNode } from "../app/block-manage";
 import { getTextContent } from "../app/index/text-content";
+import { withTx } from "../app/tx";
 
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
@@ -33,20 +33,29 @@ export function isEmptyListItem(node: Node): boolean {
 
 export function promoteSelected(editor: Editor): Command {
   return function (state, dispatch) {
-    const { start, end, cross } = getSelectedListItemInfo(state);
-    if (!start || !end || cross) return true;
+    withTx(editor.app, (tx) => {
+      if (!editor.view) return;
+      const state = editor.view.state;
+      const { start, end, cross } = getSelectedListItemInfo(state);
+      if (!start || !end || cross) return;
 
-    const { node, pos } = start;
-    const { blockId } = node.attrs;
-    if (!blockId) return false;
+      const { node, pos } = start;
+      const { blockId } = node.attrs;
+      if (!blockId) return;
 
-    // 缩进后，光标位置仍然保持在当前块的相同位置
-    const anchor = state.selection.from - (pos + 2);
+      const parentId = tx.getParentId(blockId);
+      if (!parentId)
+        throw new Error(`target 块 ${blockId} 没有父节点，根块不能反缩进`);
+      const parentIndex = tx.getIndex(parentId);
+      if (parentIndex === null)
+        throw new Error(`找不到父节点 ${parentId} 的 index`);
+      const grandParentId = tx.getParentId(parentId);
+      tx.moveBlock(blockId, grandParentId, parentIndex + 1);
 
-    tx(editor.app, (tx) => tx.promoteBlock(blockId), {
-      type: "localEditorStructural",
-      txId: nanoid(),
-      selection: { editorId: editor.id, blockId, anchor },
+      // 缩进后，光标位置仍然保持在当前块的相同位置
+      const anchor = state.selection.from - (pos + 2);
+      tx.setSelection({ editorId: editor.id, blockId, anchor });
+      tx.setOrigin("localEditorStructural");
     });
     return true;
   };
@@ -54,20 +63,26 @@ export function promoteSelected(editor: Editor): Command {
 
 export function demoteSelected(editor: Editor): Command {
   return function (state, dispatch) {
-    const { start, end, cross } = getSelectedListItemInfo(state);
-    if (!start || !end || cross) return true;
+    withTx(editor.app, (tx) => {
+      const { start, end, cross } = getSelectedListItemInfo(state);
+      if (!start || !end || cross) return;
 
-    const { node, pos } = start;
-    const { blockId } = node.attrs;
-    if (!blockId) return false;
+      const { node, pos } = start;
+      const { blockId } = node.attrs;
+      if (!blockId) return;
 
-    // 反缩进后，光标位置仍然保持在当前块的相同位置
-    const anchor = state.selection.from - (pos + 2);
+      const parentId = tx.getParentId(blockId);
+      const index = tx.getIndex(blockId)!;
+      if (index === 0)
+        throw new Error(`target 块 ${blockId} 是第一个块，不能缩进`);
+      const prevNodeId = tx.getChildrenIds(parentId)[index - 1];
+      const newIndex = tx.getChildrenIds(prevNodeId)!.length;
+      tx.moveBlock(blockId, prevNodeId, newIndex);
 
-    tx(editor.app, (tx) => tx.demoteBlock(blockId), {
-      type: "localEditorStructural",
-      txId: nanoid(),
-      selection: { editorId: editor.id, blockId, anchor },
+      // 缩进后，光标位置仍然保持在当前块的相同位置
+      const anchor = state.selection.from - (pos + 2);
+      tx.setSelection({ editorId: editor.id, blockId, anchor });
+      tx.setOrigin("localEditorStructural");
     });
     return true;
   };
@@ -92,53 +107,49 @@ export function splitListItem(editor: Editor): Command {
 
     const splitPos = $from.parentOffset;
     if (splitPos === 0) {
-      tx(
-        editor.app,
-        (tx) => {
-          // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
-          const newNode = tx.insertBlockBefore(currBlockId, (dataMap) => {
-            const newContent = oldSerialize(
-              outlinerSchema.nodes.paragraph.create()
-            );
-            dataMap.set("type", "text");
-            dataMap.set("folded", false);
-            dataMap.set("content", newContent);
-          });
-          // 要求聚焦到新块
-          tx.updateOrigin({
-            selection: { editorId: editor.id, blockId: newNode.id, anchor: 0 },
-          });
-        },
-        {
-          type: "localEditorStructural",
-          txId: nanoid(),
-        }
-      );
+      withTx(editor.app, (tx) => {
+        // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
+        const index = tx.getIndex(currBlockId)!;
+        const parentId = tx.getParentId(currBlockId);
+        const newContent = oldSerialize(
+          outlinerSchema.nodes.paragraph.create()
+        );
+        const newBlockId = tx.createBlock(parentId, index, {
+          type: "text",
+          folded: false,
+          content: newContent,
+        });
+        // 要求聚焦到新块
+        tx.setSelection({
+          editorId: editor.id,
+          blockId: newBlockId,
+          anchor: 0,
+        });
+        tx.setOrigin("localEditorStructural");
+      });
     } else {
-      tx(
-        editor.app,
-        (tx) => {
-          // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
-          const beforeContent = paragraphNode.cut(0, splitPos);
-          const afterContent = paragraphNode.cut(splitPos);
-          const beforeSerialized = oldSerialize(beforeContent);
-          const afterSerialized = oldSerialize(afterContent);
-          tx.updateBlockData(currBlockId, { content: beforeSerialized });
-          const newNode = tx.insertBlockAfter(currBlockId, (dataMap) => {
-            dataMap.set("type", "text");
-            dataMap.set("folded", false);
-            dataMap.set("content", afterSerialized);
-          });
-          // 要求聚焦到新块开头
-          tx.updateOrigin({
-            selection: { editorId: editor.id, blockId: newNode.id, anchor: 0 },
-          });
-        },
-        {
-          type: "localEditorStructural",
-          txId: nanoid(),
-        }
-      );
+      withTx(editor.app, (tx) => {
+        // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
+        const beforeContent = paragraphNode.cut(0, splitPos);
+        const afterContent = paragraphNode.cut(splitPos);
+        const beforeSerialized = oldSerialize(beforeContent);
+        const afterSerialized = oldSerialize(afterContent);
+        tx.updateBlock(currBlockId, { content: beforeSerialized });
+        const index = tx.getIndex(currBlockId)!;
+        const parentId = tx.getParentId(currBlockId);
+        const newBlockId = tx.createBlock(parentId, index + 1, {
+          type: "text",
+          folded: false,
+          content: afterSerialized,
+        });
+        // 要求聚焦到新块开头
+        tx.setSelection({
+          editorId: editor.id,
+          blockId: newBlockId,
+          anchor: 0,
+        });
+        tx.setOrigin("localEditorStructural");
+      });
     }
 
     return true;
@@ -230,10 +241,10 @@ export function deleteEmptyListItem(
     // 如果这是编辑器中唯一的根块，则不删除
     if (!focusTarget) return false;
 
-    tx(editor.app, (tx) => tx.deleteBlock(blockId), {
-      type: "localEditorStructural",
-      txId: nanoid(),
-      selection: focusTarget,
+    withTx(editor.app, (tx) => {
+      tx.deleteBlock(blockId);
+      tx.setSelection(focusTarget);
+      tx.setOrigin("localEditorStructural");
     });
 
     return true;
@@ -333,9 +344,9 @@ export function toggleFocusedFoldState(
       return true;
     }
 
-    tx(editor.app, (tx) => tx.toggleFold(blockId!, targetState), {
-      type: "localEditorStructural",
-      txId: nanoid(),
+    withTx(editor.app, (tx) => {
+      tx.updateBlock(blockId!, { folded: targetState });
+      tx.setOrigin("localEditorStructural");
     });
 
     return true;
@@ -384,14 +395,11 @@ export function moveBlockUp(editor: Editor): Command {
     const index = blockNode.index()!;
     if (index === 0) return false; // 已经是第一个块
 
-    tx(
-      editor.app,
-      (tx) => tx.moveBlock(blockId, blockNode.parent()!, index - 1),
-      {
-        type: "localEditorStructural",
-        txId: nanoid(),
-      }
-    );
+    withTx(editor.app, (tx) => {
+      const parentId = tx.getParentId(blockId)!;
+      tx.moveBlock(blockId, parentId, index - 1);
+      tx.setOrigin("localEditorStructural");
+    });
 
     return true;
   };
@@ -415,9 +423,10 @@ export function moveBlockDown(editor: Editor): Command {
     const parentNode = blockNode.parent()!;
     if (index >= parentNode.children()!.length - 1) return false; // 已经是最后一个块
 
-    tx(editor.app, (tx) => tx.moveBlock(blockId, parentNode, index + 1), {
-      type: "localEditorStructural",
-      txId: nanoid(),
+    withTx(editor.app, (tx) => {
+      const parentId = tx.getParentId(blockId)!;
+      tx.moveBlock(blockId, parentId, index + 1);
+      tx.setOrigin("localEditorStructural");
     });
 
     return true;
@@ -526,26 +535,20 @@ export function mergeWithPreviousBlock(editor: Editor): Command {
     // 计算光标在合并后的位置（在原前一个块内容的末尾）
     const mergePoint = prevContentSize;
 
-    tx(
-      editor.app,
-      (tx) => {
-        // 1. 更新前一个块的内容为合并后的内容
-        tx.updateBlockData(prevBlockId, { content: mergedSerialized });
-        // 2. 删除当前块
-        tx.deleteBlock(currentBlockId);
-        // 3. 设置光标位置
-        const selection = {
-          editorId: editor.id,
-          blockId: prevBlockId,
-          anchor: mergePoint,
-        };
-        tx.updateOrigin({ selection });
-      },
-      {
-        type: "localEditorStructural",
-        txId: nanoid(),
-      }
-    );
+    withTx(editor.app, (tx) => {
+      // 1. 更新前一个块的内容为合并后的内容
+      tx.updateBlock(prevBlockId, { content: mergedSerialized });
+      // 2. 删除当前块
+      tx.deleteBlock(currentBlockId);
+      // 3. 设置光标位置
+      const selection = {
+        editorId: editor.id,
+        blockId: prevBlockId,
+        anchor: mergePoint,
+      };
+      tx.setSelection(selection);
+      tx.setOrigin("localEditorStructural");
+    });
 
     return true;
   };
@@ -853,17 +856,19 @@ export function codeblockMoveToLineEnd(): Command {
 
 export function undo(editor: Editor): Command {
   return function (state, dispatch) {
-    const canUndo = canUndoImpl(editor);
-    if (dispatch && canUndo) undoImpl(editor);
-    return canUndo;
+    // const canUndo = canUndoImpl(editor);
+    // if (dispatch && canUndo) undoImpl(editor);
+    // return canUndo;
+    return false; // TODO
   };
 }
 
 export function redo(editor: Editor): Command {
   return function (state, dispatch) {
-    const canRedo = canRedoImpl(editor);
-    if (dispatch && canRedo) redoImpl(editor);
-    return canRedo;
+    // const canRedo = canRedoImpl(editor);
+    // if (dispatch && canRedo) redoImpl(editor);
+    // return canRedo;
+    return false; // TODO
   };
 }
 

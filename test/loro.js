@@ -37,14 +37,10 @@ import { LoroDoc, LoroMap } from "loro-crdt";
 
 const doc = new LoroDoc();
 
-const text = doc.getText("text");
-text.insert(0, "Hello World");
-const v1 = doc.frontiers();
-console.log(v1);
-text.insert(0, "Kris, Good morning!");
+const tree = doc.getTree("tree");
+const node1 = tree.createNode();
+const node2 = node1.createNode();
+console.log(tree.roots().map((r) => r.id));
 
-doc.checkout(v1);
-doc.attach();
-doc.revertTo(v1);
-console.log(doc.isDetached());
-console.log(doc.frontiers());
+tree.move(node2.id, undefined, tree.roots().length);
+console.log(tree.roots().map((r) => r.id));

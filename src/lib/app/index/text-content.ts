@@ -15,7 +15,7 @@ export function initTextContent(app: App) {
    * 2. 更新对应 Observable，如果有
    */
   app.on("tx-committed", (e) => {
-    for (const change of e.changes) {
+    for (const change of e.executedOps) {
       if (change.type === "block:update") {
         // 触发文本内容缓存失效
         invalidateTextContent(app, change.blockId);
