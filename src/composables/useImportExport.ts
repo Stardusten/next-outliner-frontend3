@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import { Fragment, type Node } from "prosemirror-model";
 import { ref, shallowRef } from "vue";
 import { toast } from "./useToast";
-import { tx } from "@/lib/app/tx";
+import { withTx } from "@/lib/app/tx";
 import { forceSave } from "@/lib/app/saver";
 
 type Block = {
@@ -213,7 +213,7 @@ export function useImportExport(app: App) {
 
         const idMapping = new Map<string, string>();
         const blockNodes: [Block, BlockNode][] = [];
-        tx(
+        withTx(
           app,
           (tx) => {
             const createTree = (block: Block, node: BlockNode) => {
@@ -258,7 +258,7 @@ export function useImportExport(app: App) {
         pendingImport.value.format === "bsnapshot"
       ) {
         const importedDoc = pendingImport.value.doc;
-        tx(
+        withTx(
           app,
           (tx) => {
             const idMapping = new Map<string, string>();

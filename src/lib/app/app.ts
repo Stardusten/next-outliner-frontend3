@@ -19,46 +19,16 @@ import { initTextContent } from "./index/text-content";
 import { initSaver } from "./saver";
 import { initCompacter } from "./compacter";
 import {
-  initLoroEventTransformer,
-  startLoroEventTransformer,
-} from "./loro-event-transformer";
-import { initTransactionManager } from "./tx";
+  initTransactionManager,
+  type TxExecutedOperation,
+  type TxMeta,
+} from "./tx";
 import { initEditors } from "./editors";
-
-export type BlockChange =
-  | {
-      type: "block:create";
-      blockId: BlockId;
-      parent: BlockId | null;
-      index: number;
-      data: BlockDataInner;
-    }
-  | {
-      type: "block:delete";
-      blockId: BlockId;
-      oldData: BlockDataInner;
-      oldParent: BlockId | null;
-      oldIndex: number;
-    }
-  | {
-      type: "block:move";
-      blockId: BlockId;
-      parent: BlockId | null;
-      index: number;
-      oldParent: BlockId | null;
-      oldIndex: number;
-    }
-  | {
-      type: "block:update";
-      blockId: BlockId;
-      newData: BlockDataInner;
-      oldData: BlockDataInner;
-    };
 
 export type AppEvents = {
   "tx-committed": {
-    origin: TxOrigin;
-    changes: BlockChange[];
+    executedOps: TxExecutedOperation[];
+    meta: TxMeta;
   };
   save: {};
   compact: {};
@@ -141,11 +111,8 @@ export function createApp(
   initUpdatesCounts(app);
   initSaver(app);
   initCompacter(app);
-  initLoroEventTransformer(app);
   initTransactionManager(app);
   initEditors(app);
-
-  startLoroEventTransformer(app);
 
   return app;
 }

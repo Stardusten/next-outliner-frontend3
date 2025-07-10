@@ -9,7 +9,7 @@ export function initInRefs(app: App) {
   app.inRefs = new Map();
 
   app.on("tx-committed", (e) => {
-    for (const change of e.changes) {
+    for (const change of e.executedOps) {
       if (change.type === "block:create") {
         const blockData = getBlockData(app, change.blockId);
         if (!blockData) continue;

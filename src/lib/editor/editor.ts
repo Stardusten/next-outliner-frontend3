@@ -5,7 +5,7 @@ import type { Node as ProseMirrorNode } from "prosemirror-model";
 import { imeSpan } from "prosemirror-safari-ime-span";
 import { EditorState, TextSelection, Transaction } from "prosemirror-state";
 import { EditorView, type NodeViewConstructor } from "prosemirror-view";
-import type { App, AppEvents, BlockChange } from "../app/app";
+import type { App, AppEvents } from "../app/app";
 import type { BlockId, SelectionInfo } from "../common/types";
 import { toggleFocusedFoldState } from "./commands";
 import { toCodeblock } from "./input-rules/to-codeblock";
@@ -26,7 +26,7 @@ import {
   toMarkdown,
 } from "./utils";
 import mitt from "mitt";
-import { tx } from "../app/tx";
+import { withTx } from "../app/tx";
 import {
   getBlockPath,
   getRootBlockIds,
@@ -52,12 +52,6 @@ export type CompletionStatus = {
   trigger: "[[" | "【【";
 };
 
-export type OpSequence = {
-  changes: BlockChange[];
-  selectionBeg?: SelectionInfo;
-  selectionEnd?: SelectionInfo;
-};
-
 export type Editor = {
   id: string;
   app: App;
@@ -71,10 +65,10 @@ export type Editor = {
   eb: Emitter<EditorEvents>;
   on: Emitter<EditorEvents>["on"];
   off: Emitter<EditorEvents>["off"];
-  // undo-redo
-  undoStack: OpSequence[];
-  redoStack: OpSequence[];
-  idMapping: Record<string, BlockId>;
+  // // undo-redo
+  // undoStack: OpSequence[];
+  // redoStack: OpSequence[];
+  // idMapping: Record<string, BlockId>;
 };
 
 export const STORAGE_SYNC_META_KEY = "fromStorage";
@@ -119,134 +113,138 @@ export function getFocusedBlockId(editor: Editor) {
  * 注册 undo-redo 事件监听器
  */
 export function startUndoRedoListener(editor: Editor) {
-  editor.app.on("tx-committed", (event) => {
-    if (event.origin.type === "undoRedo") return;
-    editor.redoStack.length = 0; // 清空 redo 栈
-    editor.undoStack.push({
-      changes: event.changes,
-      selectionBeg: event.origin.beforeSelection,
-      selectionEnd: event.origin.selection,
-    });
-  });
+  // editor.app.on("tx-committed", (event) => {
+  //   if (event.origin.type === "undoRedo") return;
+  //   editor.redoStack.length = 0; // 清空 redo 栈
+  //   editor.undoStack.push({
+  //     changes: event.changes,
+  //     selectionBeg: event.origin.beforeSelection,
+  //     selectionEnd: event.origin.selection,
+  //   });
+  // });
 }
 
 export function canUndo(editor: Editor) {
-  return editor.undoStack.length > 0;
+  // return editor.undoStack.length > 0;
+  throw new Error("Not implemented");
 }
 
 export function canRedo(editor: Editor) {
-  return editor.redoStack.length > 0;
+  // return editor.redoStack.length > 0;
+  throw new Error("Not implemented");
 }
 
 export function undo(editor: Editor) {
-  if (editor.undoStack.length === 0) return;
-  const lastSeq = editor.undoStack.pop()!;
+  // if (editor.undoStack.length === 0) return;
+  // const lastSeq = editor.undoStack.pop()!;
 
-  tx(
-    editor.app,
-    (txObj) => {
-      // 逆序执行逆操作
-      for (let i = lastSeq.changes.length - 1; i >= 0; i--) {
-        const change = lastSeq.changes[i];
-        if (change.type === "block:create") {
-          const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-          txObj.deleteBlock(blockId);
-        } else if (change.type === "block:delete") {
-          const newNode = txObj.insertBlockUnder(
-            change.oldParent,
-            (dataMap) => {
-              dataMap.set("type", change.oldData.type);
-              dataMap.set("folded", change.oldData.folded);
-              dataMap.set("content", change.oldData.content);
-            },
-            change.oldIndex
-          );
-          editor.idMapping[change.blockId] = newNode.id;
-        } else if (change.type === "block:move") {
-          const targetBlockId =
-            editor.idMapping[change.blockId] ?? change.blockId;
-          const parentBlockId = change.oldParent
-            ? (editor.idMapping[change.oldParent] ?? change.oldParent)
-            : null;
-          targetBlockId &&
-            txObj.moveBlock(targetBlockId, parentBlockId, change.oldIndex);
-        } else if (change.type === "block:update") {
-          const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-          txObj.updateBlockData(blockId, change.oldData);
-        }
-      }
+  // withTx(
+  //   editor.app,
+  //   (txObj) => {
+  //     // 逆序执行逆操作
+  //     for (let i = lastSeq.changes.length - 1; i >= 0; i--) {
+  //       const change = lastSeq.changes[i];
+  //       if (change.type === "block:create") {
+  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
+  //         txObj.deleteBlock(blockId);
+  //       } else if (change.type === "block:delete") {
+  //         const newNode = txObj.insertBlockUnder(
+  //           change.oldParent,
+  //           (dataMap) => {
+  //             dataMap.set("type", change.oldData.type);
+  //             dataMap.set("folded", change.oldData.folded);
+  //             dataMap.set("content", change.oldData.content);
+  //           },
+  //           change.oldIndex
+  //         );
+  //         editor.idMapping[change.blockId] = newNode.id;
+  //       } else if (change.type === "block:move") {
+  //         const targetBlockId =
+  //           editor.idMapping[change.blockId] ?? change.blockId;
+  //         const parentBlockId = change.oldParent
+  //           ? (editor.idMapping[change.oldParent] ?? change.oldParent)
+  //           : null;
+  //         targetBlockId &&
+  //           txObj.moveBlock(targetBlockId, parentBlockId, change.oldIndex);
+  //       } else if (change.type === "block:update") {
+  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
+  //         txObj.updateBlockData(blockId, change.oldData);
+  //       }
+  //     }
 
-      // 撤销时，需要恢复到撤销前的选区状态
-      const sel = lastSeq.selectionBeg;
-      const mappedSel = sel
-        ? {
-            ...sel,
-            blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
-          }
-        : undefined;
-      txObj.updateOrigin({ selection: mappedSel });
-    },
-    { type: "undoRedo" }
-  );
+  //     // 撤销时，需要恢复到撤销前的选区状态
+  //     const sel = lastSeq.selectionBeg;
+  //     const mappedSel = sel
+  //       ? {
+  //           ...sel,
+  //           blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
+  //         }
+  //       : undefined;
+  //     txObj.updateOrigin({ selection: mappedSel });
+  //   },
+  //   { type: "undoRedo" }
+  // );
 
-  // console.log("undo, global idMapping", this.idMapping);
-  editor.redoStack.push(lastSeq);
+  // // console.log("undo, global idMapping", this.idMapping);
+  // editor.redoStack.push(lastSeq);
+  throw new Error("Not implemented");
 }
 
 export function redo(editor: Editor) {
-  if (editor.redoStack.length === 0) return;
-  const lastSeq = editor.redoStack.pop()!;
+  // if (editor.redoStack.length === 0) return;
+  // const lastSeq = editor.redoStack.pop()!;
 
-  tx(
-    editor.app,
-    (txObj) => {
-      // 正序执行正操作
-      for (const change of lastSeq.changes) {
-        if (change.type === "block:create") {
-          const parentBlockId = change.parent
-            ? (editor.idMapping[change.parent] ?? change.parent)
-            : null;
-          const newNode = txObj.insertBlockUnder(
-            parentBlockId,
-            (dataMap) => {
-              dataMap.set("type", change.data.type);
-              dataMap.set("folded", change.data.folded);
-              dataMap.set("content", change.data.content);
-            },
-            change.index
-          );
-          editor.idMapping[change.blockId] = newNode.id;
-        } else if (change.type === "block:delete") {
-          const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-          txObj.deleteBlock(blockId);
-        } else if (change.type === "block:move") {
-          const targetBlockId =
-            editor.idMapping[change.blockId] ?? change.blockId;
-          const parentBlockId = change.parent
-            ? (editor.idMapping[change.parent] ?? change.parent)
-            : null;
-          txObj.moveBlock(targetBlockId, parentBlockId, change.index);
-        } else if (change.type === "block:update") {
-          const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-          txObj.updateBlockData(blockId, change.newData);
-        }
-      }
+  // withTx(
+  //   editor.app,
+  //   (txObj) => {
+  //     // 正序执行正操作
+  //     for (const change of lastSeq.changes) {
+  //       if (change.type === "block:create") {
+  //         const parentBlockId = change.parent
+  //           ? (editor.idMapping[change.parent] ?? change.parent)
+  //           : null;
+  //         const newNode = txObj.insertBlockUnder(
+  //           parentBlockId,
+  //           (dataMap) => {
+  //             dataMap.set("type", change.data.type);
+  //             dataMap.set("folded", change.data.folded);
+  //             dataMap.set("content", change.data.content);
+  //           },
+  //           change.index
+  //         );
+  //         editor.idMapping[change.blockId] = newNode.id;
+  //       } else if (change.type === "block:delete") {
+  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
+  //         txObj.deleteBlock(blockId);
+  //       } else if (change.type === "block:move") {
+  //         const targetBlockId =
+  //           editor.idMapping[change.blockId] ?? change.blockId;
+  //         const parentBlockId = change.parent
+  //           ? (editor.idMapping[change.parent] ?? change.parent)
+  //           : null;
+  //         txObj.moveBlock(targetBlockId, parentBlockId, change.index);
+  //       } else if (change.type === "block:update") {
+  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
+  //         txObj.updateBlockData(blockId, change.newData);
+  //       }
+  //     }
 
-      // 重做时，需要恢复到重做后的选区状态
-      const sel = lastSeq.selectionEnd;
-      const mappedSel = sel
-        ? {
-            ...sel,
-            blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
-          }
-        : undefined;
-      txObj.updateOrigin({ selection: mappedSel });
-    },
-    { type: "undoRedo" }
-  );
+  //     // 重做时，需要恢复到重做后的选区状态
+  //     const sel = lastSeq.selectionEnd;
+  //     const mappedSel = sel
+  //       ? {
+  //           ...sel,
+  //           blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
+  //         }
+  //       : undefined;
+  //     txObj.updateOrigin({ selection: mappedSel });
+  //   },
+  //   { type: "undoRedo" }
+  // );
 
-  // console.log("redo, global idMapping", editor.idMapping);
-  editor.undoStack.push(lastSeq);
+  // // console.log("redo, global idMapping", editor.idMapping);
+  // editor.undoStack.push(lastSeq);
+  throw new Error("Not implemented");
 }
 
 /**
@@ -257,17 +255,12 @@ export function startTxCommittedListener(editor: Editor) {
     if (!editor.view) return;
 
     // 如果事件是来自本地编辑器的内容变更，则不更新视图
-    if (
-      event.origin.type === "localEditorContent" &&
-      event.origin.editorId === editor.id
-    ) {
-      return;
-    }
+    if (event.meta.origin === "localEditorContent" + editor.id) return;
 
     // 计算应用事务后的新状态
     const newDoc = createStateFromStorage(editor.app, editor.rootBlockIds);
     const selection =
-      event.origin.selection ?? getEditorSelectionInfo(editor) ?? undefined;
+      event.meta.selection ?? getEditorSelectionInfo(editor) ?? undefined;
 
     // 更新视图
     updateViewWithNewDocument(newDoc, editor.view, selection, true);
@@ -430,7 +423,7 @@ export function getDispatchTransaction(editor: Editor) {
     const newState = editor.view.state.apply(transaction);
     editor.view.updateState(newState);
 
-    // 如果文档内容被用户修改，则防抖同步到应用层
+    // 如果文档内容被用户修改，则同步到应用层
     setTimeout(() => {
       if (
         transaction.docChanged &&
@@ -482,19 +475,11 @@ export function syncContentChangesToApp(
       updatedIds.add(blockId);
 
       const newData = serialize(listItem.node.firstChild!);
-      tx(
-        editor.app,
-        (tx) => {
-          tx.updateBlockData(blockId, newData);
-        },
-        {
-          type: "localEditorContent",
-          editorId: editor.id,
-          blockId,
-          txId: nanoid(),
-          beforeSelection,
-        }
-      );
+      withTx(editor.app, (tx) => {
+        tx.updateBlock(blockId, newData);
+        tx.setOrigin("localEditorContent" + editor.id);
+        beforeSelection && tx.setBeforeSelection(beforeSelection);
+      });
     }
   }
 }
@@ -507,82 +492,83 @@ export function syncContentChangesToApp(
  * 选区设置为这个块末尾，并且滚动到这个块
  */
 export function locateBlock(editor: Editor, blockId: BlockId) {
-  return tx(
-    editor.app,
-    (tx) => {
-      // 1. 获取目标块的完整路径
-      const targetPath = getBlockPath(editor.app, blockId);
-      if (!targetPath) {
-        return;
-      }
+  throw new Error("Not implemented");
+  // return withTx(
+  //   editor.app,
+  //   (tx) => {
+  //     // 1. 获取目标块的完整路径
+  //     const targetPath = getBlockPath(editor.app, blockId);
+  //     if (!targetPath) {
+  //       return;
+  //     }
 
-      // 2. 展开所有祖先块中折叠的块
-      // targetPath 包含目标块本身，所以我们需要排除最后一个元素
-      const ancestors = targetPath.slice(0, -1);
-      for (const ancestorId of ancestors) {
-        tx.toggleFold(ancestorId, false);
-      }
+  //     // 2. 展开所有祖先块中折叠的块
+  //     // targetPath 包含目标块本身，所以我们需要排除最后一个元素
+  //     const ancestors = targetPath.slice(0, -1);
+  //     for (const ancestorId of ancestors) {
+  //       tx.toggleFold(ancestorId, false);
+  //     }
 
-      // 3. 确定根块：找到当前根块与目标块的公共父块
-      const currentRoots =
-        editor.rootBlockIds.length > 0
-          ? editor.rootBlockIds
-          : getRootBlockIds(editor.app);
+  //     // 3. 确定根块：找到当前根块与目标块的公共父块
+  //     const currentRoots =
+  //       editor.rootBlockIds.length > 0
+  //         ? editor.rootBlockIds
+  //         : getRootBlockIds(editor.app);
 
-      let newRootBlocks: BlockId[] = [];
+  //     let newRootBlocks: BlockId[] = [];
 
-      if (currentRoots.length === 0 || currentRoots.length > 1) {
-        // 如果当前没有根块，显示所有根块
-        newRootBlocks = [];
-      } else {
-        // 寻找公共父块
-        let commonAncestor: BlockId | null = null;
+  //     if (currentRoots.length === 0 || currentRoots.length > 1) {
+  //       // 如果当前没有根块，显示所有根块
+  //       newRootBlocks = [];
+  //     } else {
+  //       // 寻找公共父块
+  //       let commonAncestor: BlockId | null = null;
 
-        for (const rootId of currentRoots) {
-          const rootPath = getBlockPath(editor.app, rootId);
-          if (!rootPath) continue;
+  //       for (const rootId of currentRoots) {
+  //         const rootPath = getBlockPath(editor.app, rootId);
+  //         if (!rootPath) continue;
 
-          for (
-            let i = 0;
-            i < Math.min(rootPath.length, targetPath.length);
-            i++
-          ) {
-            if (rootPath[i] === targetPath[i]) {
-              commonAncestor = rootPath[i];
-            } else {
-              break;
-            }
-          }
+  //         for (
+  //           let i = 0;
+  //           i < Math.min(rootPath.length, targetPath.length);
+  //           i++
+  //         ) {
+  //           if (rootPath[i] === targetPath[i]) {
+  //             commonAncestor = rootPath[i];
+  //           } else {
+  //             break;
+  //           }
+  //         }
 
-          if (commonAncestor) {
-            break;
-          }
-        }
+  //         if (commonAncestor) {
+  //           break;
+  //         }
+  //       }
 
-        // 如果找到公共祖先，使用它作为新的根块
-        if (commonAncestor) {
-          newRootBlocks = [commonAncestor];
-        } else {
-          // 如果没有公共祖先，显示所有根块
-          newRootBlocks = [];
-        }
-      }
+  //       // 如果找到公共祖先，使用它作为新的根块
+  //       if (commonAncestor) {
+  //         newRootBlocks = [commonAncestor];
+  //       } else {
+  //         // 如果没有公共祖先，显示所有根块
+  //         newRootBlocks = [];
+  //       }
+  //     }
 
-      // 4. 设置新的根块
-      setRootBlockIds(editor, newRootBlocks);
+  //     // 4. 设置新的根块
+  //     setRootBlockIds(editor, newRootBlocks);
 
-      // 5. 滚动到目标块然后聚焦
-      tx.updateOrigin({
-        selection: {
-          editorId: editor.id,
-          blockId,
-          anchor: 0,
-          scrollIntoView: true,
-        },
-      });
-    },
-    { type: "localEditorStructural", editorId: editor.id, txId: nanoid() }
-  );
+  //     // 5. 滚动到目标块然后聚焦
+  //     tx.updateOrigin({
+  //       selection: {
+  //         editorId: editor.id,
+  //         blockId,
+  //         anchor: 0,
+  //         scrollIntoView: true,
+  //       },
+  //     });
+  //   },
+  //   { type: "localEditorStructural", editorId: editor.id, txId: nanoid() }
+  // );
 }
 
 export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {

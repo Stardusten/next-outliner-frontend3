@@ -207,7 +207,7 @@ export function createStateFromStorage(
   }
 
   const flatNodes = flattenBlocks(rootBlocks, 0);
-  console.log("flatNodes", flatNodes);
+  // console.log("flatNodes", flatNodes);
 
   // 创建文档节点
   const { doc: docType } = outlinerSchema.nodes;

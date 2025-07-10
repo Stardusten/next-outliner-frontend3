@@ -1,6 +1,6 @@
 import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
-import { tx } from "@/lib/app/tx";
+import { withTx } from "@/lib/app/tx";
 import type { BlockId, BlockNode, SelectionInfo } from "@/lib/common/types";
 import { buildTextContent, toMarkdown } from "@/lib/editor/utils";
 import type { LlmModelConfig } from "./useLlm";
@@ -53,7 +53,7 @@ function create(app: App, ctxBlockId: BlockId, config: LlmModelConfig) {
  *     - <-- llmContentNode, empty block for ai content
  */
 function prepare(app: App, task: LlmAppendChildrenTask) {
-  return tx(
+  return withTx(
     app,
     (txObj) => {
       const ctxBlockNode = getBlockNode(app, task.ctxBlockId);

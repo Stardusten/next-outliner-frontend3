@@ -12,7 +12,7 @@ import { isEmptyListItem } from "../commands";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 import { findCurrListItem, type Editor } from "../editor";
-import { tx } from "@/lib/app/tx";
+import { withTx } from "@/lib/app/tx";
 
 type Block = {
   id: string;
@@ -219,7 +219,7 @@ export function createPastePlugin(editor: Editor) {
             view.dispatch(tr);
           } else {
             const idMapping = new Map<string, BlockNode>(); // old id -> BlockNode
-            tx(
+            withTx(
               editor.app,
               (tx) => {
                 // 粘贴了多于一个块，则粘贴所有块到当前块下方
@@ -315,7 +315,7 @@ export function createPastePlugin(editor: Editor) {
             return true;
           } else {
             // 粘贴了多行文本
-            tx(
+            withTx(
               editor.app,
               (tx) => {
                 let prevBlockId = currBlockId;

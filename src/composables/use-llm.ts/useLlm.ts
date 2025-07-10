@@ -7,7 +7,7 @@ import type { App } from "@/lib/app/app";
 import LLM, { type PartialStreamResponse } from "../../lib/llm";
 import { getLastFocusedEditor } from "@/lib/app/editors";
 import { getBlockNode } from "@/lib/app/block-manage";
-import { tx } from "@/lib/app/tx";
+import { withTx } from "@/lib/app/tx";
 import { nanoid } from "nanoid";
 import { outlinerSchema } from "@/lib/editor/schema";
 import { AppendChildrenTaskUtils } from "./append-children-task";

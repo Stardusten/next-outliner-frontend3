@@ -43,7 +43,7 @@ export function initFullTextIndex(app: App, config?: FullTextIndexConfig) {
 
   // 监听事务提交事件
   app.on("tx-committed", (event) => {
-    for (const change of event.changes) {
+    for (const change of event.executedOps) {
       let blockId: BlockId;
       switch (change.type) {
         case "block:create":
