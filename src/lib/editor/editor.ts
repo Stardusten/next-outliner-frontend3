@@ -40,6 +40,7 @@ import type {
   MenuSubMenu,
 } from "@/composables/useContextMenu";
 import { Clipboard } from "lucide-vue-next";
+import { unregisterEditor } from "../app/editors";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -75,37 +76,45 @@ export type Editor = {
   // undoStack: OpSequence[];
   // redoStack: OpSequence[];
   // idMapping: Record<string, BlockId>;
+  // 是否在只有一个根块时，放大显示根块，少一个层级
+  enableEnlargeRootBlock: boolean;
 };
 
 export const STORAGE_SYNC_META_KEY = "fromStorage";
 
 export type EditorId = string;
 
-export function createEditor(
+export type EditorOptions = {
+  id?: EditorId;
+  rootBlockIds?: BlockId[];
+  enlargeRootBlock?: boolean;
+}
+
+function createEditor(
   app: App,
-  id?: EditorId,
-  rootBlockIds?: BlockId[]
+  opts: EditorOptions = {}
 ) {
   const eb = mitt<EditorEvents>();
   const editor = {
-    id: id ?? nanoid(),
+    id: opts.id ?? nanoid(),
     app,
     view: null,
-    rootBlockIds: rootBlockIds ?? [],
+    rootBlockIds: opts.rootBlockIds ?? [],
     storageEventHandler: null,
     clickHandler: null,
     contextMenuHandler: null,
     eb,
     on: eb.on,
     off: eb.off,
-    undoStack: [],
-    redoStack: [],
-    idMapping: {},
-  };
+    // undoStack: [],
+    // redoStack: [],
+    // idMapping: {},
+    enableEnlargeRootBlock: opts.enlargeRootBlock ?? true,
+  } satisfies Editor;
   return editor;
 }
 
-export function getFocusedBlockId(editor: Editor) {
+function getFocusedBlockId(editor: Editor) {
   if (!editor.view) return null;
   const state = editor.view.state;
   const sel = state.selection;
@@ -118,7 +127,7 @@ export function getFocusedBlockId(editor: Editor) {
 /**
  * 注册 undo-redo 事件监听器
  */
-export function startUndoRedoListener(editor: Editor) {
+function startUndoRedoListener(editor: Editor) {
   // editor.app.on("tx-committed", (event) => {
   //   if (event.origin.type === "undoRedo") return;
   //   editor.redoStack.length = 0; // 清空 redo 栈
@@ -130,17 +139,17 @@ export function startUndoRedoListener(editor: Editor) {
   // });
 }
 
-export function canUndo(editor: Editor) {
+function canUndo(editor: Editor) {
   // return editor.undoStack.length > 0;
   throw new Error("Not implemented");
 }
 
-export function canRedo(editor: Editor) {
+function canRedo(editor: Editor) {
   // return editor.redoStack.length > 0;
   throw new Error("Not implemented");
 }
 
-export function undo(editor: Editor) {
+function undo(editor: Editor) {
   // if (editor.undoStack.length === 0) return;
   // const lastSeq = editor.undoStack.pop()!;
 
@@ -196,7 +205,7 @@ export function undo(editor: Editor) {
   throw new Error("Not implemented");
 }
 
-export function redo(editor: Editor) {
+function redo(editor: Editor) {
   // if (editor.redoStack.length === 0) return;
   // const lastSeq = editor.redoStack.pop()!;
 
@@ -256,7 +265,7 @@ export function redo(editor: Editor) {
 /**
  * 注册存储事件监听器，用于在（非内容变更）事务提交后更新视图
  */
-export function startTxCommittedListener(editor: Editor) {
+function startTxCommittedListener(editor: Editor) {
   editor.app.on("tx-committed", (event) => {
     if (!editor.view) return;
 
@@ -266,7 +275,7 @@ export function startTxCommittedListener(editor: Editor) {
     // 计算应用事务后的新状态
     const newDoc = createStateFromStorage(editor.app, editor.rootBlockIds);
     const selection =
-      event.meta.selection ?? getEditorSelectionInfo(editor) ?? undefined;
+      event.meta.selection ?? getSelectionInfo(editor) ?? undefined;
 
     // 更新视图
     updateViewWithNewDocument(newDoc, editor.view, selection, true);
@@ -276,7 +285,7 @@ export function startTxCommittedListener(editor: Editor) {
 /**
  * 注册 thinkingBlockIds 事件监听器，用于在 thinkingBlockIds 变化时更新视图
  */
-export function startThinkingStateListener(editor: Editor) {
+function startThinkingStateListener(editor: Editor) {
   const { thinkingBlockIds } = useLlm(editor.app);
   watch(
     thinkingBlockIds,
@@ -286,7 +295,7 @@ export function startThinkingStateListener(editor: Editor) {
 
       // 计算新状态
       const newDoc = createStateFromStorage(editor.app, editor.rootBlockIds);
-      const selection = getEditorSelectionInfo(editor) ?? undefined;
+      const selection = getSelectionInfo(editor) ?? undefined;
 
       // 更新视图
       updateViewWithNewDocument(newDoc, editor.view, selection, true);
@@ -335,21 +344,21 @@ export function getAbsPos(
   return absolutePos;
 }
 
-export function getEditorSelectionInfo(editor: Editor): SelectionInfo | null {
+function getSelectionInfo(editor: Editor): SelectionInfo | null {
   if (!editor.view) throw new Error("Editor not mounted");
   const state = editor.view.state;
   const sel = state.selection;
   const listItemInfo = findCurrListItem(state);
   return listItemInfo && listItemInfo.node.attrs.blockId
     ? {
-        editorId: editor.id,
-        blockId: listItemInfo.node.attrs.blockId,
-        anchor: sel.from - (listItemInfo.pos + 2),
-      }
+      editorId: editor.id,
+      blockId: listItemInfo.node.attrs.blockId,
+      anchor: sel.from - (listItemInfo.pos + 2),
+    }
     : null;
 }
 
-export function updateViewWithNewDocument(
+function updateViewWithNewDocument(
   newDoc: ProseMirrorNode,
   view: EditorView,
   selection?: SelectionInfo,
@@ -380,7 +389,7 @@ export function updateViewWithNewDocument(
   view.dispatch(tr);
 }
 
-export function getEditorPlugins(editor: Editor) {
+function getEditorPlugins(editor: Editor) {
   return [
     createCompletionHelperPlugin(editor.eb),
     inputRules({ rules: [toCodeblock] }),
@@ -391,7 +400,7 @@ export function getEditorPlugins(editor: Editor) {
   ];
 }
 
-export function getEditorNodeViews(
+function getEditorNodeViews(
   editor: Editor
 ): Record<string, NodeViewConstructor> {
   return {
@@ -417,12 +426,12 @@ export function getEditorNodeViews(
  * 1. 应用事务前规范化选区，确保正确处理跨块选区
  * 2. 将内容改动同步到应用层（注意：结构变动不走这里！！！）
  */
-export function getDispatchTransaction(editor: Editor) {
+function getDispatchTransaction(editor: Editor) {
   return (transaction: Transaction) => {
     if (!editor.view) return;
 
     // 先记录当前选区
-    const beforeSelection = getEditorSelectionInfo(editor) ?? undefined;
+    const beforeSelection = getSelectionInfo(editor) ?? undefined;
 
     // 立即应用事务
     // transaction = normalizeSelection(transaction); // 先规范化选区
@@ -442,7 +451,7 @@ export function getDispatchTransaction(editor: Editor) {
   };
 }
 
-export function syncContentChangesToApp(
+function syncContentChangesToApp(
   editor: Editor,
   tr: Transaction,
   beforeSelection?: SelectionInfo
@@ -497,7 +506,7 @@ export function syncContentChangesToApp(
  * 调整根块为当前根块与这个块的公共父块，然后将
  * 选区设置为这个块末尾，并且滚动到这个块
  */
-export function locateBlock(editor: Editor, blockId: BlockId) {
+function locateBlock(editor: Editor, blockId: BlockId) {
   return withTx(editor.app, (tx) => {
     // 1. 获取目标块的完整路径
     const targetPath = tx.getBlockPath(blockId);
@@ -567,7 +576,7 @@ export function locateBlock(editor: Editor, blockId: BlockId) {
   });
 }
 
-export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
+function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
   editor.rootBlockIds = rootBlockIds;
   // 触发一次重绘来更新视图
   if (editor.view) {
@@ -582,7 +591,7 @@ export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
   editor.eb.emit("root-blocks-changed", { rootBlockIds });
 }
 
-export function getContextMenuHandler(editor: Editor) {
+function getContextMenuHandler(editor: Editor) {
   return (e: MouseEvent) => {
     let tgt = e.target;
 
@@ -633,17 +642,17 @@ export function getContextMenuHandler(editor: Editor) {
                 {
                   type: "item",
                   label: "纯文本",
-                  action: () => {},
+                  action: () => { },
                 },
                 {
                   type: "item",
                   label: "HTML",
-                  action: () => {},
+                  action: () => { },
                 },
                 {
                   type: "item",
                   label: "块引用",
-                  action: () => {},
+                  action: () => { },
                 },
               ],
             } satisfies MenuSubMenu,
@@ -655,17 +664,17 @@ export function getContextMenuHandler(editor: Editor) {
                 {
                   type: "item",
                   label: "Markdown",
-                  action: () => {},
+                  action: () => { },
                 },
                 {
                   type: "item",
                   label: "纯文本",
-                  action: () => {},
+                  action: () => { },
                 },
                 {
                   type: "item",
                   label: "HTML",
-                  action: () => {},
+                  action: () => { },
                 },
               ],
             },
@@ -689,7 +698,7 @@ export function getContextMenuHandler(editor: Editor) {
   };
 }
 
-export function getClickHandler(editor: Editor) {
+function getClickHandler(editor: Editor) {
   return (e: MouseEvent) => {
     let tgt = e.target;
 
@@ -743,21 +752,22 @@ export function getClickHandler(editor: Editor) {
   };
 }
 
-export function isFocused(editor: Editor) {
+function isFocused(editor: Editor) {
   return editor.view?.hasFocus();
 }
 
-export function coordAtPos(editor: Editor, pos: number) {
+function coordAtPos(editor: Editor, pos: number) {
   if (!editor.view) throw new Error("Editor not mounted");
   return editor.view.coordsAtPos(pos);
 }
 
-export function mount(editor: Editor, dom: HTMLElement) {
+function mount(editor: Editor, dom: HTMLElement) {
   if (editor.view) {
     console.warn("Editor already mounted, unmount it");
     unmount(editor);
   }
 
+  // dom 上加上一个属性指示根块数量
   const updateNRoots = () => {
     const nRoots =
       editor.rootBlockIds.length === 0
@@ -768,6 +778,16 @@ export function mount(editor: Editor, dom: HTMLElement) {
 
   updateNRoots();
   editor.on("root-blocks-changed", updateNRoots);
+
+  // 在 dom 上加上 class 指示编辑器是否启用放大根块的功能
+  const updateEnableEnlargeRootBlock = () => {
+    if (editor.enableEnlargeRootBlock) {
+      dom.classList.add("enlarge-root-block");
+    } else {
+      dom.classList.remove("enlarge-root-block");
+    }
+  }
+  updateEnableEnlargeRootBlock();
 
   const doc = createStateFromStorage(editor.app, editor.rootBlockIds);
 
@@ -796,7 +816,7 @@ export function mount(editor: Editor, dom: HTMLElement) {
   startThinkingStateListener(editor);
 }
 
-export function unmount(editor: Editor) {
+function unmount(editor: Editor) {
   if (!editor.view) {
     console.warn("Editor not mounted, cannot unmount");
     return;
@@ -807,4 +827,30 @@ export function unmount(editor: Editor) {
   editor.view.destroy();
   editor.view = null;
   editor.clickHandler = null;
+  unregisterEditor(editor.app, editor.id);
+}
+
+function focusEditor(editor: Editor) {
+  if (!editor.view) {
+    console.warn("Editor not mounted, cannot focus");
+    return;
+  }
+  editor.view.focus();
+}
+
+export const editorUtils = {
+  createEditor,
+  getFocusedBlockId,
+  canUndo,
+  canRedo,
+  undo,
+  redo,
+  mount,
+  unmount,
+  getSelectionInfo,
+  locateBlock,
+  setRootBlockIds,
+  isFocused,
+  coordAtPos,
+  focusEditor,
 }

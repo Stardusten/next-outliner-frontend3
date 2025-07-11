@@ -1,4 +1,4 @@
-import { createEditor, isFocused } from "../editor/editor";
+import { editorUtils, type EditorOptions } from "../editor/editor";
 import type { App, EditorId } from "./app";
 
 export function initEditors(app: App) {
@@ -6,20 +6,26 @@ export function initEditors(app: App) {
   app.lastFocusedEditorId = null;
 }
 
-export function getEditorFromApp(app: App, editorId: EditorId) {
-  const editor = app.editors[editorId];
+export function getEditorFromApp(app: App, opts: EditorOptions & { id: EditorId }) {
+  const editor = app.editors[opts.id];
   if (editor) return editor;
   else {
-    const newEditor = createEditor(app, editorId, []);
-    app.editors[editorId] = newEditor;
+    const newEditor = editorUtils.createEditor(app, opts);
+    app.editors[opts.id] = newEditor;
 
     // 监听 focus 事件，更新 lastFocusedEditorId
     newEditor.on("focus", () => {
-      app.lastFocusedEditorId = editorId;
+      app.lastFocusedEditorId = opts.id;
     });
 
     return newEditor;
   }
+}
+
+export function unregisterEditor(app: App, editorId: EditorId) {
+  const editor = app.editors[editorId];
+  if (!editor) return;
+  delete app.editors[editorId];
 }
 
 export function getLastFocusedEditor(app: App, rollback: string = "main") {
@@ -34,5 +40,5 @@ export function getFocusingEditor(app: App) {
     ? app.editors[app.lastFocusedEditorId]
     : null;
   if (!lastFocused) return null;
-  return isFocused(lastFocused) ? lastFocused : null;
+  return editorUtils.isFocused(lastFocused) ? lastFocused : null;
 }

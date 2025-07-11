@@ -1,6 +1,6 @@
 import { AsyncTaskQueue } from "../common/taskQueue";
 import type { BlockDataInner, BlockId, SelectionInfo } from "../common/types";
-import { getEditorSelectionInfo } from "../editor/editor";
+import { editorUtils } from "../editor/editor";
 import type { App } from "./app";
 import type { getBlockPath } from "./block-manage";
 import { getLastFocusedEditor } from "./editors";
@@ -196,7 +196,7 @@ function execTx(
   if (!tx.meta.beforeSelection) {
     const editor = getLastFocusedEditor(app);
     if (editor) {
-      const sel = getEditorSelectionInfo(editor);
+      const sel = editorUtils.getSelectionInfo(editor);
       sel && (tx.meta.beforeSelection = sel);
     }
   }

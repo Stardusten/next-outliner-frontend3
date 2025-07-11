@@ -1,6 +1,6 @@
 import { ref, computed } from "vue";
 import { searchBlocksWithScore } from "@/lib/app/index/fulltext";
-import { locateBlock, type Editor } from "@/lib/editor/editor";
+import { editorUtils, type Editor } from "@/lib/editor/editor";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 import { getBlockNode } from "@/lib/app/block-manage";
@@ -17,20 +17,6 @@ export function useSearch(app: App) {
   const searchQuery = ref("");
   const searchResults = ref<SearchResult[]>([]);
   const activeIndex = ref(0);
-  const searchPosition = ref({ x: 0, y: 0 });
-
-  // 计算搜索弹窗位置（居中显示）
-  const calculateSearchPosition = () => {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const popupWidth = 400;
-    const popupHeight = 500;
-
-    searchPosition.value = {
-      x: (viewportWidth - popupWidth) / 2,
-      y: Math.max(50, (viewportHeight - popupHeight) / 2),
-    };
-  };
 
   // 执行搜索
   const performSearch = (query: string) => {
@@ -60,22 +46,17 @@ export function useSearch(app: App) {
     activeIndex.value = 0;
   };
 
-  // 显示搜索弹窗
-  const showSearch = () => {
-    calculateSearchPosition();
-    searchVisible.value = true;
+  // 重置搜索弹窗状态
+  const resetSearch = () => {
     searchQuery.value = "";
     searchResults.value = [];
     activeIndex.value = 0;
   };
 
-  // 隐藏搜索弹窗
-  const hideSearch = () => {
+  const closeSearch = () => {
     searchVisible.value = false;
-    searchQuery.value = "";
-    searchResults.value = [];
-    activeIndex.value = 0;
-  };
+    resetSearch();
+  }
 
   // 处理搜索结果选择
   const handleSearchSelect = (
@@ -92,9 +73,9 @@ export function useSearch(app: App) {
     // 处理实际的搜索结果选择 - 使用 locateBlock 定位到选择的块
     const editor = getLastFocusedEditor(app);
     if (editor) {
-      locateBlock(editor, result.block.id);
+      editorUtils.locateBlock(editor, result.block.id);
     }
-    hideSearch();
+    closeSearch();
   };
 
   // 更新搜索查询
@@ -107,11 +88,10 @@ export function useSearch(app: App) {
     searchQuery,
     searchResults,
     activeIndex,
-    searchPosition,
-    showSearch,
-    hideSearch,
+    resetSearch,
     handleSearchSelect,
     updateSearchQuery,
     performSearch,
+    closeSearch,
   };
 }

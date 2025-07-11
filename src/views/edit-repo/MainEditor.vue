@@ -27,7 +27,6 @@
     @select="completion!.handleBlockSelect"
     @close="completion!.handleCompletionClose"
   />
-  <SearchPopup :search="search!" :app="app!" />
   <ImportDialog :import-export="importExport!" />
   <ClearStorageConfirmDialog :import-export="importExport!" />
   <ClearHistoryConfirmDialog :import-export="importExport!" />
@@ -50,9 +49,7 @@ import { useSettings } from "@/composables";
 import type { useRepoConfigs } from "@/composables/useRepoConfigs";
 import type { App } from "@/lib/app/app";
 import {
-  mount,
-  setRootBlockIds,
-  unmount,
+  editorUtils,
   type Editor,
   type EditorEvents,
 } from "@/lib/editor/editor";
@@ -93,9 +90,9 @@ onMounted(() => {
   if (!wrapper.value) throw new Error("Wrapper not found");
 
   const { mainEditorRoots } = useMainEditorRoots();
-  const mainEditor = getEditorFromApp(app, "main");
-  setRootBlockIds(mainEditor, mainEditorRoots.value);
-  mount(mainEditor, wrapper.value);
+  const mainEditor = getEditorFromApp(app, {id: "main"});
+  editorUtils.setRootBlockIds(mainEditor, mainEditorRoots.value);
+  editorUtils.mount(mainEditor, wrapper.value);
 
   editorEventCb = (
     key: keyof EditorEvents,
@@ -112,9 +109,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   // TODO 更好的 cleanup 逻辑
-  const mainEditor = getEditorFromApp(app, "main");
+  const mainEditor = getEditorFromApp(app, {id: "main"});
   mainEditor.off("*", editorEventCb);
-  unmount(mainEditor);
+  editorUtils.unmount(mainEditor);
   taskList.cleanup();
 });
 </script>

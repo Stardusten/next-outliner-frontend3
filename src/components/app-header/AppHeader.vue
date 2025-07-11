@@ -7,14 +7,19 @@
       </Button>
 
       <!-- 面包屑 -->
-      <Breadcrumb
-        :breadcrumb-items="breadcrumb.breadcrumbItems.value"
-        @item-click="breadcrumb.handleBreadcrumbClick(editor, $event)"
-      />
+      <Breadcrumb :breadcrumb-items="breadcrumb.breadcrumbItems.value"
+        @item-click="breadcrumb.handleBreadcrumbClick(editor, $event)" />
     </div>
 
     <!-- 右侧按钮 -->
     <div class="header-actions">
+      <!-- 快速插入 -->
+      <QuickAdd :app="app">
+        <Button variant="ghost" size="xs-icon">
+          <CirclePlus :size="18" />
+        </Button>
+      </QuickAdd>
+
       <!-- 附件 -->
       <AttachmentPopup :attachment="attachment" :task-list="taskList">
         <Button variant="ghost" size="xs-icon">
@@ -23,9 +28,11 @@
       </AttachmentPopup>
 
       <!-- 搜索 -->
-      <Button variant="ghost" size="xs-icon" @click="search.showSearch">
-        <Search :size="18" />
-      </Button>
+      <SearchPopup :search="search" :app="app">
+        <Button Button variant="ghost" size="xs-icon" @click="search.resetSearch">
+          <Search :size="18" />
+        </Button>
+      </SearchPopup>
 
       <MoreMenu :import-export="importExport" :settings="settings">
         <Button variant="ghost" size="xs-icon">
@@ -37,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { Menu, Search, Folder, MoreHorizontal } from "lucide-vue-next";
+import { Menu, Search, Folder, MoreHorizontal, CirclePlus } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import MoreMenu from "./more-menu/MoreMenu.vue";
 import AttachmentPopup from "./attachment-popup/AttachmentPopup.vue";
@@ -53,6 +60,8 @@ import type {
 import type { App } from "@/lib/app/app";
 import { Button } from "../ui/button";
 import { getLastFocusedEditor } from "@/lib/app/editors";
+import QuickAdd from "../QuickAdd.vue";
+import SearchPopup from "../search-popup/SearchPopup.vue";
 
 const props = defineProps<{
   app: App;

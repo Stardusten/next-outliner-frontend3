@@ -1,6 +1,5 @@
 import {
-  coordAtPos,
-  getFocusedBlockId,
+  editorUtils,
   type CompletionStatus,
   type Editor,
   type EditorEvents,
@@ -74,7 +73,7 @@ export function useBlockRefCompletion(app: App) {
       completionQuery.value = status.query;
 
       // 计算弹窗位置
-      const coords = coordAtPos(editor, status.from);
+      const coords = editorUtils.coordAtPos(editor, status.from);
       completionPosition.value = {
         x: coords.left,
         y: coords.bottom + 4,
@@ -102,7 +101,7 @@ export function useBlockRefCompletion(app: App) {
 
       const focusedEditor = getFocusingEditor(app);
       const focusedBlockId = focusedEditor
-        ? getFocusedBlockId(focusedEditor)
+        ? editorUtils.getFocusedBlockId(focusedEditor)
         : null;
 
       // 根据搜索结果获取具体的块
