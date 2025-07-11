@@ -34,6 +34,12 @@ import {
 } from "../app/block-manage";
 import { useLlm } from "@/composables/use-llm.ts/useLlm";
 import { watch } from "vue";
+import type {
+  MenuItem,
+  MenuItemDef,
+  MenuSubMenu,
+} from "@/composables/useContextMenu";
+import { Clipboard } from "lucide-vue-next";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -492,81 +498,73 @@ export function syncContentChangesToApp(
  * 选区设置为这个块末尾，并且滚动到这个块
  */
 export function locateBlock(editor: Editor, blockId: BlockId) {
-  return withTx(
-    editor.app,
-    (tx) => {
-      // 1. 获取目标块的完整路径
-      const targetPath = tx.getBlockPath(blockId);
-      if (!targetPath) {
-        return;
-      }
+  return withTx(editor.app, (tx) => {
+    // 1. 获取目标块的完整路径
+    const targetPath = tx.getBlockPath(blockId);
+    if (!targetPath) {
+      return;
+    }
 
-      // 2. 展开所有祖先块中折叠的块
-      // targetPath 包含目标块本身，所以我们需要排除最后一个元素
-      const ancestors = targetPath.slice(0, -1);
-      for (const ancestorId of ancestors) {
-        tx.updateBlock(ancestorId, { folded: false });
-      }
+    // 2. 展开所有祖先块中折叠的块
+    // targetPath 包含目标块本身，所以我们需要排除最后一个元素
+    const ancestors = targetPath.slice(0, -1);
+    for (const ancestorId of ancestors) {
+      tx.updateBlock(ancestorId, { folded: false });
+    }
 
-      // 3. 确定根块：找到当前根块与目标块的公共父块
-      const currentRoots =
-        editor.rootBlockIds.length > 0
-          ? editor.rootBlockIds
-          : getRootBlockIds(editor.app); // todo
+    // 3. 确定根块：找到当前根块与目标块的公共父块
+    const currentRoots =
+      editor.rootBlockIds.length > 0
+        ? editor.rootBlockIds
+        : getRootBlockIds(editor.app); // todo
 
-      let newRootBlocks: BlockId[] = [];
+    let newRootBlocks: BlockId[] = [];
 
-      if (currentRoots.length === 0 || currentRoots.length > 1) {
-        // 如果当前没有根块，显示所有根块
-        newRootBlocks = [];
-      } else {
-        // 寻找公共父块
-        let commonAncestor: BlockId | null = null;
+    if (currentRoots.length === 0 || currentRoots.length > 1) {
+      // 如果当前没有根块，显示所有根块
+      newRootBlocks = [];
+    } else {
+      // 寻找公共父块
+      let commonAncestor: BlockId | null = null;
 
-        for (const rootId of currentRoots) {
-          const rootPath = tx.getBlockPath(rootId);
-          if (!rootPath) continue;
+      for (const rootId of currentRoots) {
+        const rootPath = tx.getBlockPath(rootId);
+        if (!rootPath) continue;
 
-          for (
-            let i = 0;
-            i < Math.min(rootPath.length, targetPath.length);
-            i++
-          ) {
-            if (rootPath[i] === targetPath[i]) {
-              commonAncestor = rootPath[i];
-            } else {
-              break;
-            }
-          }
-
-          if (commonAncestor) {
+        for (let i = 0; i < Math.min(rootPath.length, targetPath.length); i++) {
+          if (rootPath[i] === targetPath[i]) {
+            commonAncestor = rootPath[i];
+          } else {
             break;
           }
         }
 
-        // 如果找到公共祖先，使用它作为新的根块
         if (commonAncestor) {
-          newRootBlocks = [commonAncestor];
-        } else {
-          // 如果没有公共祖先，显示所有根块
-          newRootBlocks = [];
+          break;
         }
       }
 
-      // 4. 设置新的根块
-      setRootBlockIds(editor, newRootBlocks);
-
-      // 5. 滚动到目标块然后聚焦
-      tx.setSelection({
-          editorId: editor.id,
-          blockId,
-          anchor: 0,
-          scrollIntoView: true,
-        }
-      );
-      tx.setOrigin("localEditorStructural");
+      // 如果找到公共祖先，使用它作为新的根块
+      if (commonAncestor) {
+        newRootBlocks = [commonAncestor];
+      } else {
+        // 如果没有公共祖先，显示所有根块
+        newRootBlocks = [];
+      }
     }
-  );
+
+    // 4. 设置新的根块
+    setRootBlockIds(editor, newRootBlocks);
+
+    // 5. 滚动到目标块然后聚焦
+    tx.setSelection({
+      editorId: editor.id,
+      blockId,
+      anchor: 0,
+      scrollIntoView: true,
+    });
+    tx.setOrigin("localEditorStructural");
+  });
 }
 
 export function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
@@ -620,40 +618,68 @@ export function getContextMenuHandler(editor: Editor) {
         ]).then(([DownloadIcon, CopyIcon, Trash2Icon, LinkIcon]) => {
           const menuItems = [
             {
-              type: "item",
-              label: "以 Markdown 格式复制子树",
+              type: "submenu",
+              label: "复制为...",
               icon: CopyIcon,
-              action: () => {
-                const markdown = toMarkdown(editor.app, [clickedBlockId]);
-                clipboard.writeText(markdown);
-              },
-            } as const,
+              children: [
+                {
+                  type: "item",
+                  label: "Markdown",
+                  action: () => {
+                    const markdown = toMarkdown(editor.app, [clickedBlockId]);
+                    clipboard.writeText(markdown);
+                  },
+                },
+                {
+                  type: "item",
+                  label: "纯文本",
+                  action: () => {},
+                },
+                {
+                  type: "item",
+                  label: "HTML",
+                  action: () => {},
+                },
+                {
+                  type: "item",
+                  label: "块引用",
+                  action: () => {},
+                },
+              ],
+            } satisfies MenuSubMenu,
+            {
+              type: "submenu",
+              label: "粘贴为...",
+              icon: Clipboard,
+              children: [
+                {
+                  type: "item",
+                  label: "Markdown",
+                  action: () => {},
+                },
+                {
+                  type: "item",
+                  label: "纯文本",
+                  action: () => {},
+                },
+                {
+                  type: "item",
+                  label: "HTML",
+                  action: () => {},
+                },
+              ],
+            },
             {
               type: "item",
-              label: "导出子树",
-              icon: DownloadIcon,
-              action: () => {},
-            } as const,
-            {
-              type: "item",
-              label: "复制块引用",
-              icon: LinkIcon,
-              action: () => {
-                // TODO
-                console.log("复制块引用");
-              },
-            } as const,
-            {
-              type: "item",
-              label: "删除子树",
+              label: "删除",
               icon: Trash2Icon,
               action: () => {
                 // TODO
                 console.log("删除子树");
               },
               danger: true,
-            } as const,
-          ];
+            } satisfies MenuItem,
+          ] satisfies MenuItemDef[];
 
           console.log("show context menu", e.clientX, e.clientY);
           contextMenu.show(e.clientX, e.clientY, menuItems);

@@ -7,6 +7,7 @@ import { useLocalStorage } from "./useLocalStorage";
 import type { RepoConfig } from "@/lib/repo/schema";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
+import { useMainEditorRoots } from "./useMainEditorRoots";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -16,15 +17,12 @@ export interface BreadcrumbItem {
 }
 
 export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
-  const [rootBlockIds, setRootBlockIdsToLocalStorage] = useLocalStorage<
-    BlockId[]
-  >(ROOT_BLOCKS_KEY, []);
-
   const breadcrumbItems = computed((): BreadcrumbItem[] => {
+    const { mainEditorRoots } = useMainEditorRoots();
     const items: BreadcrumbItem[] = [{ title: repoConfig.title }];
 
-    if (rootBlockIds.value.length === 1) {
-      const rootBlockId = rootBlockIds.value[0];
+    if (mainEditorRoots.value.length === 1) {
+      const rootBlockId = mainEditorRoots.value[0];
       const rootBlock = getBlockNode(app, rootBlockId);
       if (rootBlock) {
         const path: BlockId[] = [];
@@ -44,7 +42,7 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
           }
         });
       }
-    } else if (rootBlockIds.value.length > 1) {
+    } else if (mainEditorRoots.value.length > 1) {
       items.push({ title: "多个块" });
     }
 
@@ -62,20 +60,20 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
     }
   };
 
-  const handleEditorEvent = (
+  const handleMainEditorEvent = (
     key: keyof EditorEvents,
     event: EditorEvents[keyof EditorEvents]
   ): void => {
+    const { mainEditorRoots } = useMainEditorRoots();
     if (key === "root-blocks-changed") {
       const typedEvent = event as EditorEvents["root-blocks-changed"];
-      setRootBlockIdsToLocalStorage(typedEvent.rootBlockIds);
+      mainEditorRoots.value = typedEvent.rootBlockIds;
     }
   };
 
   return {
-    rootBlockIds,
     breadcrumbItems,
     handleBreadcrumbClick,
-    handleEditorEvent,
+    handleMainEditorEvent,
   };
 }

@@ -177,6 +177,14 @@ function parseHtml(html: string) {
   return [ctx, blocks] as const;
 }
 
+function tabToSpaces(text: string, indent: number) {
+  return text.replace(/\t/g, " ".repeat(indent));
+}
+
+function normalizeSpaces(text: string) {
+  return text.replace(/\s/g, " ");
+}
+
 export function createPastePlugin(editor: Editor) {
   const plugin = new Plugin({
     props: {
@@ -192,8 +200,9 @@ export function createPastePlugin(editor: Editor) {
         if (
           currListItem.node?.firstChild?.type === outlinerSchema.nodes.codeblock
         ) {
-          const text = event.clipboardData?.getData("text/plain");
+          let text = event.clipboardData?.getData("text/plain");
           if (text) {
+            text = tabToSpaces(text, 2);
             const tr = view.state.tr;
             tr.replaceSelectionWith(outlinerSchema.text(text));
             view.dispatch(tr);
@@ -219,70 +228,59 @@ export function createPastePlugin(editor: Editor) {
             view.dispatch(tr);
           } else {
             const idMapping = new Map<string, BlockId>(); // old id -> new id
-            withTx(
-              editor.app,
-              (tx) => {
-                // 粘贴了多于一个块，则粘贴所有块到当前块下方
-                const createTree = (block: Block, newBlockId: BlockId) => {
-                  for (let i = 0; i < block.children.length; i++) {
-                    const child = block.children[i];
-                    const newChildId = tx.createBlockUnder(
-                      newBlockId,
-                      i,
-                      {
-                        type: child.type,
-                        folded: child.folded,
-                        content: child.content,
-                      }
-                    );
-                    idMapping.set(child.id, newChildId);
-                    createTree(child, newChildId);
-                  }
-                };
-
-                let lastRootId: BlockId | null = null;
-                let prevBlockId = currBlockId;
-                for (let i = 0; i < parsedTree.length; i++) {
-                  const block = parsedTree[i];
-                  if (block.parentId == null) {
-                    const rootBlockId = tx.createBlockAfter(
-                      prevBlockId,
-                      {
-                        type: block.type,
-                        folded: block.folded,
-                        content: block.content,
-                      }
-                    );
-                    lastRootId = rootBlockId;
-                    prevBlockId = rootBlockId;
-                    idMapping.set(block.id, rootBlockId);
-                    createTree(block, rootBlockId);
-                  }
+            withTx(editor.app, (tx) => {
+              // 粘贴了多于一个块，则粘贴所有块到当前块下方
+              const createTree = (block: Block, newBlockId: BlockId) => {
+                for (let i = 0; i < block.children.length; i++) {
+                  const child = block.children[i];
+                  const newChildId = tx.createBlockUnder(newBlockId, i, {
+                    type: child.type,
+                    folded: child.folded,
+                    content: child.content,
+                  });
+                  idMapping.set(child.id, newChildId);
+                  createTree(child, newChildId);
                 }
+              };
 
-                // 如果当前块为空，则删除当前块
-                if (currListItem?.node && isEmptyListItem(currListItem.node)) {
-                  tx.deleteBlock(currBlockId);
+              let lastRootId: BlockId | null = null;
+              let prevBlockId = currBlockId;
+              for (let i = 0; i < parsedTree.length; i++) {
+                const block = parsedTree[i];
+                if (block.parentId == null) {
+                  const rootBlockId = tx.createBlockAfter(prevBlockId, {
+                    type: block.type,
+                    folded: block.folded,
+                    content: block.content,
+                  });
+                  lastRootId = rootBlockId;
+                  prevBlockId = rootBlockId;
+                  idMapping.set(block.id, rootBlockId);
+                  createTree(block, rootBlockId);
                 }
+              }
 
-                // 插入后，将光标移动到插入的最后一个块的末尾
-                if (lastRootId != null) {
-                  const lastRootContent = tx.getBlockData(lastRootId)!.content;
-                  const lastRootJson = JSON.parse(lastRootContent);
-                  const lastRootNode =
-                    outlinerSchema.nodeFromJSON(lastRootJson);
+              // 如果当前块为空，则删除当前块
+              if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+                tx.deleteBlock(currBlockId);
+              }
 
-                  tx.setSelection({
-                    editorId: editor.id,
-                    blockId: lastRootId,
-                    anchor: lastRootNode.nodeSize,
-                    scrollIntoView: true,
-                  })
-                }
+              // 插入后，将光标移动到插入的最后一个块的末尾
+              if (lastRootId != null) {
+                const lastRootContent = tx.getBlockData(lastRootId)!.content;
+                const lastRootJson = JSON.parse(lastRootContent);
+                const lastRootNode = outlinerSchema.nodeFromJSON(lastRootJson);
 
-                tx.setOrigin("localEditorStructural");
-              },
-            );
+                tx.setSelection({
+                  editorId: editor.id,
+                  blockId: lastRootId,
+                  anchor: lastRootNode.nodeSize,
+                  scrollIntoView: true,
+                });
+              }
+
+              tx.setOrigin("localEditorStructural");
+            });
           }
           return true;
         }
@@ -292,7 +290,7 @@ export function createPastePlugin(editor: Editor) {
           // 粘贴了纯文本内容
           const lines = text
             .split("\n")
-            .map((s) => s.trim())
+            .map((s) => normalizeSpaces(s.trim()))
             .filter((s) => s.length > 0);
 
           if (lines.length === 0) return true;
@@ -309,42 +307,33 @@ export function createPastePlugin(editor: Editor) {
             return true;
           } else {
             // 粘贴了多行文本
-            withTx(
-              editor.app,
-              (tx) => {
-                let prevBlockId = currBlockId;
-                for (let i = 0; i < lines.length; i++) {
-                  const line = lines[i];
-                  const tNode = outlinerSchema.text(line);
-                  const pNode = outlinerSchema.nodes.paragraph.create(
-                    {},
-                    tNode
-                  );
-                  const newBlockId = tx.createBlockAfter(
-                    prevBlockId,
-                    {
-                      type: "text",
-                      folded: false,
-                      content: serialize(pNode).content,
-                    }
-                  );
-                  prevBlockId = newBlockId;
-                }
-
-                // 如果当前块为空，则删除当前块
-                if (currListItem?.node && isEmptyListItem(currListItem.node)) {
-                  tx.deleteBlock(currBlockId);
-                }
-
-                tx.setSelection({
-                  editorId: editor.id,
-                  blockId: prevBlockId,
-                  anchor: 0,
-                  scrollIntoView: true,
+            withTx(editor.app, (tx) => {
+              let prevBlockId = currBlockId;
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const tNode = outlinerSchema.text(line);
+                const pNode = outlinerSchema.nodes.paragraph.create({}, tNode);
+                const newBlockId = tx.createBlockAfter(prevBlockId, {
+                  type: "text",
+                  folded: false,
+                  content: serialize(pNode).content,
                 });
-                tx.setOrigin("localEditorStructural");
-              },
-            );
+                prevBlockId = newBlockId;
+              }
+
+              // 如果当前块为空，则删除当前块
+              if (currListItem?.node && isEmptyListItem(currListItem.node)) {
+                tx.deleteBlock(currBlockId);
+              }
+
+              tx.setSelection({
+                editorId: editor.id,
+                blockId: prevBlockId,
+                anchor: 0,
+                scrollIntoView: true,
+              });
+              tx.setOrigin("localEditorStructural");
+            });
           }
         }
 
