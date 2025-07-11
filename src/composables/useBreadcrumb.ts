@@ -1,7 +1,7 @@
 import type { App } from "@/lib/app/app";
 import type { BlockId, BlockNode } from "@/lib/common/types";
 import type { Editor, EditorEvents } from "@/lib/editor/editor";
-import { setRootBlockIds } from "@/lib/editor/editor";
+import { editorUtils } from "@/lib/editor/editor";
 import { computed } from "vue";
 import { useLocalStorage } from "./useLocalStorage";
 import type { RepoConfig } from "@/lib/repo/schema";
@@ -54,9 +54,9 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
     item: BreadcrumbItem
   ): void => {
     if (item.blockId) {
-      setRootBlockIds(editor, [item.blockId]);
+      editorUtils.setRootBlockIds(editor, [item.blockId]);
     } else {
-      setRootBlockIds(editor, []);
+      editorUtils.setRootBlockIds(editor, []);
     }
   };
 

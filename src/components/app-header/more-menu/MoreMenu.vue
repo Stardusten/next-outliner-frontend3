@@ -1,28 +1,31 @@
 <template>
   <DropdownMenu>
-    <DropdownMenuTrigger as-child>
-      <slot />
+    <DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <slot />
+        </TooltipTrigger>
+        <TooltipContent>
+          {{ $t("moremenu.tooltip") }}
+        </TooltipContent>
+      </Tooltip>
     </DropdownMenuTrigger>
 
     <DropdownMenuContent class="w-[270px]" align="end" :side-offset="8">
       <!-- 主题设置 -->
-      <div
-        class="relative flex items-center justify-between rounded-sm px-2 py-1.5 text-sm outline-hidden select-none"
-      >
+      <div class="relative flex items-center justify-between rounded-sm px-2 py-1.5 text-sm outline-hidden select-none">
         <div class="flex items-center gap-2">
           <Paintbrush :size="16" class="text-muted-foreground shrink-0" />
-          <span>主题</span>
+          <span>{{ $t("moremenu.theme") }}</span>
         </div>
         <ThemeToggle />
       </div>
 
       <!-- 行间距设置 -->
-      <div
-        class="relative flex items-center justify-between rounded-sm px-2 py-1.5 text-sm outline-hidden select-none"
-      >
+      <div class="relative flex items-center justify-between rounded-sm px-2 py-1.5 text-sm outline-hidden select-none">
         <div class="flex items-center gap-2">
           <Menu :size="16" class="text-muted-foreground shrink-0" />
-          <span>行间距</span>
+          <span>{{ $t("moremenu.lineSpace") }}</span>
         </div>
         <SpacingToggle />
       </div>
@@ -124,6 +127,7 @@ import {
   Paintbrush,
   Menu,
 } from "lucide-vue-next";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '../../ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,

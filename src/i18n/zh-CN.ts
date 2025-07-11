@@ -1,6 +1,21 @@
 export const zhCN_messages = {
   repoNotFound: "糟糕！没有找到 ID 为 {id} 的知识库",
   backToSwitchRepo: "返回知识库列表",
+  quickadd: {
+    tooltip: "快速添加",
+    title: "快速添加",
+    save: "保存",
+    cancel: "取消",
+    selectPlaceholder: "选择放置位置，默认放到根块末尾"
+  },
+  search: {
+    tooltip: "搜索",
+  },
+  moremenu: {
+    tooltip: "更多选项",
+    theme: "主题",
+    lineSpace: "行间距",
+  },
   repoConfig: {
     titleCannotBeEmpty: "知识库标题不能为空",
     idCannotBeEmpty: "知识库 ID 不能为空",
@@ -55,5 +70,8 @@ export const zhCN_messages = {
         switchRepo: "切换知识库",
       },
     },
+  },
+  attachmentMgr: {
+    tooltip: "附件管理",
   },
 };

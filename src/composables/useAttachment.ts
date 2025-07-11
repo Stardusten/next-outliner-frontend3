@@ -2,37 +2,11 @@ import { ref } from "vue";
 import { toast } from "vue-sonner";
 import type { App } from "@/lib/app/app";
 
-// 附件弹窗状态
-const attachmentVisible = ref(false);
-const attachmentPosition = ref({ x: 0, y: 0 });
-
 // 上传确认对话框状态
 const uploadConfirmVisible = ref(false);
 const selectedFile = ref<File | null>(null);
 
 export const useAttachment = (app: App) => {
-  // 切换附件弹窗
-  const toggleAttachment = (buttonElement?: HTMLElement) => {
-    if (attachmentVisible.value) {
-      attachmentVisible.value = false;
-    } else {
-      // 计算弹窗位置
-      if (buttonElement) {
-        const rect = buttonElement.getBoundingClientRect();
-        attachmentPosition.value = {
-          x: rect.right,
-          y: rect.bottom,
-        };
-      }
-      attachmentVisible.value = true;
-    }
-  };
-
-  // 关闭附件弹窗
-  const closeAttachment = () => {
-    attachmentVisible.value = false;
-  };
-
   // 处理上传操作
   const handleUpload = () => {
     const input = document.createElement("input");
@@ -44,7 +18,6 @@ export const useAttachment = (app: App) => {
       if (file) {
         selectedFile.value = file;
         uploadConfirmVisible.value = true;
-        attachmentVisible.value = false;
       }
     };
     input.click();
@@ -92,14 +65,10 @@ export const useAttachment = (app: App) => {
 
   return {
     // 状态
-    attachmentVisible,
-    attachmentPosition,
     uploadConfirmVisible,
     selectedFile,
 
     // 方法
-    toggleAttachment,
-    closeAttachment,
     handleUpload,
     handleBrowse,
     handleUploadConfirm,

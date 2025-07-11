@@ -14,7 +14,7 @@ div.list-item {
   display: block;
 }
 
-[data-n-roots="1"] div.list-item {
+[data-n-roots="1"].enlarge-root-block div.list-item {
   position: relative;
   margin-left: calc(var(--level) * 32px + 4px);
   line-height: 24px;
@@ -22,14 +22,14 @@ div.list-item {
   display: block;
 }
 
-[data-n-roots="1"] div.list-item[data-level="0"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="0"] {
   font-size: 1.5em;
   font-weight: 500;
   margin-bottom: 1em;
   margin-left: 1em;
 }
 
-[data-n-roots="1"] div.list-item[data-level="0"] .list-item-left {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="0"] .list-item-left {
   display: none;
 }
 
@@ -50,19 +50,19 @@ div.list-item {
 }
 
 /** 纯 CSS 实现的引导线 */
-:not([data-n-roots="1"]) div.list-item[data-level="0"] {
+div.list-item[data-level="0"] {
   /** 这一部分 shadow 用于遮掉选区，下同 */
   box-shadow: calc(-11px - 1 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="1"] {
+div.list-item[data-level="1"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 2 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="2"] {
+div.list-item[data-level="2"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -71,7 +71,7 @@ div.list-item {
     calc(-11px - 3 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="3"] {
+div.list-item[data-level="3"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -82,7 +82,7 @@ div.list-item {
     calc(-11px - 4 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="4"] {
+div.list-item[data-level="4"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -95,7 +95,7 @@ div.list-item {
     calc(-11px - 5 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="5"] {
+div.list-item[data-level="5"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -110,7 +110,7 @@ div.list-item {
     calc(-11px - 6 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="6"] {
+div.list-item[data-level="6"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -127,7 +127,7 @@ div.list-item {
     calc(-11px - 7 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="7"] {
+div.list-item[data-level="7"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -146,7 +146,7 @@ div.list-item {
     calc(-11px - 8 * 32px) 0px 0px var(--color-background);
 }
 
-:not([data-n-roots="1"]) div.list-item[data-level="8"] {
+div.list-item[data-level="8"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -167,24 +167,25 @@ div.list-item {
     calc(-11px - 9 * 32px) 0px 0px var(--color-background);
 }
 
+/* 如果只有一个根块，且启用了扩展根块 */
 /** 纯 CSS 实现的引导线 */
-[data-n-roots="1"] div.list-item[data-level="0"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="0"] {
   /** 这一部分 shadow 用于遮掉选区，下同 */
   box-shadow: calc(-11px - 1 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="1"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="1"] {
   box-shadow: calc(-11px - 1 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="2"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="2"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
     calc(-11px - 2 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="3"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="3"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -193,7 +194,7 @@ div.list-item {
     calc(-11px - 3 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="4"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="4"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -204,7 +205,7 @@ div.list-item {
     calc(-11px - 4 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="5"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="5"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -217,7 +218,7 @@ div.list-item {
     calc(-11px - 5 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="6"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="6"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -232,7 +233,7 @@ div.list-item {
     calc(-11px - 6 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="7"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="7"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),
@@ -249,7 +250,7 @@ div.list-item {
     calc(-11px - 7 * 32px) 0px 0px var(--color-background);
 }
 
-[data-n-roots="1"] div.list-item[data-level="8"] {
+[data-n-roots="1"].enlarge-root-block div.list-item[data-level="8"] {
   box-shadow:
     calc(-11px - 1 * 32px) 0px 0px var(--color-background),
     calc(-12px - 1 * 32px) 0px 0px var(--color-guide-line),

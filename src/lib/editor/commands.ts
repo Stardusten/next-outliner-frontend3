@@ -6,11 +6,8 @@ import type { EditorId } from "../app/app";
 import type { AttachmentTaskInfo } from "../app/attachment/storage";
 import type { BlockId } from "../common/types";
 import {
-  canRedo as canRedoImpl,
-  canUndo as canUndoImpl,
+  editorUtils,
   findCurrListItem,
-  redo as redoImpl,
-  undo as undoImpl,
   type Editor,
 } from "./editor";
 import { getFileType } from "./node-views/file/common";
