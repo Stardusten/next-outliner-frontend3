@@ -1,14 +1,20 @@
 import type { App } from "@/lib/app/app";
 import { BLOCKS_TREE_NAME } from "@/lib/persistence/local-storage";
-import type { BlockDataInner, BlockNode, BlockType } from "@/lib/common/types";
+import type {
+  BlockDataInner,
+  BlockId,
+  BlockNode,
+  BlockType,
+} from "@/lib/common/types";
 import { outlinerSchema } from "@/lib/editor/schema";
 import { LoroDoc } from "loro-crdt";
 import { nanoid } from "nanoid";
 import { Fragment, type Node } from "prosemirror-model";
 import { ref, shallowRef } from "vue";
-import { toast } from "./useToast";
 import { withTx } from "@/lib/app/tx";
 import { forceSave } from "@/lib/app/saver";
+import { useMainEditorRoots } from "./useMainEditorRoots";
+import { toast } from "vue-sonner";
 
 type Block = {
   id: string;
@@ -153,10 +159,12 @@ export function useImportExport(app: App) {
     }
   };
 
+  // 将块引用的 id 根据 idMapping 更新
   const applyIdMapping = (
     type: BlockType,
     content: string,
-    mapping: Map<string, string>
+    old2tmp: Record<string, string>,
+    tmp2new: Record<string, BlockId>
   ) => {
     const nodeJson = JSON.parse(content);
     const node = outlinerSchema.nodeFromJSON(nodeJson);
@@ -170,7 +178,7 @@ export function useImportExport(app: App) {
       fragment.forEach((child) => {
         if (child.type === blockRefType) {
           const oldId = child.attrs.blockId;
-          const newId = mapping.get(oldId) ?? oldId;
+          const newId = tmp2new[old2tmp[oldId]] ?? oldId;
           const newNode = blockRefType.create({ blockId: newId });
           result.push(newNode);
         } else {
@@ -196,6 +204,7 @@ export function useImportExport(app: App) {
 
     try {
       if (pendingImport.value.format === "jsonl") {
+        // 导入 jsonl 文件，每条记录是一个块
         const blockMap = pendingImport.value.blocks;
 
         for (const block of blockMap.values()) {
@@ -211,45 +220,51 @@ export function useImportExport(app: App) {
           block.children.sort((a, b) => a.fractionalIndex - b.fractionalIndex);
         }
 
-        const idMapping = new Map<string, string>();
-        const blockNodes: [Block, BlockNode][] = [];
-        withTx(
-          app,
-          (tx) => {
-            const createTree = (block: Block, node: BlockNode) => {
-              for (let i = 0; i < block.children.length; i++) {
-                const child = block.children[i];
-                const childNode = tx.insertBlockUnder(node, (dataMap) => {}, i);
-                idMapping.set(child.id, childNode.id);
-                blockNodes.push([child, childNode]);
-                createTree(child, childNode);
-              }
-            };
-
-            [...blockMap.values()]
-              .filter((block) => block.parentId == null)
-              .sort((a, b) => a.fractionalIndex - b.fractionalIndex)
-              .forEach((block, i) => {
-                const rootNode = tx.insertBlockUnder(null, (dataMap) => {}, i);
-                idMapping.set(block.id, rootNode.id);
-                blockNodes.push([block, rootNode]);
-                createTree(block, rootNode);
+        const old2Tmp: Record<string, BlockId> = {};
+        const { idMapping: tmp2New } = await withTx(app, (tx) => {
+          const createTree = (block: Block, newBlockId: BlockId) => {
+            for (let i = 0; i < block.children.length; i++) {
+              const child = block.children[i];
+              const newChildId = tx.createBlockUnder(newBlockId, i, {
+                type: child.type,
+                folded: child.folded,
+                content: child.content, // 临时内容，之后需要应用 idMapping
               });
-
-            for (const [block, blockNode] of blockNodes) {
-              blockNode.data.set("type", block.type);
-              blockNode.data.set("folded", block.folded);
-              blockNode.data.set(
-                "content",
-                applyIdMapping(block.type, block.content, idMapping)
-              );
+              old2Tmp[child.id] = newChildId;
+              createTree(child, newChildId);
             }
-          },
-          {
-            type: "localImport",
-            txId: nanoid(),
+          };
+
+          [...blockMap.values()]
+            .filter((block) => block.parentId == null)
+            .sort((a, b) => a.fractionalIndex - b.fractionalIndex)
+            .forEach((block, i) => {
+              const rootBlockId = tx.createBlockUnder(null, i, {
+                type: block.type,
+                folded: block.folded,
+                content: block.content, // 临时内容，之后需要应用 idMapping
+              });
+              old2Tmp[block.id] = rootBlockId;
+              createTree(block, rootBlockId);
+            });
+
+          tx.setOrigin("localImport");
+        });
+
+        await withTx(app, (tx) => {
+          for (const blockId of Object.values(tmp2New)) {
+            const oldData = tx.getBlockData(blockId)!;
+            const newContent = applyIdMapping(
+              oldData.type,
+              oldData.content,
+              old2Tmp,
+              tmp2New
+            );
+            tx.updateBlock(blockId, { content: newContent });
           }
-        );
+
+          tx.setOrigin("localImport");
+        });
 
         toast.success("导入成功！");
         forceSave(app);
@@ -257,53 +272,61 @@ export function useImportExport(app: App) {
         pendingImport.value.format === "snapshot" ||
         pendingImport.value.format === "bsnapshot"
       ) {
+        // 导入 snapshot 或 bsnapshot 文件，整个文档是一个 LoroDoc 快照
         const importedDoc = pendingImport.value.doc;
-        withTx(
-          app,
-          (tx) => {
-            const idMapping = new Map<string, string>();
-            const blockNodes: [BlockNode, BlockNode][] = [];
-            const createTree = (node1: BlockNode, node2: BlockNode) => {
-              const node1children = node1.children() ?? [];
-              for (let i = 0; i < node1children.length; i++) {
-                const child = node1children[i];
-                const childNode = tx.insertBlockUnder(
-                  node2,
-                  (dataMap) => {},
-                  i
-                );
-                idMapping.set(child.id, childNode.id);
-                blockNodes.push([child, childNode]);
-                createTree(child, childNode);
-              }
-            };
 
-            const importedTree = importedDoc.getTree(BLOCKS_TREE_NAME);
-            const importedRoots = importedTree.roots();
-            for (let i = 0; i < importedRoots.length; i++) {
-              const root1 = importedRoots[i];
-              const root2 = tx.insertBlockUnder(null, (dataMap) => {}, i);
-              idMapping.set(root1.id, root2.id);
-              blockNodes.push([root1, root2]);
-              createTree(root1, root2);
+        const old2Tmp: Record<string, BlockId> = {};
+        const { idMapping: tmp2New } = await withTx(app, (tx) => {
+          const createTree = (node1: BlockNode, node2Id: BlockId) => {
+            const node1children = node1.children() ?? [];
+            for (let i = 0; i < node1children.length; i++) {
+              const child = node1children[i];
+              const childData = child.data.toJSON() as BlockDataInner;
+              const newChildId = tx.createBlockUnder(node2Id, i, {
+                type: childData.type,
+                folded: childData.folded,
+                content: childData.content, // 临时内容，之后需要应用 idMapping
+              });
+              old2Tmp[child.id] = newChildId;
+              createTree(child, newChildId);
             }
+          };
 
-            for (const [node1, node2] of blockNodes) {
-              const data = node1.data.toJSON() as BlockDataInner;
-              node2.data.set("type", data.type);
-              node2.data.set("folded", data.folded);
-              node2.data.set(
-                "content",
-                applyIdMapping(data.type, data.content, idMapping)
-              );
-            }
-          },
-          {
-            type: "localImport",
-            txId: nanoid(),
+          const importedTree = importedDoc.getTree(BLOCKS_TREE_NAME);
+          const importedRoots = importedTree.roots();
+          for (let i = 0; i < importedRoots.length; i++) {
+            const root1 = importedRoots[i];
+            const rootData = root1.data.toJSON() as BlockDataInner;
+            const newRootId = tx.createBlockUnder(null, i, {
+              type: rootData.type,
+              folded: rootData.folded,
+              content: rootData.content, // 临时内容，之后需要应用 idMapping
+            });
+            old2Tmp[root1.id] = newRootId;
+            createTree(root1, newRootId);
           }
-        );
+
+          tx.setOrigin("localImport");
+        });
+
+        await withTx(app, (tx) => {
+          for (const blockId of Object.values(tmp2New)) {
+            const oldData = tx.getBlockData(blockId)!;
+            const newContent = applyIdMapping(
+              oldData.type,
+              oldData.content,
+              old2Tmp,
+              tmp2New
+            );
+            tx.updateBlock(blockId, { content: newContent });
+          }
+
+          tx.setOrigin("localImport");
+        });
       }
+
+      toast.success("导入成功！");
+      forceSave(app);
     } catch (error) {
       toast.error(`导入失败：${error}`);
     } finally {
@@ -328,10 +351,15 @@ export function useImportExport(app: App) {
     try {
       app.persistence.clear();
       forceSave(app);
-      // 刷新页面以重新加载
-      window.location.reload();
+      // 清空块存储记得也要清空 main editor 的根块，
+      // 因为之前的根块可能已经不存在了
+      const { mainEditorRoots } = useMainEditorRoots();
+      mainEditorRoots.value = [];
+      toast.success("成功清空存储！");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error) {
-      console.error("清空存储失败:", error);
       toast.error("清空存储失败，请查看控制台了解详情");
     } finally {
       clearStorageDialogVisible.value = false;

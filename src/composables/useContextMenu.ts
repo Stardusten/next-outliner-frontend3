@@ -16,8 +16,18 @@ export interface MenuDivider {
   type: "divider";
 }
 
+// 子菜单类型
+export interface MenuSubMenu {
+  type: "submenu";
+  label: string;
+  icon?: Component;
+  children: MenuItemDef[]; // 子菜单项
+  danger?: boolean; // 是否为危险操作
+  disabled?: boolean; // 是否禁用
+}
+
 // 菜单项或分割线
-export type MenuItemDef = MenuItem | MenuDivider;
+export type MenuItemDef = MenuItem | MenuDivider | MenuSubMenu;
 
 const visible = ref(false);
 const position = ref<{ x: number; y: number } | null>(null);

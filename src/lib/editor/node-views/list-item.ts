@@ -5,6 +5,7 @@ import { outlinerSchema } from "../schema";
 import type { Observable } from "@/lib/common/observable";
 import type { App } from "@/lib/app/app";
 import { getInRefs } from "@/lib/app/index/in-refs";
+import { stringToUnicode } from "@/lib/utils";
 
 export function createListItemNodeViewClass(app: App) {
   return class implements NodeView {
@@ -31,6 +32,10 @@ export function createListItemNodeViewClass(app: App) {
       el.dataset.type = node.attrs.type;
       el.dataset.thinking = String(node.attrs.thinking);
       el.style.setProperty("--level", node.attrs.level);
+
+      // const pre = document.createElement("pre");
+      // pre.textContent = stringToUnicode(node.textContent);
+      // el.appendChild(pre);
 
       const left = document.createElement("div");
       left.classList.add("list-item-left");

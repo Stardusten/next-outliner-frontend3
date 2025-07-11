@@ -183,13 +183,14 @@ function createBlockBeforeToTx(
   return addCreateOpToTx(tx, parentId, index, data);
 }
 
-function execTx(app: App, tx: Transaction) {
+function execTx(
+  app: App,
+  tx: Transaction,
+  idMapping: Record<BlockId, BlockId>
+) {
   if (tx.status !== "notCommit")
     throw new Error(`Transaction already ${tx.status}`);
   tx.status = "pending";
-
-  // 创建一个 id 映射表，用于在 commit 时将临时 id 映射为真实 id
-  const idMapping: Record<BlockId, BlockId> = {};
 
   // 如果没有指定 beforeSelection，则记录当前选区到 meta.beforeSelection
   if (!tx.meta.beforeSelection) {
@@ -367,7 +368,11 @@ export function getParentIdFromTx(app: App, tx: Transaction, blockId: BlockId) {
   return parentId;
 }
 
-export function getBlockPathFromTx(app: App, tx: Transaction, blockId: BlockId) {
+export function getBlockPathFromTx(
+  app: App,
+  tx: Transaction,
+  blockId: BlockId
+) {
   const path: BlockId[] = [];
   let curr = getParentIdFromTx(app, tx, blockId);
 
@@ -444,12 +449,14 @@ function getIndexFromTx(
   return idx === -1 ? null : idx;
 }
 
-export function withTx(app: App, fn: (tx: TxObj) => void) {
-  return app.txQueue.queueTaskAndWait(() => {
+export async function withTx(app: App, fn: (tx: TxObj) => void) {
+  const idMapping: Record<BlockId, BlockId> = {};
+  await app.txQueue.queueTaskAndWait(() => {
     const txObj = createTxObj(app);
     fn(txObj);
-    execTx(app, txObj._tx);
+    execTx(app, txObj._tx, idMapping);
   });
+  return { idMapping };
 }
 
 function createTxObj(app: App): TxObj & { _tx: Transaction } {
@@ -477,7 +484,9 @@ function createTxObj(app: App): TxObj & { _tx: Transaction } {
     getChildrenIds: (blockId) => getChildrenIdsFromTx(app, tx, blockId),
     getBlockPath: (blockId) => getBlockPathFromTx(app, tx, blockId),
     getIndex: (blockId) => getIndexFromTx(app, tx, blockId),
-    createBlockAfter: (baseId, data) => createBlockAfterToTx(app, tx, baseId, data),
-    createBlockBefore: (baseId, data) => createBlockBeforeToTx(app, tx, baseId, data),
+    createBlockAfter: (baseId, data) =>
+      createBlockAfterToTx(app, tx, baseId, data),
+    createBlockBefore: (baseId, data) =>
+      createBlockBeforeToTx(app, tx, baseId, data),
   };
 }

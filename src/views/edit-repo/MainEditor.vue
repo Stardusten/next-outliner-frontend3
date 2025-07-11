@@ -32,7 +32,6 @@
   <ClearStorageConfirmDialog :import-export="importExport!" />
   <ClearHistoryConfirmDialog :import-export="importExport!" />
   <UploadConfirmDialog :attachment="attachment!" />
-  <Toast :toasts="toast!.toasts.value" @remove="toast!.remove" />
   <ContextMenu />
   <SettingsPanel />
 </template>
@@ -46,7 +45,6 @@ import ContextMenu from "@/components/ContextMenu.vue";
 import ImportDialog from "@/components/ImportDialog.vue";
 import SearchPopup from "@/components/search-popup/SearchPopup.vue";
 import SettingsPanel from "@/components/settings-panel/SettingsPanel.vue";
-import Toast from "@/components/Toast.vue";
 import UploadConfirmDialog from "@/components/UploadConfirmDialog.vue";
 import { useSettings } from "@/composables";
 import type { useRepoConfigs } from "@/composables/useRepoConfigs";
@@ -68,6 +66,7 @@ import { useAttachmentTaskList } from "@/composables/useAttachmentTaskList";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { RepoConfig } from "@/lib/repo/schema";
 import { getEditorFromApp } from "@/lib/app/editors";
+import { useMainEditorRoots } from "@/composables/useMainEditorRoots";
 
 const props = defineProps<{
   app: App;
@@ -78,7 +77,6 @@ const wrapper = ref<HTMLElement | null>(null);
 const { app, repoConfig } = props;
 
 const settings = useSettings();
-const toast = useToast();
 const completion = useBlockRefCompletion(app);
 const breadcrumb = useBreadcrumb(app, repoConfig);
 const search = useSearch(app);
@@ -94,10 +92,9 @@ let editorEventCb: (
 onMounted(() => {
   if (!wrapper.value) throw new Error("Wrapper not found");
 
-  const rootBlockIds = breadcrumb.rootBlockIds.value ?? [];
-
+  const { mainEditorRoots } = useMainEditorRoots();
   const mainEditor = getEditorFromApp(app, "main");
-  setRootBlockIds(mainEditor, rootBlockIds);
+  setRootBlockIds(mainEditor, mainEditorRoots.value);
   mount(mainEditor, wrapper.value);
 
   editorEventCb = (
@@ -105,7 +102,7 @@ onMounted(() => {
     event: EditorEvents[keyof EditorEvents]
   ) => {
     completion.handleCompletionRelatedEvent(mainEditor, key, event);
-    breadcrumb.handleEditorEvent(key, event);
+    breadcrumb.handleMainEditorEvent(key, event);
   };
   mainEditor.on("*", editorEventCb);
 
