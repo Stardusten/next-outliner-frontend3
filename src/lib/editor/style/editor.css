@@ -12,14 +12,11 @@ div.list-item {
   line-height: 24px;
   padding: 2px;
   display: block;
+  outline: none;
 }
 
 [data-n-roots="1"].enlarge-root-block div.list-item {
-  position: relative;
   margin-left: calc(var(--level) * 32px + 4px);
-  line-height: 24px;
-  padding: 2px;
-  display: block;
 }
 
 [data-n-roots="1"].enlarge-root-block div.list-item[data-level="0"] {
@@ -29,7 +26,9 @@ div.list-item {
   margin-left: 1em;
 }
 
-[data-n-roots="1"].enlarge-root-block div.list-item[data-level="0"] .list-item-left {
+[data-n-roots="1"].enlarge-root-block
+  div.list-item[data-level="0"]
+  .list-item-left {
   display: none;
 }
 
@@ -400,7 +399,13 @@ div.list-item pre code .hljs-function .hljs-title {
 div.list-item pre code .hljs-tag,
 div.list-item pre code .hljs-tag .hljs-name,
 div.list-item pre code .hljs-tag .hljs-attr {
-  color: var(--color-syntax-tag, #22863a);
+  color: var(--color-syntax-tag, #d73a49);
+}
+
+/* Distinct color for HTML attribute names */
+div.list-item pre code .hljs-attr,
+div.list-item pre code .hljs-tag .hljs-attr {
+  color: var(--color-syntax-attr, #6f42c1);
 }
 
 div.list-item pre code .hljs-deletion,

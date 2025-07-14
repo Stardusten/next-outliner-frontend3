@@ -101,7 +101,8 @@
   --color-syntax-keyword: #d73a49;
   --color-syntax-string: #032f62;
   --color-syntax-number: #005cc5;
-  --color-syntax-tag: #22863a;
+  --color-syntax-tag: #d73a49;
+  --color-syntax-attr: #6f42c1;
   --color-syntax-meta: #e36209;
 }
 
@@ -155,7 +156,8 @@
   --color-syntax-keyword: #ff7b72;
   --color-syntax-string: #a5d6ff;
   --color-syntax-number: #79c0ff;
-  --color-syntax-tag: #7ee787;
+  --color-syntax-tag: #ff7b72;
+  --color-syntax-attr: #d2a8ff;
   --color-syntax-meta: #ffa657;
 }
 
