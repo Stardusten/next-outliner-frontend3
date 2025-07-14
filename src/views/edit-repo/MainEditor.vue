@@ -53,7 +53,6 @@ import {
   type Editor,
   type EditorEvents,
 } from "@/lib/editor/editor";
-import { useToast } from "@/composables/useToast";
 import { useBlockRefCompletion } from "@/composables/useBlockRefCompletion";
 import { useBreadcrumb } from "@/composables/useBreadcrumb";
 import { useSearch } from "@/composables/useSearch";
@@ -90,7 +89,7 @@ onMounted(() => {
   if (!wrapper.value) throw new Error("Wrapper not found");
 
   const { mainEditorRoots } = useMainEditorRoots();
-  const mainEditor = getEditorFromApp(app, {id: "main"});
+  const mainEditor = getEditorFromApp(app, { id: "main" });
   editorUtils.setRootBlockIds(mainEditor, mainEditorRoots.value);
   editorUtils.mount(mainEditor, wrapper.value);
 
@@ -109,7 +108,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   // TODO 更好的 cleanup 逻辑
-  const mainEditor = getEditorFromApp(app, {id: "main"});
+  const mainEditor = getEditorFromApp(app, { id: "main" });
   mainEditor.off("*", editorEventCb);
   editorUtils.unmount(mainEditor);
   taskList.cleanup();

@@ -5,11 +5,7 @@ import { NodeSelection, TextSelection, type Command } from "prosemirror-state";
 import type { EditorId } from "../app/app";
 import type { AttachmentTaskInfo } from "../app/attachment/storage";
 import type { BlockId } from "../common/types";
-import {
-  editorUtils,
-  findCurrListItem,
-  type Editor,
-} from "./editor";
+import { editorUtils, findCurrListItem, type Editor } from "./editor";
 import { getFileType } from "./node-views/file/common";
 import { outlinerSchema } from "./schema";
 import {
@@ -323,22 +319,25 @@ export function toggleFocusedFoldState(
   blockId?: BlockId
 ): Command {
   return function (state, dispatch) {
+    let targetBlockId = blockId;
     if (!editor.view) return false;
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
 
-    if (!blockId) {
-      blockId = listItemInfo.node.attrs.blockId as BlockId;
-      if (!blockId) return false;
+    if (!targetBlockId) {
+      targetBlockId = listItemInfo.node.attrs.blockId as BlockId;
+      if (!targetBlockId) return false;
     }
 
-    const currentBlockData = getBlockData(editor.app, blockId);
+    const currentBlockData = getBlockData(editor.app, targetBlockId);
     if (!currentBlockData || targetState === currentBlockData.folded) {
       return true;
     }
 
     withTx(editor.app, (tx) => {
-      tx.updateBlock(blockId!, { folded: targetState ?? !currentBlockData.folded });
+      tx.updateBlock(targetBlockId, {
+        folded: targetState ?? !currentBlockData.folded,
+      });
       tx.setOrigin("localEditorStructural");
     });
 

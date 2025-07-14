@@ -193,7 +193,10 @@ export function useImportExport(app: App) {
       const paragraph = paragraphType.create({}, recur(node.content));
       return JSON.stringify(paragraph.toJSON());
     } else if (type == "code") {
-      const codeblock = codeblockType.create({}, recur(node.content));
+      const codeblock = codeblockType.create(
+        { ...node.attrs },
+        recur(node.content)
+      );
       return JSON.stringify(codeblock.toJSON());
     } else throw new Error("不支持的块类型");
   };
