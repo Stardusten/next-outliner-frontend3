@@ -88,12 +88,9 @@ export type EditorOptions = {
   id?: EditorId;
   rootBlockIds?: BlockId[];
   enlargeRootBlock?: boolean;
-}
+};
 
-function createEditor(
-  app: App,
-  opts: EditorOptions = {}
-) {
+function createEditor(app: App, opts: EditorOptions = {}) {
   const eb = mitt<EditorEvents>();
   const editor = {
     id: opts.id ?? nanoid(),
@@ -351,10 +348,10 @@ function getSelectionInfo(editor: Editor): SelectionInfo | null {
   const listItemInfo = findCurrListItem(state);
   return listItemInfo && listItemInfo.node.attrs.blockId
     ? {
-      editorId: editor.id,
-      blockId: listItemInfo.node.attrs.blockId,
-      anchor: sel.from - (listItemInfo.pos + 2),
-    }
+        editorId: editor.id,
+        blockId: listItemInfo.node.attrs.blockId,
+        anchor: sel.from - (listItemInfo.pos + 2),
+      }
     : null;
 }
 
@@ -365,7 +362,7 @@ function updateViewWithNewDocument(
   fromStorageSync = false
 ) {
   const state = view.state;
-  const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
+  let tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
 
   // 恢复选区
   if (selection != null) {
@@ -374,16 +371,16 @@ function updateViewWithNewDocument(
       ? (getAbsPos(tr.doc, selection.blockId, selection.head) ?? undefined)
       : undefined;
     if (anchor !== null) {
-      tr.setSelection(TextSelection.create(tr.doc, anchor, head));
+      tr = tr.setSelection(TextSelection.create(tr.doc, anchor, head));
     }
     if (selection.scrollIntoView) {
-      tr.scrollIntoView();
+      tr = tr.scrollIntoView();
     }
   }
 
   // 如果是来自存储同步，标记此事务
   if (fromStorageSync) {
-    tr.setMeta(STORAGE_SYNC_META_KEY, true);
+    tr = tr.setMeta(STORAGE_SYNC_META_KEY, true);
   }
 
   view.dispatch(tr);
@@ -642,17 +639,17 @@ function getContextMenuHandler(editor: Editor) {
                 {
                   type: "item",
                   label: "纯文本",
-                  action: () => { },
+                  action: () => {},
                 },
                 {
                   type: "item",
                   label: "HTML",
-                  action: () => { },
+                  action: () => {},
                 },
                 {
                   type: "item",
                   label: "块引用",
-                  action: () => { },
+                  action: () => {},
                 },
               ],
             } satisfies MenuSubMenu,
@@ -664,17 +661,17 @@ function getContextMenuHandler(editor: Editor) {
                 {
                   type: "item",
                   label: "Markdown",
-                  action: () => { },
+                  action: () => {},
                 },
                 {
                   type: "item",
                   label: "纯文本",
-                  action: () => { },
+                  action: () => {},
                 },
                 {
                   type: "item",
                   label: "HTML",
-                  action: () => { },
+                  action: () => {},
                 },
               ],
             },
@@ -786,7 +783,7 @@ function mount(editor: Editor, dom: HTMLElement) {
     } else {
       dom.classList.remove("enlarge-root-block");
     }
-  }
+  };
   updateEnableEnlargeRootBlock();
 
   const doc = createStateFromStorage(editor.app, editor.rootBlockIds);
@@ -853,4 +850,4 @@ export const editorUtils = {
   isFocused,
   coordAtPos,
   focusEditor,
-}
+};
