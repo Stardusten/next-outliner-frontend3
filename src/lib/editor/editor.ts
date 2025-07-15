@@ -275,7 +275,7 @@ function startTxCommittedListener(editor: Editor) {
       event.meta.selection ?? getSelectionInfo(editor) ?? undefined;
 
     // 更新视图
-    updateViewWithNewDocument(newDoc, editor.view, selection, true);
+    updateViewWithNewDocument(newDoc, editor, selection, true);
   });
 }
 
@@ -295,7 +295,7 @@ function startThinkingStateListener(editor: Editor) {
       const selection = getSelectionInfo(editor) ?? undefined;
 
       // 更新视图
-      updateViewWithNewDocument(newDoc, editor.view, selection, true);
+      updateViewWithNewDocument(newDoc, editor, selection, true);
     },
     { deep: true }
   );
@@ -357,15 +357,23 @@ function getSelectionInfo(editor: Editor): SelectionInfo | null {
 
 function updateViewWithNewDocument(
   newDoc: ProseMirrorNode,
-  view: EditorView,
+  editor: Editor,
   selection?: SelectionInfo,
   fromStorageSync = false
 ) {
-  const state = view.state;
+  if (!editor.view) throw new Error("Editor not mounted");
+
+  // 整个文档替换
+  const state = editor.view.state;
   let tr = state.tr.replaceWith(0, state.doc.content.size, newDoc);
 
-  // 恢复选区
-  if (selection != null) {
+  // 如果是来自存储同步，加上 STORAGE_SYNC_META_KEY 标记
+  if (fromStorageSync) {
+    tr = tr.setMeta(STORAGE_SYNC_META_KEY, true);
+  }
+
+  // 如果指定了要恢复的选区，并且选区属于当前编辑器，则恢复
+  if (selection != null && selection.editorId === editor.id) {
     const anchor = getAbsPos(tr.doc, selection.blockId, selection.anchor);
     const head = selection.head
       ? (getAbsPos(tr.doc, selection.blockId, selection.head) ?? undefined)
@@ -376,14 +384,10 @@ function updateViewWithNewDocument(
     if (selection.scrollIntoView) {
       tr = tr.scrollIntoView();
     }
+    editor.view.focus();
   }
 
-  // 如果是来自存储同步，标记此事务
-  if (fromStorageSync) {
-    tr = tr.setMeta(STORAGE_SYNC_META_KEY, true);
-  }
-
-  view.dispatch(tr);
+  editor.view.dispatch(tr);
 }
 
 function getEditorPlugins(editor: Editor) {
@@ -503,8 +507,8 @@ function syncContentChangesToApp(
  * 调整根块为当前根块与这个块的公共父块，然后将
  * 选区设置为这个块末尾，并且滚动到这个块
  */
-function locateBlock(editor: Editor, blockId: BlockId) {
-  return withTx(editor.app, (tx) => {
+async function locateBlock(editor: Editor, blockId: BlockId) {
+  await withTx(editor.app, (tx) => {
     // 1. 获取目标块的完整路径
     const targetPath = tx.getBlockPath(blockId);
     if (!targetPath) {
@@ -558,18 +562,20 @@ function locateBlock(editor: Editor, blockId: BlockId) {
         newRootBlocks = [];
       }
     }
-
-    // 4. 设置新的根块
     setRootBlockIds(editor, newRootBlocks);
-
-    // 5. 滚动到目标块然后聚焦
-    tx.setSelection({
-      editorId: editor.id,
-      blockId,
-      anchor: 0,
-      scrollIntoView: true,
-    });
     tx.setOrigin("localEditorStructural");
+  });
+
+  // 聚焦到目标块
+  setTimeout(() => {
+    if (!editor.view) return;
+    const doc = editor.view.state.doc;
+    const absPos = getAbsPos(doc, blockId, 0);
+    if (absPos == null) return;
+    const sel = TextSelection.create(doc, absPos);
+    const tr = editor.view.state.tr.setSelection(sel).scrollIntoView();
+    editor.view.focus();
+    editor.view.dispatch(tr);
   });
 }
 
@@ -579,7 +585,7 @@ function setRootBlockIds(editor: Editor, rootBlockIds: BlockId[]) {
   if (editor.view) {
     updateViewWithNewDocument(
       createStateFromStorage(editor.app, rootBlockIds),
-      editor.view,
+      editor,
       undefined,
       true
     );

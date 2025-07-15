@@ -11,35 +11,65 @@
       </Tooltip>
     </DialogTrigger>
 
-    <DialogContent class="max-w-[500px] max-h-[500px] p-0 gap-0" transparent-overlay>
+    <DialogContent
+      class="max-w-[500px] max-h-[500px] p-0 gap-0"
+      transparent-overlay
+      @close-auto-focus.prevent
+    >
       <DialogTitle class="hidden" />
       <!-- 搜索输入框 -->
       <div class="flex items-center gap-2 px-3 py-3 border-b">
         <Search :size="16" class="text-muted-foreground shrink-0" />
-        <input ref="inputRef" v-model="searchQuery"
+        <input
+          ref="inputRef"
+          v-model="searchQuery"
           class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
-          placeholder="搜索块内容..." @keydown="handleKeyDown" @input="handleInput" @compositionend="handleCompositionEnd" />
+          placeholder="搜索块内容..."
+          @keydown="handleKeyDown"
+          @input="handleInput"
+          @compositionend="handleCompositionEnd"
+        />
       </div>
 
       <!-- 搜索结果列表 -->
       <div class="max-h-[400px] overflow-y-auto" ref="listRef">
-        <div v-for="(result, index) in searchResults" :key="result.block.id" :ref="(el) => setItemRef(el, index)"
+        <div
+          v-for="(result, index) in searchResults"
+          :key="result.block.id"
+          :ref="(el) => setItemRef(el, index)"
           class="p-3 cursor-pointer border-b border-border/50 last:border-b-0 transition-colors hover:bg-muted/50"
-          :class="{ 'bg-muted/50': index === activeIndex }" @click="selectResult(result)">
+          :class="{ 'bg-muted/50': index === activeIndex }"
+          @click="selectResult(result)"
+        >
           <div class="text-sm text-foreground overflow-hidden">
-            <SearchResultItem :block="result.block" :app="app" :search-query="searchQuery" />
+            <SearchResultItem
+              :block="result.block"
+              :app="app"
+              :search-query="searchQuery"
+            />
           </div>
-          <div class="flex items-center justify-between mt-1 text-xs text-muted-foreground">
+          <div
+            class="flex items-center justify-between mt-1 text-xs text-muted-foreground"
+          >
             <span class="font-mono">{{ result.block.id.slice(0, 8) }}</span>
-            <span v-if="result.score" class="bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">
+            <span
+              v-if="result.score"
+              class="bg-primary/10 text-primary px-2 py-0.5 rounded font-mono"
+            >
               {{ result.score.toFixed(2) }}
             </span>
           </div>
         </div>
-        <div v-if="searchQuery && searchResults.length === 0" class="p-5 text-center text-sm text-muted-foreground">
+        <div
+          v-if="searchQuery && searchResults.length === 0"
+          class="p-5 text-center text-sm text-muted-foreground"
+        >
           没有找到匹配的块
         </div>
-        <div v-if="!searchQuery" class="p-5 text-center text-sm text-muted-foreground italic">
+        <div
+          v-if="!searchQuery"
+          class="p-5 text-center text-sm text-muted-foreground italic"
+        >
           输入关键词开始搜索
         </div>
       </div>
@@ -51,11 +81,21 @@
 import { ref, watch, nextTick, onMounted } from "vue";
 import { Search } from "lucide-vue-next";
 import SearchResultItem from "./SearchResultItem.vue";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import type { BlockNode } from "@/lib/common/types";
 import type { App } from "@/lib/app/app";
 import type { useSearch } from "@/composables";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "../ui/tooltip";
 
 interface SearchResult {
   block: BlockNode;
