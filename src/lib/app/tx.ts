@@ -374,7 +374,7 @@ export function getBlockPathFromTx(
   tx: Transaction,
   blockId: BlockId
 ) {
-  const path: BlockId[] = [];
+  const path: BlockId[] = [blockId];
   let curr = getParentIdFromTx(app, tx, blockId);
 
   while (curr !== null) {
