@@ -42,6 +42,7 @@ import type {
 import { Clipboard } from "lucide-vue-next";
 import { unregisterEditor } from "../app/editors";
 import { createPasteImagePlugin } from "./plugins/paste-image";
+import { createCompositionFixPlugin } from "./plugins/composition-fix";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -79,6 +80,7 @@ export type Editor = {
   // idMapping: Record<string, BlockId>;
   // 是否在只有一个根块时，放大显示根块，少一个层级
   enableEnlargeRootBlock: boolean;
+  deferredContentSyncTask: (() => void) | null;
 };
 
 export const STORAGE_SYNC_META_KEY = "fromStorage";
@@ -105,6 +107,7 @@ function createEditor(app: App, opts: EditorOptions = {}) {
     on: eb.on,
     off: eb.off,
     enableEnlargeRootBlock: opts.enlargeRootBlock ?? true,
+    deferredContentSyncTask: null,
   } satisfies Editor;
   return editor;
 }
@@ -259,6 +262,7 @@ function getEditorPlugins(editor: Editor) {
     imeSpan,
     createPasteImagePlugin(editor),
     createPasteHtmlAndTextPlugin(editor),
+    createCompositionFixPlugin(editor),
   ];
 }
 
@@ -301,15 +305,17 @@ function getDispatchTransaction(editor: Editor) {
     editor.view.updateState(newState);
 
     // 如果文档内容被用户修改，则同步到应用层
-    setTimeout(() => {
-      if (
-        transaction.docChanged &&
-        !transaction.getMeta(STORAGE_SYNC_META_KEY) &&
-        !editor.view?.composing
-      ) {
+    if (transaction.docChanged && !transaction.getMeta(STORAGE_SYNC_META_KEY)) {
+      // 如果使用输入法输入，则在 compositionend 事件时才触发同步
+      if (editor.view.composing) {
+        editor.deferredContentSyncTask = () => {
+          syncContentChangesToApp(editor, transaction, beforeSelection);
+          editor.deferredContentSyncTask = null;
+        };
+      } else {
         syncContentChangesToApp(editor, transaction, beforeSelection);
       }
-    });
+    }
   };
 }
 
