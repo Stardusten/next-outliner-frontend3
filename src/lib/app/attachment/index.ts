@@ -5,8 +5,13 @@ import type { RepoConfig } from "@/lib/repo/schema";
 export function getAttachmentStorage(
   config: RepoConfig
 ): AttachmentStorage | null {
-  if (config.attachment.type === "r2") {
-    return new R2AttachmentStorage(config.attachment.params);
+  if (config.attachment.storageType === "oss") {
+    return new R2AttachmentStorage({
+      endpoint: config.attachment.endpoint,
+      bucket: config.attachment.bucket,
+      accessKeyId: config.attachment.accessKeyId,
+      secretAccessKey: config.attachment.secretAccessKey,
+    });
   }
 
   return null;

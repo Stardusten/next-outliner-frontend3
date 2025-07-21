@@ -28,12 +28,12 @@
 import { computed } from "vue";
 import { useSettings } from "@/composables";
 
-const { settings, saveSetting } = useSettings();
+const { getSetting, saveSetting } = useSettings();
 
 // 创建响应式引用
 const themeRef = computed({
-  get: () => settings.theme,
-  set: (value: string) => saveSetting("theme", value),
+  get: () => getSetting("ui.theme") || "light",
+  set: (value: string) => saveSetting("ui.theme", value),
 });
 
 const setLight = () => (themeRef.value = "light");

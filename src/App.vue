@@ -2,7 +2,7 @@
   <div class="h-screen">
     <TooltipProvider>
       <router-view />
-      <Toaster position="top-right" :expand="true" richColors />
+      <Toaster position="top-right" :expand="true" richColors closeButton />
     </TooltipProvider>
   </div>
 </template>

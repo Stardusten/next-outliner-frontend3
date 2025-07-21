@@ -147,22 +147,24 @@ import MultiSelectComp from "./comps/MultiSelectComp.vue";
 import TextInputComp from "./comps/TextInputComp.vue";
 import NumberInputComp from "./comps/NumberInputComp.vue";
 import FontSelectorComp from "./comps/FontSelectorComp.vue";
+import { useRepoConfigs } from "@/composables/useRepoConfigs";
 
 const {
   visible,
   currentPage,
   currentPageConfig,
   sidebarSections,
-  settings,
   evaluateCondition,
   getSetting,
   saveSetting,
   resetSetting,
 } = useSettings();
 
+const { currentRepo } = useRepoConfigs();
+
 // 创建渲染上下文
 const renderContext = computed(() => ({
-  settings,
+  config: currentRepo.value!,
   getSetting,
   saveSetting,
   resetSetting,
@@ -178,7 +180,7 @@ const visiblePageConfig = computed(() => {
       .map((group) => ({
         ...group,
         settings: group.settings.filter((setting) =>
-          evaluateCondition(setting.condition, settings)
+          evaluateCondition(setting.condition, currentRepo.value!)
         ),
       }))
       .filter((group) => group.settings.length > 0), // 过滤掉没有可见设置项的分组

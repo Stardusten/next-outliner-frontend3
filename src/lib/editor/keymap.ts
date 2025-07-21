@@ -119,8 +119,6 @@ export function createKeymapPlugin(editor: Editor) {
     }),
     "Mod-z": undo(editor),
     "Mod-Shift-z": redo(editor),
-    // 文件上传
-    "Mod-g": uploadFile(editor),
     // "Mod-Shift-g": (state, dispatch) => {
     //   const currListItem = findCurrListItem(state);
     //   if (currListItem == null) return false;
@@ -144,7 +142,7 @@ export function createKeymapPlugin(editor: Editor) {
       if (currListItem == null) return false;
 
       if (dispatch) {
-        const llm = useLlm(editor.app);
+        const llm = useLlm(editor.app); // 暂时使用默认配置
         const blockId = currListItem.node.attrs.blockId;
         const task = llm.createAppendChildrenTask(blockId);
         task.start();

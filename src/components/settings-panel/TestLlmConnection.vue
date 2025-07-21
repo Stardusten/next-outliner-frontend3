@@ -48,29 +48,23 @@ const testing = ref(false);
 const testResult = ref<{ success: boolean; message: string } | null>(null);
 
 const testConnection = async () => {
-  const { settings } = props.context;
+  const { config, getSetting } = props.context;
 
   // 检查必填配置
-  const requiredFields = ["llmServiceProvider", "llmApiKey", "llmModelName"];
-  const missingFields = requiredFields.filter((field) => !settings[field]);
+  const requiredFields = [
+    { path: "llm.serviceProvider" as const, label: "模型提供商" },
+    { path: "llm.apiKey" as const, label: "API Key" },
+    { path: "llm.modelName" as const, label: "模型名称" },
+  ];
+
+  const missingFields = requiredFields.filter(
+    (field) => !getSetting(field.path)
+  );
 
   if (missingFields.length > 0) {
     testResult.value = {
       success: false,
-      message: `请先填写：${missingFields
-        .map((f) => {
-          switch (f) {
-            case "llmServiceProvider":
-              return "模型提供商";
-            case "llmApiKey":
-              return "API Key";
-            case "llmModelName":
-              return "模型名称";
-            default:
-              return f;
-          }
-        })
-        .join(", ")}`,
+      message: `请先填写：${missingFields.map((f) => f.label).join(", ")}`,
     };
     return;
   }
@@ -79,17 +73,17 @@ const testConnection = async () => {
   testResult.value = null;
 
   try {
-    const config: LlmModelConfig = {
-      service: settings.llmServiceProvider,
-      baseUrl: settings.llmBaseUrl,
-      apiKey: settings.llmApiKey,
-      model: settings.llmModelName,
-      temperature: settings.llmTemperature,
-      think: settings.llmEnableThinking,
+    const llmConfig: LlmModelConfig = {
+      service: getSetting("llm.serviceProvider"),
+      baseUrl: getSetting("llm.baseUrl"),
+      apiKey: getSetting("llm.apiKey"),
+      model: getSetting("llm.modelName"),
+      temperature: getSetting("llm.temperature"),
+      think: getSetting("llm.enableThinking"),
     };
-    console.log(config);
+    console.log(llmConfig);
 
-    const success = await testLlmConnection(config);
+    const success = await testLlmConnection(llmConfig);
     if (success) {
       testResult.value = {
         success: true,

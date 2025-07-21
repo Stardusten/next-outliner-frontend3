@@ -41,6 +41,7 @@ import type {
 } from "@/composables/useContextMenu";
 import { Clipboard } from "lucide-vue-next";
 import { unregisterEditor } from "../app/editors";
+import { createPasteImagePlugin } from "./plugins/paste-image";
 
 // 编辑器事件
 export type EditorEvents = {
@@ -283,7 +284,7 @@ function startTxCommittedListener(editor: Editor) {
  * 注册 thinkingBlockIds 事件监听器，用于在 thinkingBlockIds 变化时更新视图
  */
 function startThinkingStateListener(editor: Editor) {
-  const { thinkingBlockIds } = useLlm(editor.app);
+  const { thinkingBlockIds } = useLlm(editor.app); // 暂时使用默认配置
   watch(
     thinkingBlockIds,
     () => {
@@ -397,6 +398,7 @@ function getEditorPlugins(editor: Editor) {
     createKeymapPlugin(editor),
     createHighlightCodeblockPlugin(),
     imeSpan,
+    createPasteImagePlugin(editor),
     createPastePlugin(editor),
   ];
 }

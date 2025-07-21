@@ -6,6 +6,7 @@ import { textIcon } from "./icons/text";
 import { videoIcon } from "./icons/video";
 import { loadingIcon } from "./icons/loading";
 import { errorIcon } from "./icons/error";
+import type { RepoConfig } from "@/lib/repo/schema";
 
 export type FileType =
   | "image"
@@ -184,4 +185,36 @@ export function createFileStatus(
     return `failed-${value || 0}`;
   }
   return "uploaded";
+}
+
+export function getFileDisplayMode(
+  type: FileType,
+  config?: RepoConfig
+): string {
+  // 如果没有配置，返回默认值
+  if (!config?.editor) {
+    switch (type) {
+      case "image":
+      case "video":
+      case "audio":
+        return "preview";
+      default:
+        return "expanded";
+    }
+  }
+
+  switch (type) {
+    case "image":
+      return config.editor.imageFileDefaultDisplayMode || "preview";
+    case "video":
+      return config.editor.videoFileDefaultDisplayMode || "preview";
+    case "audio":
+      return config.editor.audioFileDefaultDisplayMode || "preview";
+    case "text":
+      return config.editor.textFileDefaultDisplayMode || "expanded";
+    case "archive":
+      return config.editor.archiveFileDefaultDisplayMode || "expanded";
+    default:
+      return config.editor.unknownFileDefaultDisplayMode || "expanded";
+  }
 }

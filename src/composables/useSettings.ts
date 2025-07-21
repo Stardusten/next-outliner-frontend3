@@ -2,15 +2,22 @@ import RepoInfo from "@/components/settings-panel/RepoInfo.vue";
 import TestLlmConnection from "@/components/settings-panel/TestLlmConnection.vue";
 import TestOssConnection from "@/components/settings-panel/TestOssConnection.vue";
 import { Brain, Database, Info, PaintRoller, Settings } from "lucide-vue-next";
-import {
-  computed,
-  h,
-  reactive,
-  ref,
-  watch,
-  type Component,
-  type VNode,
-} from "vue";
+import { computed, h, ref, watch, type Component, type VNode } from "vue";
+import { useRepoConfigs } from "./useRepoConfigs";
+import type {
+  RepoConfig,
+  RepoUISettings,
+  RepoEditorSettings,
+  RepoAttachmentSettings,
+  RepoLLMSettings,
+} from "@/lib/repo/schema";
+
+// 设置路径类型
+type SettingPath =
+  | `ui.${keyof RepoUISettings}`
+  | `editor.${keyof RepoEditorSettings}`
+  | `attachment.${keyof RepoAttachmentSettings}`
+  | `llm.${keyof RepoLLMSettings}`;
 
 // 设置项类型
 export type SettingType =
@@ -30,14 +37,14 @@ export interface SettingOption {
 }
 
 // 条件显示类型
-export type SettingCondition = (settings: Record<string, any>) => boolean;
+export type SettingCondition = (config: RepoConfig) => boolean;
 
 // 渲染上下文
 export interface SettingRenderContext {
-  settings: Record<string, any>;
-  getSetting: (key: string) => any;
-  saveSetting: (key: string, value: any) => void;
-  resetSetting: (key: string) => void;
+  config: RepoConfig;
+  getSetting: (path: SettingPath) => any;
+  saveSetting: (path: SettingPath, value: any) => void;
+  resetSetting: (path: SettingPath) => void;
 }
 
 // 基础设置项接口
@@ -46,7 +53,7 @@ export interface BaseSetting {
   type: SettingType;
   label: string;
   description?: string;
-  storageKey: string; // localStorage 键名
+  settingPath: SettingPath | null; // 设置路径，如 "ui.theme" 或 null（自定义组件）
   condition?: SettingCondition;
 }
 
@@ -102,6 +109,7 @@ export interface CustomSetting extends BaseSetting {
   render: (context: SettingRenderContext) => VNode | Component;
   noLabel?: boolean;
   defaultValue?: undefined; // 可选的默认值（通常为 undefined）
+  settingPath: null;
 }
 
 // 联合类型
@@ -151,7 +159,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "theme",
             type: "single-select",
             label: "颜色主题",
-            storageKey: "theme",
+            settingPath: "ui.theme",
             defaultValue: "light",
             options: [
               { id: "light", label: "Light" },
@@ -163,7 +171,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "uiFontSize",
             type: "number",
             label: "UI 字体大小",
-            storageKey: "uiFontSize",
+            settingPath: "ui.fontSize",
             defaultValue: 16,
             min: 12,
             max: 24,
@@ -172,14 +180,14 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "uiFontFamily",
             type: "font",
             label: "UI 字体",
-            storageKey: "uiFontFamily",
+            settingPath: "ui.fontFamily",
             defaultValue: "Inter",
           },
           {
             id: "uiScale",
             type: "number",
             label: "UI 缩放比例",
-            storageKey: "uiScale",
+            settingPath: "ui.scale",
             defaultValue: 100,
             min: 50,
             max: 200,
@@ -194,7 +202,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "editorLineSpacing",
             type: "single-select",
             label: "行间距",
-            storageKey: "editorLineSpacing",
+            settingPath: "editor.lineSpacing",
             defaultValue: "normal",
             options: [
               { id: "compact", label: "Compact" },
@@ -206,7 +214,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "editorFontSize",
             type: "number",
             label: "编辑器字体大小",
-            storageKey: "editorFontSize",
+            settingPath: "editor.fontSize",
             defaultValue: 16,
             min: 12,
             max: 24,
@@ -216,14 +224,14 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "editorFontFamily",
             type: "font",
             label: "编辑器文本字体",
-            storageKey: "editorFontFamily",
+            settingPath: "editor.fontFamily",
             defaultValue: "Inter",
           },
           {
             id: "editorMonospaceFontSize",
             type: "number",
             label: "编辑器等宽字体大小",
-            storageKey: "editorMonospaceFontSize",
+            settingPath: "editor.monospaceFontSize",
             defaultValue: 16,
             min: 12,
           },
@@ -231,7 +239,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "editorMonospaceFontFamily",
             type: "font",
             label: "编辑器等宽字体",
-            storageKey: "editorMonospaceFontFamily",
+            settingPath: "editor.monospaceFontFamily",
             defaultValue: "Inter",
           },
         ],
@@ -251,7 +259,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "imageFileDefaultDisplayMode",
             type: "single-select",
             label: "图片文件",
-            storageKey: "imageFileDefaultDisplayMode",
+            settingPath: "editor.imageFileDefaultDisplayMode",
             defaultValue: "preview",
             options: [
               { id: "inline", label: "引用" },
@@ -263,7 +271,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "videoFileDefaultDisplayMode",
             type: "single-select",
             label: "视频文件",
-            storageKey: "videoFileDefaultDisplayMode",
+            settingPath: "editor.videoFileDefaultDisplayMode",
             defaultValue: "preview",
             options: [
               { id: "inline", label: "引用" },
@@ -275,7 +283,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "audioFileDefaultDisplayMode",
             type: "single-select",
             label: "音频文件",
-            storageKey: "audioFileDefaultDisplayMode",
+            settingPath: "editor.audioFileDefaultDisplayMode",
             defaultValue: "preview",
             options: [
               { id: "inline", label: "引用" },
@@ -287,7 +295,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "textFileDefaultDisplayMode",
             type: "single-select",
             label: "文本文件",
-            storageKey: "textFileDefaultDisplayMode",
+            settingPath: "editor.textFileDefaultDisplayMode",
             defaultValue: "expanded",
             options: [
               { id: "inline", label: "引用" },
@@ -299,7 +307,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "archiveFileDefaultDisplayMode",
             type: "single-select",
             label: "压缩文件",
-            storageKey: "archiveFileDefaultDisplayMode",
+            settingPath: "editor.archiveFileDefaultDisplayMode",
             defaultValue: "expanded",
             options: [
               { id: "inline", label: "引用" },
@@ -311,7 +319,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "unknownFileDefaultDisplayMode",
             type: "single-select",
             label: "未知文件",
-            storageKey: "unknownFileDefaultDisplayMode",
+            settingPath: "editor.unknownFileDefaultDisplayMode",
             defaultValue: "expanded",
             options: [
               { id: "inline", label: "引用" },
@@ -334,7 +342,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "basicInfoComponent",
             type: "custom",
             label: "知识库信息",
-            storageKey: "basicInfoComponent",
+            settingPath: null,
             noLabel: true,
             render: (context) => {
               return h(RepoInfo);
@@ -350,54 +358,54 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "attachmentStorageType",
             type: "single-select",
             label: "存储方式",
-            storageKey: "attachmentStorageType",
-            defaultValue: "unset",
+            settingPath: "attachment.storageType",
+            defaultValue: "none",
             options: [
+              { id: "none", label: "不设置" },
               { id: "oss", label: "对象存储" },
-              { id: "unset", label: "不设置" },
             ],
           },
           {
             id: "ossEndpoint",
             type: "input",
             label: "对象存储服务地址",
-            storageKey: "ossEndpoint",
+            settingPath: "attachment.endpoint",
             defaultValue: "",
-            condition: (settings) => settings.attachmentStorageType === "oss",
+            condition: (config) => config.attachment?.storageType === "oss",
           },
           {
             id: "ossAccessKey",
             type: "input",
             label: "对象存储 Access Key",
-            storageKey: "ossAccessKey",
+            settingPath: "attachment.accessKeyId",
             defaultValue: "",
             hidden: true,
-            condition: (settings) => settings.attachmentStorageType === "oss",
+            condition: (config) => config.attachment?.storageType === "oss",
           },
           {
             id: "ossSecretKey",
             type: "input",
             label: "对象存储 Secret Key",
-            storageKey: "ossSecretKey",
+            settingPath: "attachment.secretAccessKey",
             defaultValue: "",
             hidden: true,
-            condition: (settings) => settings.attachmentStorageType === "oss",
+            condition: (config) => config.attachment?.storageType === "oss",
           },
           {
             id: "ossBucket",
             type: "input",
             label: "存储桶名",
-            storageKey: "ossBucket",
+            settingPath: "attachment.bucket",
             defaultValue: "",
-            condition: (settings) => settings.attachmentStorageType === "oss",
+            condition: (config) => config.attachment?.storageType === "oss",
           },
           {
             id: "ossTest",
             type: "custom",
             label: "测试对象存储连接",
-            storageKey: "ossTest",
+            settingPath: null,
             noLabel: true,
-            condition: (settings) => settings.attachmentStorageType === "oss",
+            condition: (config) => config.attachment?.storageType === "oss",
             render: (context) => {
               return h(TestOssConnection, { context });
             },
@@ -417,7 +425,7 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "llmServiceProvider",
             type: "single-select",
             label: "模型提供商",
-            storageKey: "llmServiceProvider",
+            settingPath: "llm.serviceProvider",
             defaultValue: "openai",
             options: [
               { id: "openai", label: "OpenAI" },
@@ -434,29 +442,29 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "llmBaseUrl",
             type: "input",
             label: "模型服务地址",
-            storageKey: "llmBaseUrl",
+            settingPath: "llm.baseUrl",
             defaultValue: "",
-            condition: (settings) => settings.llmServiceProvider === "custom",
+            condition: (config) => config.llm?.serviceProvider === "custom",
           },
           {
             id: "llmApiKey",
             type: "input",
             label: "API Key",
-            storageKey: "llmApiKey",
+            settingPath: "llm.apiKey",
             defaultValue: "",
           },
           {
             id: "llmModelName",
             type: "input",
             label: "模型名称",
-            storageKey: "llmModelName",
+            settingPath: "llm.modelName",
             defaultValue: "",
           },
           {
             id: "llmTemperature",
             type: "number",
             label: "模型温度",
-            storageKey: "llmTemperature",
+            settingPath: "llm.temperature",
             defaultValue: 1,
             min: 0,
             max: 2,
@@ -466,14 +474,14 @@ const settingsConfig: SettingsPageConfig[] = [
             id: "llmEnableThinking",
             type: "toggle",
             label: "启用思考",
-            storageKey: "llmEnableThinking",
+            settingPath: "llm.enableThinking",
             defaultValue: true,
           },
           {
             id: "llmTestConnection",
             type: "custom",
-            label: "测试大模型连接",
-            storageKey: "llmTestConnection",
+            label: "测试连接",
+            settingPath: null,
             noLabel: true,
             render: (context) => {
               return h(TestLlmConnection, { context });
@@ -506,150 +514,164 @@ const sidebarSections: SidebarSection[] = [
 // 全局状态
 const visible = ref(false);
 const currentPage = ref(settingsConfig[0]?.id || "");
-const settings = reactive<Record<string, any>>({});
 
 // 初始化标志
 let initialized = false;
 
-// 从 localStorage 加载设置
-const loadSettings = () => {
-  settingsConfig.forEach((page) => {
-    page.groups.forEach((group) => {
-      group.settings.forEach((setting) => {
-        // 跳过自定义设置项
-        if (setting.type === "custom") return;
+export function useSettings() {
+  const { currentRepo, addConfig } = useRepoConfigs();
 
-        const stored = localStorage.getItem(setting.storageKey);
-        if (stored !== null) {
-          try {
-            settings[setting.storageKey] = JSON.parse(stored);
-          } catch {
-            settings[setting.storageKey] = stored;
+  // 获取嵌套属性的值
+  const getNestedValue = (obj: any, path: string): any => {
+    const keys = path.split(".");
+    let result = obj;
+    for (const key of keys) {
+      result = result?.[key];
+      if (result === undefined) break;
+    }
+    return result;
+  };
+
+  // 设置嵌套属性的值
+  const setNestedValue = (obj: any, path: string, value: any): any => {
+    const keys = path.split(".");
+    const result = { ...obj };
+    let current = result;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i];
+      current[key] = { ...current[key] };
+      current = current[key];
+    }
+
+    current[keys[keys.length - 1]] = value;
+    return result;
+  };
+
+  // 保存设置到当前仓库配置
+  const saveSetting = (settingPath: SettingPath, value: any) => {
+    console.log("saveSetting", settingPath, value);
+    if (!currentRepo.value) {
+      console.warn("No current repo, cannot save setting");
+      return;
+    }
+
+    const updatedConfig = setNestedValue(currentRepo.value, settingPath, value);
+    addConfig(updatedConfig);
+  };
+
+  // 获取设置值
+  const getSetting = (settingPath: SettingPath) => {
+    if (!currentRepo.value) return undefined;
+    return getNestedValue(currentRepo.value, settingPath);
+  };
+
+  // 重置设置为默认值
+  const resetSetting = (settingPath: SettingPath) => {
+    const setting = findSettingByPath(settingPath);
+    if (setting && setting.type !== "custom") {
+      saveSetting(settingPath, setting.defaultValue);
+    }
+  };
+
+  // 根据 settingPath 查找设置项
+  const findSettingByPath = (settingPath: SettingPath): SettingItem | null => {
+    for (const page of settingsConfig) {
+      for (const group of page.groups) {
+        for (const setting of group.settings) {
+          if (setting.settingPath === settingPath) {
+            return setting;
           }
-        } else {
-          settings[setting.storageKey] = setting.defaultValue;
-        }
-      });
-    });
-  });
-};
-
-// 保存设置到 localStorage
-const saveSetting = (storageKey: string, value: any) => {
-  console.log("saveSetting", storageKey, value);
-  settings[storageKey] = value;
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(value));
-  } catch {
-    localStorage.setItem(storageKey, String(value));
-  }
-};
-
-// 获取设置值
-const getSetting = (storageKey: string) => settings[storageKey];
-
-// 重置设置为默认值
-const resetSetting = (storageKey: string) => {
-  const setting = findSettingByStorageKey(storageKey);
-  if (setting && setting.type !== "custom") {
-    saveSetting(storageKey, setting.defaultValue);
-  }
-};
-
-// 根据 storageKey 查找设置项
-const findSettingByStorageKey = (storageKey: string): SettingItem | null => {
-  for (const page of settingsConfig) {
-    for (const group of page.groups) {
-      for (const setting of group.settings) {
-        if (setting.storageKey === storageKey) {
-          return setting;
         }
       }
     }
-  }
-  return null;
-};
+    return null;
+  };
 
-// 评估设置项条件
-const evaluateCondition = (
-  condition: SettingCondition | undefined,
-  settings: Record<string, any>
-): boolean => {
-  if (!condition) {
-    return true; // 没有条件则始终显示
-  }
+  // 评估设置项条件
+  const evaluateCondition = (
+    condition: SettingCondition | undefined,
+    config: RepoConfig
+  ): boolean => {
+    // console.log("evaluateCondition", config);
+    if (!condition) {
+      return true; // 没有条件则始终显示
+    }
 
-  try {
-    return condition(settings);
-  } catch (error) {
-    console.warn("条件评估函数执行出错:", error);
-    return true; // 出错时默认显示
-  }
-};
-
-// 初始化副作用
-const initEffects = () => {
-  if (initialized) return;
-  initialized = true;
-
-  // 主题效果
-  const root = document.documentElement;
-  const applyTheme = (themeValue: string) => {
-    switch (themeValue) {
-      case "light":
-        root.classList.remove("dark");
-        break;
-      case "dark":
-        root.classList.add("dark");
-        break;
-      case "system":
-      default:
-        const isDark = window.matchMedia(
-          "(prefers-color-scheme: dark)"
-        ).matches;
-        root.classList.toggle("dark", isDark);
-        break;
+    try {
+      return condition(config);
+    } catch (error) {
+      console.warn("条件评估函数执行出错:", error);
+      return true; // 出错时默认显示
     }
   };
 
-  watch(() => settings.theme, applyTheme, { immediate: true });
+  // 初始化副作用
+  const initEffects = () => {
+    if (initialized) return;
+    initialized = true;
 
-  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  mediaQuery.addEventListener("change", (e) => {
-    if (settings.theme === "system") {
-      root.classList.toggle("dark", e.matches);
-    }
-  });
+    // 主题效果
+    const root = document.documentElement;
+    const applyTheme = (themeValue: string) => {
+      switch (themeValue) {
+        case "light":
+          root.classList.remove("dark");
+          break;
+        case "dark":
+          root.classList.add("dark");
+          break;
+        case "system":
+        default:
+          const isDark = window.matchMedia(
+            "(prefers-color-scheme: dark)"
+          ).matches;
+          root.classList.toggle("dark", isDark);
+          break;
+      }
+    };
 
-  // 行间距效果
-  const spacingClasses = ["compact", "normal", "loose"];
-  const applySpacing = (spacing: string) => {
-    spacingClasses.forEach((cls) => root.classList.remove(`spacing-${cls}`));
-    if (spacing && spacingClasses.includes(spacing)) {
-      root.classList.add(`spacing-${spacing}`);
-    }
+    watch(() => currentRepo.value?.ui?.theme || "light", applyTheme, {
+      immediate: true,
+    });
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    mediaQuery.addEventListener("change", (e) => {
+      if ((currentRepo.value?.ui?.theme || "light") === "system") {
+        root.classList.toggle("dark", e.matches);
+      }
+    });
+
+    // 行间距效果
+    const spacingClasses = ["compact", "normal", "loose"];
+    const applySpacing = (spacing: string) => {
+      spacingClasses.forEach((cls) => root.classList.remove(`spacing-${cls}`));
+      if (spacing && spacingClasses.includes(spacing)) {
+        root.classList.add(`spacing-${spacing}`);
+      }
+    };
+
+    watch(
+      () => currentRepo.value?.editor?.lineSpacing || "normal",
+      applySpacing,
+      { immediate: true }
+    );
   };
-
-  watch(() => settings.editorLineSpacing, applySpacing, { immediate: true });
-};
-
-export function useSettings() {
-  // 初始化设置（只在第一次调用时执行）
-  if (!initialized) {
-    loadSettings();
-    initEffects();
-  }
 
   // 计算属性
   const currentPageConfig = computed(() => {
     return settingsConfig.find((page) => page.id === currentPage.value);
   });
 
+  // 初始化副作用（只在第一次调用时执行）
+  if (!initialized) {
+    initEffects();
+  }
+
   return {
     // 响应式状态
     visible,
     currentPage,
-    settings,
 
     // 计算属性
     currentPageConfig,

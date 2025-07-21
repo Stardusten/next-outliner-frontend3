@@ -189,6 +189,7 @@ function setupImageLoader(
       // 检查缓存
       let url = imageUrlCache.get(path);
       if (!url) {
+        console.log("download", path);
         // 缓存未命中，下载文件并创建 URL
         const blob = await app.attachmentStorage!.download(path);
         url = URL.createObjectURL(blob);

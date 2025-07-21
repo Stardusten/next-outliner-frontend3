@@ -141,7 +141,24 @@ const props = defineProps<{
   taskList: ReturnType<typeof useAttachmentTaskList>;
 }>();
 
-const { handleUpload, handleBrowse } = props.attachment;
+const { getFileFromPopWindow, upload } = props.attachment;
+
+// 处理上传
+const handleUpload = async () => {
+  const file = await getFileFromPopWindow();
+  if (file) {
+    await upload(file, true); // 需要确认
+  }
+};
+
+// 处理浏览（选择文件但不上传）
+const handleBrowse = async () => {
+  const file = await getFileFromPopWindow();
+  if (file) {
+    console.log("选择的文件:", file.name);
+    // 可以在这里做其他处理，比如预览等
+  }
+};
 const {
   tasks,
   clearCompletedTasks,

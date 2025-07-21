@@ -83,10 +83,10 @@ function isUpdateItemKey(key: string, docId: string): boolean {
 }
 
 const testLocalStorage = async () => {
-  const { settings } = props.context;
+  const { config } = props.context;
 
   // 检查文档名是否填写
-  const docName = settings.repoId?.trim();
+  const docName = config.id?.trim();
   if (!docName) {
     testResult.value = {
       status: "error",

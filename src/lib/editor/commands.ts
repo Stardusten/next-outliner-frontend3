@@ -6,7 +6,7 @@ import type { EditorId } from "../app/app";
 import type { AttachmentTaskInfo } from "../app/attachment/storage";
 import type { BlockId } from "../common/types";
 import { editorUtils, findCurrListItem, type Editor } from "./editor";
-import { getFileType } from "./node-views/file/common";
+import { getFileDisplayMode, getFileType } from "./node-views/file/common";
 import { outlinerSchema } from "./schema";
 import {
   buildBlockRefStr,
@@ -17,6 +17,7 @@ import {
 import { getBlockData, getBlockNode } from "../app/block-manage";
 import { getTextContent } from "../app/index/text-content";
 import { withTx } from "../app/tx";
+import { toast } from "vue-sonner";
 
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
@@ -875,6 +876,7 @@ export function insertLineBreak(): Command {
   };
 }
 
+export const IMAGE_RESIZE_MARK = "IMAGE_RESIZE_MARK";
 export function setImageWidth(pos: number, width: number): Command {
   return function (state, dispatch) {
     const fileType = outlinerSchema.nodes.file;
@@ -892,7 +894,8 @@ export function setImageWidth(pos: number, width: number): Command {
     };
 
     if (dispatch) {
-      const tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
+      let tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
+      tr = tr.setMeta(IMAGE_RESIZE_MARK, true);
       dispatch(tr);
     }
 
@@ -900,157 +903,149 @@ export function setImageWidth(pos: number, width: number): Command {
   };
 }
 
-export function uploadFile(editor: Editor): Command {
-  return function (state, dispatch, view) {
-    if (!editor.view) return false;
-    // 如果 app 没有 attachmentStorage，则不执行上传
-    if (!editor.app.attachmentStorage) return false;
+export async function uploadFile(editor: Editor, getFile: () => Promise<File>) {
+  const { view, app } = editor;
+  if (!view) return;
+  if (!app.attachmentStorage) {
+    toast.error("未配置附件存储，无法上传文件");
+    return;
+  }
 
-    const fileType = outlinerSchema.nodes.file;
-    // 检查当前是否在列表项中
-    const currListItem = findCurrListItem(state);
-    if (!currListItem) return false;
+  // 获得要上传的文件
+  const file = await getFile();
 
-    if (!dispatch || !view) return true;
+  // 检查当前是否在列表项中
+  const currListItem = findCurrListItem(view.state);
+  if (!currListItem) return;
 
-    // 当任务创建时插入文件节点
-    let taskId: string | null = null;
-    const onTaskCreated = (task: AttachmentTaskInfo) => {
-      // 开始执行就立刻移除监听器，确保只执行一次
-      editor.app.attachmentStorage?.off("task:created", onTaskCreated);
+  // 当任务创建时插入文件节点
+  let taskId: string | null = null;
+  const fileType = outlinerSchema.nodes.file;
+  const onTaskCreated = (task: AttachmentTaskInfo) => {
+    // 开始执行就立刻移除监听器，确保只执行一次
+    editor.app.attachmentStorage?.off("task:created", onTaskCreated);
 
-      // 记录任务 ID，用于后续的文件节点更新
-      taskId = task.id;
+    // 记录任务 ID，用于后续的文件节点更新
+    taskId = task.id;
 
-      // 插入 inline 文件节点，状态为 uploading-0
-      if (dispatch) {
-        const tr = view.state.tr;
-        const fileNode = fileType.create({
-          path: task.path,
-          displayMode: "inline",
-          filename: task.filename,
-          type: getFileType(task.path),
-          size: task.size,
-          status: "uploading-0",
-        });
-        tr.replaceSelectionWith(fileNode);
-        dispatch(tr);
-      }
-    };
-
-    // 注册进度监听器：更新上传进度
-    const onTaskProgress = (task: AttachmentTaskInfo) => {
-      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
-      if (task.id !== taskId) return;
-
-      if (task.progress === undefined) return;
-
-      if (dispatch) {
-        let found: any = null;
-
-        view.state.doc.descendants((node, pos) => {
-          if (found) return false;
-          if (node.type === fileType && node.attrs.path === task.path) {
-            found = [node, pos];
-            return false;
-          }
-        });
-
-        if (found) {
-          const [fileNode, filePos]: [Node, number] = found;
-          const newAttrs = {
-            ...fileNode.attrs,
-            status: `uploading-${Math.round(task.progress)}`,
-          };
-
-          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
-          dispatch(tr);
-        }
-      }
-    };
-
-    // 注册任务完成监听器：更新文件节点的 path 和状态
-    const onTaskCompleted = (task: AttachmentTaskInfo) => {
-      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
-      if (task.id !== taskId) return;
-
-      // 移除监听器
-      editor.app.attachmentStorage?.off("task:completed", onTaskCompleted);
-      editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
-
-      // 在文档中找到对应的文件节点并更新
-      if (dispatch) {
-        let found: any = null;
-
-        view.state.doc.descendants((node, pos) => {
-          if (found) return false;
-          if (node.type === fileType && node.attrs.path === task.path) {
-            found = [node, pos];
-            return false; // 停止遍历
-          }
-        });
-
-        if (found) {
-          const [fileNode, filePos]: [Node, number] = found;
-          const currentAttrs = fileNode.attrs as any;
-          const newAttrs = {
-            ...currentAttrs,
-            path: task.path, // 更新为真实的 path
-            status: "uploaded",
-          };
-
-          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
-          dispatch(tr);
-        }
-      }
-    };
-
-    // 注册任务失败监听器：更新文件节点状态
-    const onTaskFailed = (task: AttachmentTaskInfo) => {
-      // 如果任务 ID 不匹配，说明不是当前任务，直接返回
-      if (task.id !== taskId) return;
-
-      // 移除监听器
-      editor.app.attachmentStorage?.off("task:failed", onTaskFailed);
-      editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
-
-      // 在文档中找到对应的文件节点并更新状态
-      if (dispatch) {
-        let found: any = null;
-
-        view.state.doc.descendants((node, pos) => {
-          if (found) return false;
-          if (node.type === fileType && node.attrs.path === task.path) {
-            found = [node, pos];
-            return false;
-          }
-        });
-
-        if (found) {
-          const [fileNode, filePos]: [Node, number] = found;
-          const newAttrs = {
-            ...fileNode.attrs,
-            status: "failed-1",
-          };
-
-          const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
-          dispatch(tr);
-        }
-      }
-    };
-
-    // 注册所有事件监听器
-    editor.app.attachmentStorage?.on("task:created", onTaskCreated);
-    editor.app.attachmentStorage?.on("task:completed", onTaskCompleted);
-    editor.app.attachmentStorage?.on("task:failed", onTaskFailed);
-    editor.app.attachmentStorage?.on("task:progress", onTaskProgress);
-
-    // 触发上传
-    const attachment = useAttachment(editor.app);
-    attachment.handleUpload();
-
-    return true;
+    // 插入 inline 文件节点，状态为 uploading-0
+    const tr = view.state.tr;
+    const fileNode = fileType.create({
+      path: task.path,
+      displayMode: getFileDisplayMode(getFileType(task.filename)), // 使用默认值，后续可以优化
+      filename: task.filename,
+      type: getFileType(task.path),
+      size: task.size,
+      status: "uploading-0",
+    });
+    tr.replaceSelectionWith(fileNode);
+    view.dispatch(tr);
   };
+
+  // 注册进度监听器：更新上传进度
+  const onTaskProgress = (task: AttachmentTaskInfo) => {
+    // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+    if (task.id !== taskId) return;
+
+    if (task.progress === undefined) return;
+
+    let found: any = null;
+
+    view.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.type === fileType && node.attrs.path === task.path) {
+        found = [node, pos];
+        return false;
+      }
+    });
+
+    if (found) {
+      const [fileNode, filePos]: [Node, number] = found;
+      const newAttrs = {
+        ...fileNode.attrs,
+        status: `uploading-${Math.round(task.progress)}`,
+      };
+
+      const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+      view.dispatch(tr);
+    }
+  };
+
+  // 注册任务完成监听器：更新文件节点的 path 和状态
+  const onTaskCompleted = (task: AttachmentTaskInfo) => {
+    // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+    if (task.id !== taskId) return;
+
+    // 移除监听器
+    editor.app.attachmentStorage?.off("task:completed", onTaskCompleted);
+    editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
+
+    // 在文档中找到对应的文件节点并更新
+    let found: any = null;
+
+    view.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.type === fileType && node.attrs.path === task.path) {
+        found = [node, pos];
+        return false; // 停止遍历
+      }
+    });
+
+    if (found) {
+      const [fileNode, filePos]: [Node, number] = found;
+      const currentAttrs = fileNode.attrs as any;
+      const newAttrs = {
+        ...currentAttrs,
+        path: task.path, // 更新为真实的 path
+        status: "uploaded",
+      };
+
+      const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+      view.dispatch(tr);
+    }
+  };
+
+  // 注册任务失败监听器：更新文件节点状态
+  const onTaskFailed = (task: AttachmentTaskInfo) => {
+    // 如果任务 ID 不匹配，说明不是当前任务，直接返回
+    if (task.id !== taskId) return;
+
+    // 移除监听器
+    editor.app.attachmentStorage?.off("task:failed", onTaskFailed);
+    editor.app.attachmentStorage?.off("task:progress", onTaskProgress);
+
+    // 在文档中找到对应的文件节点并更新状态
+    let found: any = null;
+
+    view.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.type === fileType && node.attrs.path === task.path) {
+        found = [node, pos];
+        return false;
+      }
+    });
+
+    if (found) {
+      const [fileNode, filePos]: [Node, number] = found;
+      const newAttrs = {
+        ...fileNode.attrs,
+        status: "failed-1",
+      };
+
+      const tr = view.state.tr.setNodeMarkup(filePos, undefined, newAttrs);
+      view.dispatch(tr);
+    }
+  };
+
+  // 注册所有事件监听器
+  editor.app.attachmentStorage?.on("task:created", onTaskCreated);
+  editor.app.attachmentStorage?.on("task:completed", onTaskCompleted);
+  editor.app.attachmentStorage?.on("task:failed", onTaskFailed);
+  editor.app.attachmentStorage?.on("task:progress", onTaskProgress);
+
+  // 直接上传文件，不需要确认对话框
+  const attachment = useAttachment(editor.app);
+  await attachment.upload(file, false);
 }
 
 export function changeFileDisplayMode(

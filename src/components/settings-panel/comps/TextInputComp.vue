@@ -31,11 +31,16 @@ const { getSetting, saveSetting } = useSettings();
 
 // 当前值
 const currentValue = computed(() => {
-  return getSetting(props.setting.storageKey) ?? props.setting.defaultValue;
+  if (!props.setting.settingPath) {
+    return props.setting.defaultValue;
+  }
+  return getSetting(props.setting.settingPath) ?? props.setting.defaultValue;
 });
 
 // 处理值变化
 const handleValueChange = (value: string | number) => {
-  saveSetting(props.setting.storageKey, String(value));
+  if (props.setting.settingPath) {
+    saveSetting(props.setting.settingPath, String(value));
+  }
 };
 </script>

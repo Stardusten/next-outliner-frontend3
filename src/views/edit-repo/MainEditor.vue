@@ -42,27 +42,25 @@ import ClearStorageConfirmDialog from "@/components/ClearStorageConfirmDialog.vu
 import CompletionPopup from "@/components/CompletionPopup.vue";
 import ContextMenu from "@/components/ContextMenu.vue";
 import ImportDialog from "@/components/ImportDialog.vue";
-import SearchPopup from "@/components/search-popup/SearchPopup.vue";
 import SettingsPanel from "@/components/settings-panel/SettingsPanel.vue";
 import UploadConfirmDialog from "@/components/UploadConfirmDialog.vue";
 import { useSettings } from "@/composables";
-import type { useRepoConfigs } from "@/composables/useRepoConfigs";
-import type { App } from "@/lib/app/app";
-import {
-  editorUtils,
-  type Editor,
-  type EditorEvents,
-} from "@/lib/editor/editor";
-import { useBlockRefCompletion } from "@/composables/useBlockRefCompletion";
-import { useBreadcrumb } from "@/composables/useBreadcrumb";
-import { useSearch } from "@/composables/useSearch";
-import { useImportExport } from "@/composables/useImportExport";
 import { useAttachment } from "@/composables/useAttachment";
 import { useAttachmentTaskList } from "@/composables/useAttachmentTaskList";
-import { onMounted, onUnmounted, ref, watch } from "vue";
-import type { RepoConfig } from "@/lib/repo/schema";
-import { getEditorFromApp } from "@/lib/app/editors";
+import { useBlockRefCompletion } from "@/composables/useBlockRefCompletion";
+import { useBreadcrumb } from "@/composables/useBreadcrumb";
+import { useImportExport } from "@/composables/useImportExport";
 import { useMainEditorRoots } from "@/composables/useMainEditorRoots";
+import { useSearch } from "@/composables/useSearch";
+import type { App } from "@/lib/app/app";
+import { getRootBlockNodes } from "@/lib/app/block-manage";
+import { getEditorFromApp } from "@/lib/app/editors";
+import { withTx } from "@/lib/app/tx";
+import { editorUtils, type EditorEvents } from "@/lib/editor/editor";
+import { outlinerSchema } from "@/lib/editor/schema";
+import { serialize } from "@/lib/editor/utils";
+import type { RepoConfig } from "@/lib/repo/schema";
+import { onMounted, onUnmounted, ref } from "vue";
 
 const props = defineProps<{
   app: App;
@@ -92,6 +90,20 @@ onMounted(() => {
   const mainEditor = getEditorFromApp(app, { id: "main" });
   editorUtils.setRootBlockIds(mainEditor, mainEditorRoots.value);
   editorUtils.mount(mainEditor, wrapper.value);
+
+  // 如果当前没有根块，创建一个默认根块
+  if (getRootBlockNodes(app).length == 0) {
+    withTx(app, (tx) => {
+      const { type, content } = serialize(
+        outlinerSchema.nodes.paragraph.create()
+      );
+      tx.createBlockUnder(null, 0, {
+        type,
+        content,
+        folded: false,
+      });
+    });
+  }
 
   editorEventCb = (
     key: keyof EditorEvents,

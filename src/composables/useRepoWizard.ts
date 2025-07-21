@@ -70,7 +70,7 @@ export const useRepoWizard = () => {
     // 默认值
     form.setFieldValue("id", nanoid());
     form.setFieldValue("persistence.type", "local-storage");
-    form.setFieldValue("attachment.type", "r2");
+    form.setFieldValue("attachment.storageType", "none");
   };
 
   // 步骤导航

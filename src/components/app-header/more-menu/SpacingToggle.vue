@@ -28,12 +28,12 @@
 import { computed } from "vue";
 import { useSettings } from "@/composables";
 
-const { settings, saveSetting } = useSettings();
+const { getSetting, saveSetting } = useSettings();
 
 // 创建响应式引用
 const spacingRef = computed({
-  get: () => settings.editorLineSpacing,
-  set: (value: string) => saveSetting("editorLineSpacing", value),
+  get: () => getSetting("editor.lineSpacing") || "normal",
+  set: (value: string) => saveSetting("editor.lineSpacing", value),
 });
 
 const setSpacing = (val: string) => (spacingRef.value = val);

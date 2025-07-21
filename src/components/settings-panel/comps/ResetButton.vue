@@ -24,6 +24,11 @@ const settings = useSettings();
 
 // 重置设置到默认值
 const resetSetting = () => {
-  settings.saveSetting(props.setting.storageKey, props.setting.defaultValue);
+  if (props.setting.settingPath) {
+    settings.saveSetting(
+      props.setting.settingPath,
+      (props.setting as any).defaultValue
+    );
+  }
 };
 </script>

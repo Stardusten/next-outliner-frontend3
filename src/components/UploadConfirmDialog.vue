@@ -76,8 +76,8 @@ const props = defineProps<{
 const {
   uploadConfirmVisible,
   selectedFile,
-  handleUploadConfirm,
-  handleUploadCancel,
+  handleConfirm: handleUploadConfirm,
+  handleCancel: handleUploadCancel,
 } = props.attachment;
 
 // 上传前缀

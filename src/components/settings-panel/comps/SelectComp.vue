@@ -41,8 +41,19 @@ const settings = useSettings();
 
 // 创建响应式的设置值
 const currentValue = computed({
-  get: () =>
-    settings.getSetting(props.setting.storageKey) ?? props.setting.defaultValue,
-  set: (value: string) => settings.saveSetting(props.setting.storageKey, value),
+  get: () => {
+    if (!props.setting.settingPath) {
+      return props.setting.defaultValue;
+    }
+    return (
+      settings.getSetting(props.setting.settingPath) ??
+      props.setting.defaultValue
+    );
+  },
+  set: (value: string) => {
+    if (props.setting.settingPath) {
+      settings.saveSetting(props.setting.settingPath, value);
+    }
+  },
 });
 </script>

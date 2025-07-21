@@ -45,19 +45,32 @@ export const testLlmConnection = async (config: LlmModelConfig) => {
 
 const thinkingBlockIds = ref<Set<BlockId>>(new Set());
 
-export function useLlm(app: App) {
-  const settings = useSettings();
+export function useLlm(app: App, config?: any) {
+  // 如果没有提供配置，使用默认值
+  const defaultLlmConfig = {
+    service: "openai",
+    baseUrl: "",
+    model: "gpt-3.5-turbo",
+    apiKey: "",
+    temperature: 1,
+    think: true,
+  };
 
   const createAppendChildrenTask = (ctxBlockId: BlockId) => {
-    const config = {
-      service: settings.getSetting("llmServiceProvider"),
-      baseUrl: settings.getSetting("llmBaseUrl"),
-      model: settings.getSetting("llmModelName"),
-      apiKey: settings.getSetting("llmApiKey"),
-      temperature: settings.getSetting("llmTemperature"),
-      think: settings.getSetting("llmEnableThinking"),
-    };
-    const task = AppendChildrenTaskUtils.create(app, ctxBlockId, config);
+    const llmConfig = config
+      ? {
+          service: config.llm?.serviceProvider || defaultLlmConfig.service,
+          baseUrl: config.llm?.baseUrl || defaultLlmConfig.baseUrl,
+          model: config.llm?.modelName || defaultLlmConfig.model,
+          apiKey: config.llm?.apiKey || defaultLlmConfig.apiKey,
+          temperature: config.llm?.temperature || defaultLlmConfig.temperature,
+          think:
+            config.llm?.enableThinking !== undefined
+              ? config.llm.enableThinking
+              : defaultLlmConfig.think,
+        }
+      : defaultLlmConfig;
+    const task = AppendChildrenTaskUtils.create(app, ctxBlockId, llmConfig);
 
     // 监听任务状态变化，更新 thinkingBlockIds
     const listener = (status: any) => {

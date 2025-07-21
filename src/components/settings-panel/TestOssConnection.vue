@@ -44,36 +44,24 @@ const testing = ref(false);
 const testResult = ref<{ success: boolean; message: string } | null>(null);
 
 const testConnection = async () => {
-  const { settings } = props.context;
+  const { config, getSetting } = props.context;
 
   // 检查必填配置
   const requiredFields = [
-    "ossEndpoint",
-    "ossAccessKey",
-    "ossSecretKey",
-    "ossBucket",
+    { path: "attachment.endpoint" as const, label: "Endpoint" },
+    { path: "attachment.accessKeyId" as const, label: "Access Key" },
+    { path: "attachment.secretAccessKey" as const, label: "Secret Key" },
+    { path: "attachment.bucket" as const, label: "Bucket" },
   ];
-  const missingFields = requiredFields.filter((field) => !settings[field]);
+
+  const missingFields = requiredFields.filter(
+    (field) => !getSetting(field.path)
+  );
 
   if (missingFields.length > 0) {
     testResult.value = {
       success: false,
-      message: `请先填写：${missingFields
-        .map((f) => {
-          switch (f) {
-            case "ossEndpoint":
-              return "Endpoint";
-            case "ossAccessKey":
-              return "Access Key";
-            case "ossSecretKey":
-              return "Secret Key";
-            case "ossBucket":
-              return "Bucket";
-            default:
-              return f;
-          }
-        })
-        .join(", ")}`,
+      message: `请先填写：${missingFields.map((f) => f.label).join(", ")}`,
     };
     return;
   }
@@ -82,14 +70,14 @@ const testConnection = async () => {
   testResult.value = null;
 
   try {
-    const config = {
-      endpoint: settings.ossEndpoint,
-      bucket: settings.ossBucket,
-      accessKeyId: settings.ossAccessKey,
-      secretAccessKey: settings.ossSecretKey,
+    const configParams = {
+      endpoint: getSetting("attachment.endpoint"),
+      bucket: getSetting("attachment.bucket"),
+      accessKeyId: getSetting("attachment.accessKeyId"),
+      secretAccessKey: getSetting("attachment.secretAccessKey"),
     };
 
-    const result = await R2AttachmentStorage.test_conn(config);
+    const result = await R2AttachmentStorage.test_conn(configParams);
     testResult.value = result;
   } catch (error) {
     testResult.value = {

@@ -172,7 +172,7 @@ export function createStateFromStorage(
   rootBlockIds: BlockId[],
   rootOnly: boolean = false
 ): Node {
-  const { thinkingBlockIds } = useLlm(app);
+  const { thinkingBlockIds } = useLlm(app); // 暂时使用默认配置
 
   // 将嵌套的 block 转换为扁平的 listItem 节点数组
   function flattenBlocks(blockNodes: BlockNode[], level: number): Node[] {

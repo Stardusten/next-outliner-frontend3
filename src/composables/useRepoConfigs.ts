@@ -6,6 +6,35 @@ import { repoConfigSchema, type RepoConfig } from "@/lib/repo/schema";
 
 const REPO_CONFIGS_STORAGE_KEY = "repo-configs";
 const _configs = ref<RepoConfig[]>([]);
+let _initialized = false;
+
+// 迁移旧配置结构
+const migrateOldConfig = (oldConfig: any): any => {
+  const migrated = { ...oldConfig };
+
+  // 迁移 attachment 结构
+  if (oldConfig.attachment && oldConfig.attachment.type) {
+    if (oldConfig.attachment.type === "r2" && oldConfig.attachment.params) {
+      migrated.attachment = {
+        storageType: "oss",
+        endpoint: oldConfig.attachment.params.endpoint || "",
+        bucket: oldConfig.attachment.params.bucket || "",
+        accessKeyId: oldConfig.attachment.params.accessKeyId || "",
+        secretAccessKey: oldConfig.attachment.params.secretAccessKey || "",
+      };
+    } else {
+      migrated.attachment = {
+        storageType: "none",
+        endpoint: "",
+        bucket: "",
+        accessKeyId: "",
+        secretAccessKey: "",
+      };
+    }
+  }
+
+  return migrated;
+};
 
 // 从 localStorage 加载配置
 const loadConfigsFromStorage = (): void => {
@@ -15,15 +44,33 @@ const loadConfigsFromStorage = (): void => {
     return;
   }
 
-  const schema = z
-    .string()
-    .transform((val) => JSON.parse(val))
-    .pipe(z.array(repoConfigSchema));
+  try {
+    const rawData = JSON.parse(stored);
+    if (!Array.isArray(rawData)) {
+      throw new Error("Invalid config format");
+    }
 
-  const res = schema.safeParse(stored);
-  if (res.success) {
-    _configs.value = res.data;
-  } else {
+    // 尝试迁移和验证每个配置
+    const migratedConfigs = rawData.map(migrateOldConfig);
+    const validConfigs: RepoConfig[] = [];
+
+    for (const config of migratedConfigs) {
+      const res = repoConfigSchema.safeParse(config);
+      if (res.success) {
+        validConfigs.push(res.data);
+      } else {
+        console.warn("跳过无效配置:", config, res.error);
+      }
+    }
+
+    _configs.value = validConfigs;
+
+    // 如果有迁移，保存新格式
+    if (validConfigs.length > 0) {
+      saveConfigsToStorage();
+    }
+  } catch (error) {
+    console.error("加载配置失败:", error);
     _configs.value = [];
     saveConfigsToStorage();
     toast.error("加载知识库配置失败，已重置配置列表");
@@ -46,10 +93,13 @@ const saveConfigsToStorage = (): void => {
   }
 };
 
-// 初始化加载配置
-loadConfigsFromStorage();
-
 export const useRepoConfigs = () => {
+  // 确保只初始化一次，并且在组件内部
+  if (!_initialized) {
+    _initialized = true;
+    loadConfigsFromStorage();
+  }
+
   const router = useRouter();
   const route = useRoute();
   const configs = readonly(_configs);
@@ -67,7 +117,7 @@ export const useRepoConfigs = () => {
     if (existingIndex >= 0) {
       // 更新现有配置
       _configs.value[existingIndex] = config;
-      toast.success(`已更新知识库 ${config.title}`);
+      // toast.success(`已更新知识库 ${config.title}`);
     } else {
       // 添加新配置
       _configs.value.push(config);

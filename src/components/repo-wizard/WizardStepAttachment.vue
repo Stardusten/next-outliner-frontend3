@@ -2,14 +2,16 @@
   <div class="space-y-4 max-h-[60vh] overflow-y-auto px-1">
     <div class="grid gap-3">
       <template v-for="option in attachmentOptions" :key="option.value">
-        <FormField name="attachment.type">
+        <FormField name="attachment.storageType">
           <FormItem>
             <FormControl>
               <SingleSelect
                 :title="option.title"
                 :description="option.description"
-                :selected="form.values.attachment?.type === option.value"
-                @click="form.setFieldValue('attachment.type', option.value)"
+                :selected="form.values.attachment?.storageType === option.value"
+                @click="
+                  form.setFieldValue('attachment.storageType', option.value)
+                "
               ></SingleSelect>
             </FormControl>
           </FormItem>
@@ -17,24 +19,21 @@
       </template>
     </div>
 
-    <!-- R2 配置表单 -->
+    <!-- OSS 配置表单 -->
     <div
-      v-show="form.values.attachment?.type === 'r2'"
+      v-show="form.values.attachment?.storageType === 'oss'"
       class="space-y-3 p-4 bg-accent/30 rounded-lg border mt-4"
     >
-      <h4 class="font-medium text-sm">R2 存储配置</h4>
+      <h4 class="font-medium text-sm">对象存储配置</h4>
 
       <div class="space-y-3">
-        <FormField
-          v-slot="{ componentField }"
-          name="attachment.params.endpoint"
-        >
+        <FormField v-slot="{ componentField }" name="attachment.endpoint">
           <FormItem>
             <Label class="text-xs">Endpoint</Label>
             <FormControl>
               <Input
                 v-bind="componentField"
-                placeholder="R2 Endpoint URL"
+                placeholder="对象存储 Endpoint URL"
                 class="text-sm"
               />
             </FormControl>
@@ -42,7 +41,7 @@
           </FormItem>
         </FormField>
 
-        <FormField v-slot="{ componentField }" name="attachment.params.bucket">
+        <FormField v-slot="{ componentField }" name="attachment.bucket">
           <FormItem>
             <Label class="text-xs">Bucket</Label>
             <FormControl>
@@ -56,16 +55,13 @@
           </FormItem>
         </FormField>
 
-        <FormField
-          v-slot="{ componentField }"
-          name="attachment.params.accessKeyId"
-        >
+        <FormField v-slot="{ componentField }" name="attachment.accessKeyId">
           <FormItem>
             <Label class="text-xs">Access Key ID</Label>
             <FormControl>
               <Input
                 v-bind="componentField"
-                placeholder="R2 Access Key ID"
+                placeholder="Access Key ID"
                 class="text-sm"
               />
             </FormControl>
@@ -75,7 +71,7 @@
 
         <FormField
           v-slot="{ componentField }"
-          name="attachment.params.secretAccessKey"
+          name="attachment.secretAccessKey"
         >
           <FormItem>
             <Label class="text-xs">Secret Access Key</Label>
@@ -83,7 +79,7 @@
               <Input
                 v-bind="componentField"
                 type="password"
-                placeholder="R2 Secret Access Key"
+                placeholder="Secret Access Key"
                 class="text-sm"
               />
             </FormControl>
@@ -115,7 +111,7 @@ const attachmentOptions = [
     description: "暂时不设置附件上传功能，之后可以随时修改",
   },
   {
-    value: "r2" as const,
+    value: "oss" as const,
     title: "对象存储",
     description: "使用对象存储，支持大文件和多设备同步",
   },
