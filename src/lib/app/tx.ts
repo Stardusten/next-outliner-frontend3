@@ -288,7 +288,7 @@ function execTx(
     // 提交到 loro doc
     app.doc.commit({ origin: tx.meta.origin });
 
-    // 对选区应用 idMapping
+    // 对 selection 应用 idMapping
     if (tx.meta.selection) {
       tx.meta.selection = {
         ...tx.meta.selection,
@@ -297,6 +297,7 @@ function execTx(
       };
     }
 
+    // 对 beforeSelection 应用 idMapping
     if (tx.meta.beforeSelection) {
       tx.meta.beforeSelection = {
         ...tx.meta.beforeSelection,

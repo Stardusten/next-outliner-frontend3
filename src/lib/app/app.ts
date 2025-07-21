@@ -3,12 +3,7 @@ import type { Persistence } from "../persistence/persistence";
 import type { AttachmentStorage } from "./attachment/storage";
 import type { Emitter } from "mitt";
 import type { Observable } from "../common/observable";
-import type {
-  BlockDataInner,
-  BlockId,
-  BlocksVersion,
-  TxOrigin,
-} from "../common/types";
+import type { BlockId, BlocksVersion, SelectionInfo } from "../common/types";
 import { initFullTextIndex, type FullTextIndexConfig } from "./index/fulltext";
 import type { Editor } from "../editor/editor";
 import type { AsyncTaskQueue } from "../common/taskQueue";
@@ -20,10 +15,12 @@ import { initSaver } from "./saver";
 import { initCompacter } from "./compacter";
 import {
   initTransactionManager,
+  type Transaction,
   type TxExecutedOperation,
   type TxMeta,
 } from "./tx";
 import { initEditors } from "./editors";
+import { initUndoRedoManager } from "./undo-redo";
 
 export type AppEvents = {
   "tx-committed": {
@@ -35,6 +32,12 @@ export type AppEvents = {
 };
 
 export type EditorId = string;
+
+export type UndoRedoItem = {
+  executedOps: TxExecutedOperation[];
+  beforeSelection?: SelectionInfo;
+  afterSelection?: SelectionInfo;
+};
 
 export type App = {
   doc: LoroDoc;
@@ -89,6 +92,11 @@ export type App = {
 
   // thinkingBlockIds
   thinkingBlockIds: Set<BlockId>;
+
+  // 撤销重做
+  undoStack: UndoRedoItem[];
+  redoStack: UndoRedoItem[];
+  idMapping: Record<BlockId, BlockId>;
 };
 
 export function createApp(
@@ -113,6 +121,7 @@ export function createApp(
   initCompacter(app);
   initTransactionManager(app);
   initEditors(app);
+  initUndoRedoManager(app);
 
   return app;
 }

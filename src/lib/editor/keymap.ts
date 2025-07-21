@@ -1,5 +1,9 @@
+import { useLlm } from "@/composables/use-llm.ts/useLlm";
+import { chainCommands, toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
+import type { Command, EditorState } from "prosemirror-state";
 import {
+  backspaceAfterCharBeforeExpandedFile,
   codeblockIndent,
   codeblockInsertLineBreak,
   codeblockMoveToLineEnd,
@@ -7,7 +11,7 @@ import {
   codeblockOutdent,
   codeblockSelectAll,
   copyBlockRef,
-  backspaceAfterCharBeforeExpandedFile,
+  deleteBeforeCharBeforeExpandedFile,
   deleteEmptyListItem,
   deleteSelected,
   demoteSelected,
@@ -16,22 +20,14 @@ import {
   moveBlockDown,
   moveBlockUp,
   promoteSelected,
-  redo,
+  redoCommand,
   selectCurrentListItem,
   splitListItem,
   toggleFocusedFoldState,
-  undo,
-  deleteBeforeCharBeforeExpandedFile,
-  uploadFile,
+  undoCommand,
 } from "./commands";
-import type { Command, EditorState } from "prosemirror-state";
-import { chainCommands, toggleMark } from "prosemirror-commands";
-import { outlinerSchema } from "./schema";
 import { findCurrListItem, type Editor } from "./editor";
-import {
-  useLlm,
-  type LlmAppendChildrenTask,
-} from "@/composables/use-llm.ts/useLlm";
+import { outlinerSchema } from "./schema";
 
 export function createKeymapPlugin(editor: Editor) {
   const dispatchByBlockType =
@@ -117,8 +113,8 @@ export function createKeymapPlugin(editor: Editor) {
     "Shift-Enter": dispatchByBlockType({
       text: insertLineBreak(),
     }),
-    "Mod-z": undo(editor),
-    "Mod-Shift-z": redo(editor),
+    "Mod-z": undoCommand(editor),
+    "Mod-Shift-z": redoCommand(editor),
     // "Mod-Shift-g": (state, dispatch) => {
     //   const currListItem = findCurrListItem(state);
     //   if (currListItem == null) return false;

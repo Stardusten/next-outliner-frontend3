@@ -15,7 +15,7 @@ import { createFileNodeViewClass } from "./node-views/file";
 import { createListItemNodeViewClass } from "./node-views/list-item";
 import { createCompletionHelperPlugin } from "./plugins/block-ref-completion";
 import { createHighlightCodeblockPlugin } from "./plugins/highlight-codeblock";
-import { createPastePlugin } from "./plugins/paste-text";
+import { createPasteHtmlAndTextPlugin } from "./plugins/paste-text";
 import { outlinerSchema } from "./schema";
 import {
   clipboard,
@@ -104,9 +104,6 @@ function createEditor(app: App, opts: EditorOptions = {}) {
     eb,
     on: eb.on,
     off: eb.off,
-    // undoStack: [],
-    // redoStack: [],
-    // idMapping: {},
     enableEnlargeRootBlock: opts.enlargeRootBlock ?? true,
   } satisfies Editor;
   return editor;
@@ -120,144 +117,6 @@ function getFocusedBlockId(editor: Editor) {
   return listItemInfo && listItemInfo.node.attrs.blockId
     ? listItemInfo.node.attrs.blockId
     : null;
-}
-
-/**
- * 注册 undo-redo 事件监听器
- */
-function startUndoRedoListener(editor: Editor) {
-  // editor.app.on("tx-committed", (event) => {
-  //   if (event.origin.type === "undoRedo") return;
-  //   editor.redoStack.length = 0; // 清空 redo 栈
-  //   editor.undoStack.push({
-  //     changes: event.changes,
-  //     selectionBeg: event.origin.beforeSelection,
-  //     selectionEnd: event.origin.selection,
-  //   });
-  // });
-}
-
-function canUndo(editor: Editor) {
-  // return editor.undoStack.length > 0;
-  throw new Error("Not implemented");
-}
-
-function canRedo(editor: Editor) {
-  // return editor.redoStack.length > 0;
-  throw new Error("Not implemented");
-}
-
-function undo(editor: Editor) {
-  // if (editor.undoStack.length === 0) return;
-  // const lastSeq = editor.undoStack.pop()!;
-
-  // withTx(
-  //   editor.app,
-  //   (txObj) => {
-  //     // 逆序执行逆操作
-  //     for (let i = lastSeq.changes.length - 1; i >= 0; i--) {
-  //       const change = lastSeq.changes[i];
-  //       if (change.type === "block:create") {
-  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-  //         txObj.deleteBlock(blockId);
-  //       } else if (change.type === "block:delete") {
-  //         const newNode = txObj.insertBlockUnder(
-  //           change.oldParent,
-  //           (dataMap) => {
-  //             dataMap.set("type", change.oldData.type);
-  //             dataMap.set("folded", change.oldData.folded);
-  //             dataMap.set("content", change.oldData.content);
-  //           },
-  //           change.oldIndex
-  //         );
-  //         editor.idMapping[change.blockId] = newNode.id;
-  //       } else if (change.type === "block:move") {
-  //         const targetBlockId =
-  //           editor.idMapping[change.blockId] ?? change.blockId;
-  //         const parentBlockId = change.oldParent
-  //           ? (editor.idMapping[change.oldParent] ?? change.oldParent)
-  //           : null;
-  //         targetBlockId &&
-  //           txObj.moveBlock(targetBlockId, parentBlockId, change.oldIndex);
-  //       } else if (change.type === "block:update") {
-  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-  //         txObj.updateBlockData(blockId, change.oldData);
-  //       }
-  //     }
-
-  //     // 撤销时，需要恢复到撤销前的选区状态
-  //     const sel = lastSeq.selectionBeg;
-  //     const mappedSel = sel
-  //       ? {
-  //           ...sel,
-  //           blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
-  //         }
-  //       : undefined;
-  //     txObj.updateOrigin({ selection: mappedSel });
-  //   },
-  //   { type: "undoRedo" }
-  // );
-
-  // // console.log("undo, global idMapping", this.idMapping);
-  // editor.redoStack.push(lastSeq);
-  throw new Error("Not implemented");
-}
-
-function redo(editor: Editor) {
-  // if (editor.redoStack.length === 0) return;
-  // const lastSeq = editor.redoStack.pop()!;
-
-  // withTx(
-  //   editor.app,
-  //   (txObj) => {
-  //     // 正序执行正操作
-  //     for (const change of lastSeq.changes) {
-  //       if (change.type === "block:create") {
-  //         const parentBlockId = change.parent
-  //           ? (editor.idMapping[change.parent] ?? change.parent)
-  //           : null;
-  //         const newNode = txObj.insertBlockUnder(
-  //           parentBlockId,
-  //           (dataMap) => {
-  //             dataMap.set("type", change.data.type);
-  //             dataMap.set("folded", change.data.folded);
-  //             dataMap.set("content", change.data.content);
-  //           },
-  //           change.index
-  //         );
-  //         editor.idMapping[change.blockId] = newNode.id;
-  //       } else if (change.type === "block:delete") {
-  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-  //         txObj.deleteBlock(blockId);
-  //       } else if (change.type === "block:move") {
-  //         const targetBlockId =
-  //           editor.idMapping[change.blockId] ?? change.blockId;
-  //         const parentBlockId = change.parent
-  //           ? (editor.idMapping[change.parent] ?? change.parent)
-  //           : null;
-  //         txObj.moveBlock(targetBlockId, parentBlockId, change.index);
-  //       } else if (change.type === "block:update") {
-  //         const blockId = editor.idMapping[change.blockId] ?? change.blockId;
-  //         txObj.updateBlockData(blockId, change.newData);
-  //       }
-  //     }
-
-  //     // 重做时，需要恢复到重做后的选区状态
-  //     const sel = lastSeq.selectionEnd;
-  //     const mappedSel = sel
-  //       ? {
-  //           ...sel,
-  //           blockId: editor.idMapping[sel.blockId] ?? sel.blockId,
-  //         }
-  //       : undefined;
-  //     txObj.updateOrigin({ selection: mappedSel });
-  //   },
-  //   { type: "undoRedo" }
-  // );
-
-  // // console.log("redo, global idMapping", editor.idMapping);
-  // editor.undoStack.push(lastSeq);
-  throw new Error("Not implemented");
 }
 
 /**
@@ -399,7 +258,7 @@ function getEditorPlugins(editor: Editor) {
     createHighlightCodeblockPlugin(),
     imeSpan,
     createPasteImagePlugin(editor),
-    createPastePlugin(editor),
+    createPasteHtmlAndTextPlugin(editor),
   ];
 }
 
@@ -816,7 +675,6 @@ function mount(editor: Editor, dom: HTMLElement) {
 
   editor.view.dom.addEventListener("focus", () => editor.eb.emit("focus"));
 
-  startUndoRedoListener(editor);
   startTxCommittedListener(editor);
   startThinkingStateListener(editor);
 }
@@ -843,13 +701,122 @@ function focusEditor(editor: Editor) {
   editor.view.focus();
 }
 
+async function undo(editor: Editor) {
+  const { app } = editor;
+  if (app.undoStack.length === 0) return;
+  const lastTx = app.undoStack.pop()!;
+
+  // 撤销前，将当前的选区信息记录到 afterSelection
+  const afterSelection = getSelectionInfo(editor);
+  lastTx.afterSelection = afterSelection ?? undefined;
+
+  const id2Tmp: Record<BlockId, BlockId> = {};
+  const mapId = (id: BlockId) => id2Tmp[id] ?? app.idMapping[id] ?? id;
+  const { idMapping: tmp2newId } = await withTx(app, (tx) => {
+    for (let i = lastTx.executedOps.length - 1; i >= 0; i--) {
+      const op = lastTx.executedOps[i];
+      if (op.type === "block:create") {
+        const blockId = mapId(op.blockId);
+        tx.deleteBlock(blockId);
+      } else if (op.type === "block:delete") {
+        const oldParentId = op.oldParent ? mapId(op.oldParent) : null;
+        const newBlockId = tx.createBlockUnder(oldParentId, op.oldIndex, {
+          type: op.oldData.type,
+          folded: op.oldData.folded,
+          content: op.oldData.content,
+        });
+        id2Tmp[op.blockId] = newBlockId;
+      } else if (op.type === "block:move") {
+        const targetId = mapId(op.blockId);
+        const parentId = op.oldParent ? mapId(op.oldParent) : null;
+        tx.moveBlock(targetId, parentId, op.oldIndex);
+      } else if (op.type === "block:update") {
+        const blockId = mapId(op.blockId);
+        tx.updateBlock(blockId, op.oldData);
+      }
+    }
+
+    // 撤销时，需要恢复到撤销前的选区状态
+    if (lastTx.beforeSelection) {
+      const sel = lastTx.beforeSelection;
+      const mappedSel = {
+        ...sel,
+        blockId: mapId(sel.blockId),
+      };
+      tx.setSelection(mappedSel);
+    }
+    tx.setOrigin("undoRedo");
+  });
+
+  for (const [oldId, tmpId] of Object.entries(id2Tmp)) {
+    const newId = tmp2newId[tmpId];
+    app.idMapping[oldId as BlockId] = newId;
+  }
+
+  app.redoStack.push(lastTx);
+}
+
+export function canUndo(editor: Editor) {
+  return editor.app.undoStack.length > 0;
+}
+
+export function canRedo(editor: Editor) {
+  return editor.app.redoStack.length > 0;
+}
+
+async function redo(editor: Editor) {
+  const { app } = editor;
+  if (app.undoStack.length === 0) return;
+  const lastTx = app.redoStack.pop()!;
+
+  const id2Tmp: Record<BlockId, BlockId> = {};
+  const mapId = (id: BlockId) => id2Tmp[id] ?? app.idMapping[id] ?? id;
+  const { idMapping: tmp2newId } = await withTx(app, (tx) => {
+    for (const op of lastTx.executedOps) {
+      if (op.type === "block:create") {
+        const parentId = op.parent ? mapId(op.parent) : null;
+        const newBlockId = tx.createBlockUnder(parentId, op.index, {
+          type: op.data.type,
+          folded: op.data.folded,
+          content: op.data.content,
+        });
+        id2Tmp[op.blockId] = newBlockId;
+      } else if (op.type === "block:delete") {
+        const blockId = mapId(op.blockId);
+        tx.deleteBlock(blockId);
+      } else if (op.type === "block:move") {
+        const targetId = mapId(op.blockId);
+        const parentId = op.parent ? mapId(op.parent) : null;
+        tx.moveBlock(targetId, parentId, op.index);
+      } else if (op.type === "block:update") {
+        const blockId = mapId(op.blockId);
+        tx.updateBlock(blockId, op.newData);
+      }
+    }
+
+    // 重做时，需要恢复到重做后的选区状态
+    if (lastTx.afterSelection) {
+      const sel = lastTx.afterSelection;
+      const mappedSel = {
+        ...sel,
+        blockId: mapId(sel.blockId),
+      };
+      tx.setSelection(mappedSel);
+    }
+    tx.setOrigin("undoRedo");
+  });
+
+  for (const [oldId, tmpId] of Object.entries(id2Tmp)) {
+    const newId = tmp2newId[tmpId];
+    app.idMapping[oldId as BlockId] = newId;
+  }
+
+  app.undoStack.push(lastTx);
+}
+
 export const editorUtils = {
   createEditor,
   getFocusedBlockId,
-  canUndo,
-  canRedo,
-  undo,
-  redo,
   mount,
   unmount,
   getSelectionInfo,
@@ -858,4 +825,8 @@ export const editorUtils = {
   isFocused,
   coordAtPos,
   focusEditor,
+  canUndo,
+  canRedo,
+  undo,
+  redo,
 };

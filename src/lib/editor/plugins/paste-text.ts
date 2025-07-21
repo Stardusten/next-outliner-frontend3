@@ -185,7 +185,7 @@ function normalizeSpaces(text: string) {
   return text.replace(/\s/g, " ");
 }
 
-export function createPastePlugin(editor: Editor) {
+export function createPasteHtmlAndTextPlugin(editor: Editor) {
   const plugin = new Plugin({
     props: {
       handlePaste(view, event) {

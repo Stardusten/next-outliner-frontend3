@@ -847,21 +847,19 @@ export function codeblockMoveToLineEnd(): Command {
   };
 }
 
-export function undo(editor: Editor): Command {
+export function undoCommand(editor: Editor): Command {
   return function (state, dispatch) {
-    // const canUndo = canUndoImpl(editor);
-    // if (dispatch && canUndo) undoImpl(editor);
-    // return canUndo;
-    return false; // TODO
+    const canUndoRes = editorUtils.canUndo(editor);
+    if (dispatch && canUndoRes) editorUtils.undo(editor);
+    return true;
   };
 }
 
-export function redo(editor: Editor): Command {
+export function redoCommand(editor: Editor): Command {
   return function (state, dispatch) {
-    // const canRedo = canRedoImpl(editor);
-    // if (dispatch && canRedo) redoImpl(editor);
-    // return canRedo;
-    return false; // TODO
+    const canRedoRes = editorUtils.canRedo(editor);
+    if (dispatch && canRedoRes) editorUtils.redo(editor);
+    return true;
   };
 }
 
