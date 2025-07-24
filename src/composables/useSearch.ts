@@ -46,6 +46,49 @@ export function useSearch(app: App) {
     activeIndex.value = 0;
   };
 
+  // 设置活动索引（用于键盘导航）
+  const setActiveIndex = (index: number) => {
+    if (index >= 0 && index < searchResults.value.length) {
+      activeIndex.value = index;
+    }
+  };
+
+  // 导航到下一项
+  const navigateDown = () => {
+    if (searchResults.value.length > 0) {
+      const nextIndex = Math.min(
+        activeIndex.value + 1,
+        searchResults.value.length - 1
+      );
+      setActiveIndex(nextIndex);
+    }
+  };
+
+  // 导航到上一项
+  const navigateUp = () => {
+    if (searchResults.value.length > 0) {
+      const prevIndex = Math.max(activeIndex.value - 1, 0);
+      setActiveIndex(prevIndex);
+    }
+  };
+
+  // 选择当前活动项
+  const selectCurrentItem = () => {
+    const currentItem = searchResults.value[activeIndex.value];
+    if (currentItem) {
+      selectBlock(currentItem);
+    }
+  };
+
+  // 选择指定的块
+  const selectBlock = (result: SearchResult) => {
+    const editor = getLastFocusedEditor(app);
+    if (editor) {
+      editorUtils.locateBlock(editor, result.block.id);
+    }
+    closeSearch();
+  };
+
   // 重置搜索弹窗状态
   const resetSearch = () => {
     searchQuery.value = "";
@@ -53,29 +96,10 @@ export function useSearch(app: App) {
     activeIndex.value = 0;
   };
 
+  // 关闭搜索弹窗
   const closeSearch = () => {
     searchVisible.value = false;
     resetSearch();
-  }
-
-  // 处理搜索结果选择
-  const handleSearchSelect = (
-    result: SearchResult | { type: string; index?: number }
-  ) => {
-    if ("type" in result) {
-      // 处理导航事件
-      if (result.type === "navigate" && typeof result.index === "number") {
-        activeIndex.value = result.index;
-      }
-      return;
-    }
-
-    // 处理实际的搜索结果选择 - 使用 locateBlock 定位到选择的块
-    const editor = getLastFocusedEditor(app);
-    if (editor) {
-      editorUtils.locateBlock(editor, result.block.id);
-    }
-    closeSearch();
   };
 
   // 更新搜索查询
@@ -84,14 +108,22 @@ export function useSearch(app: App) {
   };
 
   return {
+    // 状态
     searchVisible,
     searchQuery,
     searchResults,
     activeIndex,
-    resetSearch,
-    handleSearchSelect,
-    updateSearchQuery,
+    // 搜索功能
     performSearch,
+    updateSearchQuery,
+    resetSearch,
     closeSearch,
+    // 导航功能
+    setActiveIndex,
+    navigateDown,
+    navigateUp,
+    // 选择功能
+    selectBlock,
+    selectCurrentItem,
   };
 }

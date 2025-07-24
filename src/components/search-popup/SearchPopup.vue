@@ -37,9 +37,9 @@
           v-for="(result, index) in searchResults"
           :key="result.block.id"
           :ref="(el) => setItemRef(el, index)"
-          class="p-3 cursor-pointer border-b border-border/50 last:border-b-0 transition-colors hover:bg-muted/50"
+          class="p-3 cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-muted/50"
           :class="{ 'bg-muted/50': index === activeIndex }"
-          @click="selectResult(result)"
+          @click="selectBlock(result)"
         >
           <div class="text-sm text-foreground overflow-hidden">
             <SearchResultItem
@@ -87,7 +87,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { BlockNode } from "@/lib/common/types";
 import type { App } from "@/lib/app/app";
 import type { useSearch } from "@/composables";
 import {
@@ -96,11 +95,6 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "../ui/tooltip";
-
-interface SearchResult {
-  block: BlockNode;
-  score?: number;
-}
 
 const props = defineProps<{
   app: App;
@@ -112,10 +106,13 @@ const {
   searchResults,
   searchQuery,
   activeIndex,
-  handleSearchSelect,
   updateSearchQuery,
   performSearch,
   closeSearch,
+  navigateDown,
+  navigateUp,
+  selectBlock,
+  selectCurrentItem,
 } = props.search;
 
 // DOM refs
@@ -146,7 +143,7 @@ const scrollToActiveItem = async () => {
   }
 
   activeItem.scrollIntoView({
-    block: "nearest",
+    block: "nearest", // 只在必要时滚动，避免不必要的跳动
     inline: "nearest",
   });
 };
@@ -161,26 +158,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      if (searchResults.value.length > 0) {
-        const nextIndex = Math.min(
-          activeIndex.value + 1,
-          searchResults.value.length - 1
-        );
-        handleSearchSelect({ type: "navigate", index: nextIndex } as any);
-      }
+      navigateDown();
       break;
     case "ArrowUp":
       e.preventDefault();
-      if (searchResults.value.length > 0) {
-        const prevIndex = Math.max(activeIndex.value - 1, 0);
-        handleSearchSelect({ type: "navigate", index: prevIndex } as any);
-      }
+      navigateUp();
       break;
     case "Enter":
       e.preventDefault();
-      if (searchResults.value[activeIndex.value]) {
-        selectResult(searchResults.value[activeIndex.value]);
-      }
+      selectCurrentItem();
       break;
     case "Escape":
       e.preventDefault();
@@ -206,11 +192,6 @@ const handleCompositionEnd = () => {
   performSearch(searchQuery.value);
 };
 
-// 选择搜索结果
-const selectResult = (result: SearchResult) => {
-  handleSearchSelect(result);
-};
-
 // 监听 activeIndex 变化，自动滚动
 watch(() => activeIndex.value, scrollToActiveItem);
 
@@ -223,16 +204,6 @@ watch(
         inputRef.value?.focus();
         scrollToActiveItem();
       });
-    }
-  }
-);
-
-// 同步外部搜索查询
-watch(
-  () => searchQuery.value,
-  (newQuery) => {
-    if (searchQuery.value !== newQuery) {
-      searchQuery.value = newQuery;
     }
   }
 );
