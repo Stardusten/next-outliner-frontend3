@@ -2,7 +2,7 @@ import RepoInfo from "@/components/settings-panel/RepoInfo.vue";
 import TestLlmConnection from "@/components/settings-panel/TestLlmConnection.vue";
 import TestOssConnection from "@/components/settings-panel/TestOssConnection.vue";
 import { Brain, Database, Info, PaintRoller, Settings } from "lucide-vue-next";
-import { computed, h, ref, watch, type Component, type VNode } from "vue";
+import { computed, h, ref, type Component, type VNode } from "vue";
 import { useRepoConfigs } from "./useRepoConfigs";
 import type {
   RepoConfig,
@@ -515,9 +515,6 @@ const sidebarSections: SidebarSection[] = [
 const visible = ref(false);
 const currentPage = ref(settingsConfig[0]?.id || "");
 
-// 初始化标志
-let initialized = false;
-
 export function useSettings() {
   const { currentRepo, addConfig } = useRepoConfigs();
 
@@ -606,67 +603,10 @@ export function useSettings() {
     }
   };
 
-  // 初始化副作用
-  const initEffects = () => {
-    if (initialized) return;
-    initialized = true;
-
-    // 主题效果
-    const root = document.documentElement;
-    const applyTheme = (themeValue: string) => {
-      switch (themeValue) {
-        case "light":
-          root.classList.remove("dark");
-          break;
-        case "dark":
-          root.classList.add("dark");
-          break;
-        case "system":
-        default:
-          const isDark = window.matchMedia(
-            "(prefers-color-scheme: dark)"
-          ).matches;
-          root.classList.toggle("dark", isDark);
-          break;
-      }
-    };
-
-    watch(() => currentRepo.value?.ui?.theme || "light", applyTheme, {
-      immediate: true,
-    });
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    mediaQuery.addEventListener("change", (e) => {
-      if ((currentRepo.value?.ui?.theme || "light") === "system") {
-        root.classList.toggle("dark", e.matches);
-      }
-    });
-
-    // 行间距效果
-    const spacingClasses = ["compact", "normal", "loose"];
-    const applySpacing = (spacing: string) => {
-      spacingClasses.forEach((cls) => root.classList.remove(`spacing-${cls}`));
-      if (spacing && spacingClasses.includes(spacing)) {
-        root.classList.add(`spacing-${spacing}`);
-      }
-    };
-
-    watch(
-      () => currentRepo.value?.editor?.lineSpacing || "normal",
-      applySpacing,
-      { immediate: true }
-    );
-  };
-
   // 计算属性
   const currentPageConfig = computed(() => {
     return settingsConfig.find((page) => page.id === currentPage.value);
   });
-
-  // 初始化副作用（只在第一次调用时执行）
-  if (!initialized) {
-    initEffects();
-  }
 
   return {
     // 响应式状态

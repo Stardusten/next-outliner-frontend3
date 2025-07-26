@@ -1,11 +1,11 @@
 import { ref, computed } from "vue";
 import { searchBlocksWithScore } from "@/lib/app/index/fulltext";
-import { editorUtils, type Editor } from "@/lib/editor/editor";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
-import { getLastFocusedEditor } from "@/lib/app/editors";
+import { getLastFocusedAppView } from "@/lib/app/views";
+import { TiptapEditorView } from "@/lib/views/tiptap-editor/editor-view";
 
 export interface SearchResult {
   block: BlockNode;
@@ -82,9 +82,9 @@ export function useSearch(app: App) {
 
   // 选择指定的块
   const selectBlock = (result: SearchResult) => {
-    const editor = getLastFocusedEditor(app);
-    if (editor) {
-      editorUtils.locateBlock(editor, result.block.id);
+    const editor = getLastFocusedAppView(app);
+    if (editor instanceof TiptapEditorView) {
+      editor.locateBlock(result.block.id);
     }
     closeSearch();
   };

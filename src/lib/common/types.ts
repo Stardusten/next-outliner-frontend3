@@ -6,7 +6,7 @@ export type BlockNode = LoroTreeNode;
 
 export type BlocksVersion = VersionVector;
 
-export type BlockType = "text" | "code";
+export type BlockType = "text" | "code" | "search";
 
 export type BlockDataInner = {
   folded: boolean;
@@ -17,7 +17,7 @@ export type BlockDataInner = {
 export type BlockData = LoroMap<BlockDataInner>;
 
 export type SelectionInfo = {
-  editorId: string;
+  viewId: string;
   blockId: BlockId;
   anchor: number;
   head?: number;

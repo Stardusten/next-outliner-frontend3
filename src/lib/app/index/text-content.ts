@@ -1,9 +1,11 @@
 import { Observable } from "../../common/observable";
-import { outlinerSchema } from "../../editor/schema";
+import { schema } from "../../views/tiptap-editor/editor-view";
 import type { BlockId } from "@/lib/common/types";
 import type { App } from "../app";
 import { getInRefs } from "./in-refs";
 import { getBlockData } from "../block-manage";
+import { BlockRef } from "@/lib/views/tiptap-editor/nodes/block-ref";
+import { Codeblock } from "@/lib/views/tiptap-editor/nodes/codeblock";
 
 export function initTextContent(app: App) {
   app.textContentCache = new Map();
@@ -97,16 +99,16 @@ function loadTextContentToCache(
   let textContent = "";
   if (blockData.type === "text" || blockData.type === "code") {
     const nodeJson = JSON.parse(blockData.content);
-    const node = outlinerSchema.nodeFromJSON(nodeJson);
+    const node = schema.nodeFromJSON(nodeJson);
 
     const arr: string[] = [];
     node.content.descendants((currNode) => {
       if (currNode.isText) arr.push(currNode.text ?? "");
-      else if (currNode.type === outlinerSchema.nodes.blockRef) {
+      else if (currNode.type.name === BlockRef.name) {
         const blockId = currNode.attrs.blockId;
         const content = getTextContent(app, blockId, visited);
         arr.push(content);
-      } else if (currNode.type === outlinerSchema.nodes.codeblock) {
+      } else if (currNode.type.name === Codeblock.name) {
         arr.push(currNode.textContent);
       }
     });

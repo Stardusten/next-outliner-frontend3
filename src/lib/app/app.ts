@@ -5,7 +5,6 @@ import type { Emitter } from "mitt";
 import type { Observable } from "../common/observable";
 import type { BlockId, BlocksVersion, SelectionInfo } from "../common/types";
 import { initFullTextIndex, type FullTextIndexConfig } from "./index/fulltext";
-import type { Editor } from "../editor/editor";
 import type { AsyncTaskQueue } from "../common/taskQueue";
 import type { DebouncedTimer } from "../common/timer/debounced";
 import { initInRefs } from "./index/in-refs";
@@ -19,8 +18,9 @@ import {
   type TxExecutedOperation,
   type TxMeta,
 } from "./tx";
-import { initEditors } from "./editors";
+import { initAppViews } from "./views";
 import { initUndoRedoManager } from "./undo-redo";
+import type { AppView, AppViewId } from "../views/view";
 
 export type AppEvents = {
   "tx-committed": {
@@ -55,6 +55,7 @@ export type App = {
 
   // 反链管理
   inRefs: Map<BlockId, Observable<Set<BlockId>>>;
+  inTags: Map<BlockId, Observable<Set<BlockId>>>;
 
   // 全文索引
   flexsearch: any;
@@ -65,9 +66,9 @@ export type App = {
   textContentCache: Map<BlockId, string>;
   textContentObs: Map<BlockId, Observable<string>>;
 
-  // 编辑器
-  editors: Record<EditorId, Editor>;
-  lastFocusedEditorId: EditorId | null;
+  // 视图
+  appViews: Record<AppViewId, AppView<any>>;
+  lastFocusedAppViewId: AppViewId | null;
 
   // 事务队列
   txQueue: AsyncTaskQueue;
@@ -90,9 +91,6 @@ export type App = {
   // 更新计数
   updatesCount: number;
 
-  // thinkingBlockIds
-  thinkingBlockIds: Set<BlockId>;
-
   // 撤销重做
   undoStack: UndoRedoItem[];
   redoStack: UndoRedoItem[];
@@ -111,16 +109,16 @@ export function createApp(
   } as App;
 
   initEb(app);
-  initInRefs(app);
   initDocAndTree(app);
   initInRefs(app);
   initTextContent(app);
   initFullTextIndex(app);
+  initInRefs(app);
   initUpdatesCounts(app);
   initSaver(app);
   initCompacter(app);
   initTransactionManager(app);
-  initEditors(app);
+  initAppViews(app);
   initUndoRedoManager(app);
 
   return app;

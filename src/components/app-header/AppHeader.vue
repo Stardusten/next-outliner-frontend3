@@ -7,8 +7,10 @@
       </Button>
 
       <!-- 面包屑 -->
-      <Breadcrumb :breadcrumb-items="breadcrumb.breadcrumbItems.value"
-        @item-click="breadcrumb.handleBreadcrumbClick(editor, $event)" />
+      <Breadcrumb
+        :breadcrumb-items="breadcrumb.breadcrumbItems.value"
+        @item-click="breadcrumb.handleBreadcrumbClick(editor, $event)"
+      />
     </div>
 
     <!-- 右侧按钮 -->
@@ -29,7 +31,12 @@
 
       <!-- 搜索 -->
       <SearchPopup :search="search" :app="app">
-        <Button Button variant="ghost" size="xs-icon" @click="search.resetSearch">
+        <Button
+          Button
+          variant="ghost"
+          size="xs-icon"
+          @click="search.resetSearch"
+        >
           <Search :size="18" />
         </Button>
       </SearchPopup>
@@ -44,7 +51,13 @@
 </template>
 
 <script setup lang="ts">
-import { Menu, Search, Folder, MoreHorizontal, CirclePlus } from "lucide-vue-next";
+import {
+  Menu,
+  Search,
+  Folder,
+  MoreHorizontal,
+  CirclePlus,
+} from "lucide-vue-next";
 import { computed, ref } from "vue";
 import MoreMenu from "./more-menu/MoreMenu.vue";
 import AttachmentPopup from "./attachment-popup/AttachmentPopup.vue";
@@ -59,7 +72,7 @@ import type {
 } from "@/composables";
 import type { App } from "@/lib/app/app";
 import { Button } from "../ui/button";
-import { getLastFocusedEditor } from "@/lib/app/editors";
+import { getLastFocusedAppView } from "@/lib/app/views";
 import QuickAdd from "../QuickAdd.vue";
 import SearchPopup from "../search-popup/SearchPopup.vue";
 
@@ -74,7 +87,7 @@ const props = defineProps<{
 }>();
 
 // TODO
-const editor = computed(() => getLastFocusedEditor(props.app!));
+const editor = computed(() => getLastFocusedAppView(props.app!));
 </script>
 
 <style scoped>

@@ -1,15 +1,7 @@
-import type { BlockId } from "@/lib/common/types";
-import { computed, ref } from "vue";
-import { useSettings } from "../useSettings";
-import { toast } from "vue-sonner";
-import { buildTextContent, serialize, toMarkdown } from "@/lib/editor/utils";
 import type { App } from "@/lib/app/app";
-import LLM, { type PartialStreamResponse } from "../../lib/llm";
-import { getLastFocusedEditor } from "@/lib/app/editors";
-import { getBlockNode } from "@/lib/app/block-manage";
-import { withTx } from "@/lib/app/tx";
-import { nanoid } from "nanoid";
-import { outlinerSchema } from "@/lib/editor/schema";
+import type { BlockId } from "@/lib/common/types";
+import { ref } from "vue";
+import LLM from "../../lib/llm";
 import { AppendChildrenTaskUtils } from "./append-children-task";
 
 export type LlmModelConfig = {

@@ -1,28 +1,29 @@
-import {
-  editorUtils,
-  type CompletionStatus,
-  type Editor,
-  type EditorEvents,
-} from "@/lib/editor/editor";
 import { onMounted, ref } from "vue";
-import { outlinerSchema } from "@/lib/editor/schema";
 import type { App } from "@/lib/app/app";
 import type { BlockDataInner, BlockNode } from "@/lib/common/types";
-import { executeCompletion } from "@/lib/editor/plugins/block-ref-completion";
 import { searchBlocks } from "@/lib/app/index/fulltext";
-import { getFocusingEditor } from "@/lib/app/editors";
 import { getAllNodes, getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
+import { Paragraph } from "@/lib/views/tiptap-editor/nodes/paragraph";
+import { BlockRef } from "@/lib/views/tiptap-editor/nodes/block-ref";
+import {
+  schema,
+  TiptapEditorView,
+  type CompletionStatus,
+  type TiptapEditorViewEvents,
+} from "@/lib/views/tiptap-editor/editor-view";
+import { getFocusingAppView } from "@/lib/app/views";
+import { executeCompletion } from "@/lib/views/tiptap-editor/functionalities/block-ref-completion";
 
 function isSingleRefBlock(block: BlockNode) {
   const data = block.data.toJSON() as BlockDataInner;
   const nodeJson = JSON.parse(data.content);
-  const node = outlinerSchema.nodeFromJSON(nodeJson);
-  if (!node || node.type !== outlinerSchema.nodes.paragraph) return false;
+  const node = schema.nodeFromJSON(nodeJson);
+  if (!node || node.type.name !== Paragraph.name) return false;
 
   if (node.content.size === 1) {
     const fst = node.firstChild;
-    if (fst && fst.type === outlinerSchema.nodes.blockRef) {
+    if (fst && fst.type.name === BlockRef.name) {
       return true;
     }
   }
@@ -39,15 +40,15 @@ export function useBlockRefCompletion(app: App) {
 
   // 编辑器事件处理
   function handleCompletionRelatedEvent(
-    editor: Editor,
-    key: keyof EditorEvents,
-    event: EditorEvents[keyof EditorEvents]
+    editor: TiptapEditorView,
+    key: keyof TiptapEditorViewEvents,
+    event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
   ) {
     switch (key) {
       case "completion":
         handleCompletionEvent(
           editor,
-          (event as EditorEvents["completion"]).status
+          (event as TiptapEditorViewEvents["completion"]).status
         );
         break;
       case "completion-next":
@@ -64,7 +65,7 @@ export function useBlockRefCompletion(app: App) {
 
   // 处理补全事件
   const handleCompletionEvent = (
-    editor: Editor,
+    editor: TiptapEditorView,
     status: CompletionStatus | null
   ) => {
     if (status) {
@@ -73,7 +74,7 @@ export function useBlockRefCompletion(app: App) {
       completionQuery.value = status.query;
 
       // 计算弹窗位置
-      const coords = editorUtils.coordAtPos(editor, status.from);
+      const coords = editor.coordAtPos(status.from);
       completionPosition.value = {
         x: coords.left,
         y: coords.bottom + 4,
@@ -93,15 +94,18 @@ export function useBlockRefCompletion(app: App) {
   };
 
   // 加载可用的块列表
-  const loadAvailableBlocks = (editor: Editor, query?: string) => {
+  const loadAvailableBlocks = (editor: TiptapEditorView, query?: string) => {
     const blocks: BlockNode[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
       const searchResults = searchBlocks(app, query, 100);
 
-      const focusedEditor = getFocusingEditor(app);
+      const focusedEditor = getFocusingAppView(app);
+      if (!(focusedEditor instanceof TiptapEditorView))
+        // TODO
+        throw new Error("Focused editor is not a TiptapEditorView");
       const focusedBlockId = focusedEditor
-        ? editorUtils.getFocusedBlockId(focusedEditor)
+        ? focusedEditor.getFocusedBlockId()
         : null;
 
       // 根据搜索结果获取具体的块
@@ -139,9 +143,9 @@ export function useBlockRefCompletion(app: App) {
   };
 
   // 补全相关函数
-  const handleBlockSelect = (editor: Editor, block: BlockNode) => {
+  const handleBlockSelect = (editor: TiptapEditorView, block: BlockNode) => {
     // 插入选中的块引用
-    editor.view && executeCompletion(block.id, editor.view);
+    editor.tiptap && executeCompletion(block.id, editor.tiptap.view);
     // 关闭补全窗口
     completionVisible.value = false;
   };
@@ -166,7 +170,7 @@ export function useBlockRefCompletion(app: App) {
     }
   };
 
-  const handleCompletionSelect = (editor: Editor) => {
+  const handleCompletionSelect = (editor: TiptapEditorView) => {
     const selectedBlock = availableBlocks.value[completionActiveIndex.value];
     if (selectedBlock) {
       handleBlockSelect(editor, selectedBlock);

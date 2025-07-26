@@ -11,10 +11,11 @@
 
   <!-- 编辑器容器 -->
   <div class="flex-1 flex flex-col overflow-auto">
-    <div
-      ref="wrapper"
+    <EditorContent
       class="flex-1 px-5 py-4 pb-[50vh] mt-5 outline-none"
-    ></div>
+      ref="wrapper"
+      :editor="mainEditorView?.tiptap ?? undefined"
+    />
   </div>
 
   <CompletionPopup
@@ -53,14 +54,19 @@ import { useImportExport } from "@/composables/useImportExport";
 import { useMainEditorRoots } from "@/composables/useMainEditorRoots";
 import { useSearch } from "@/composables/useSearch";
 import type { App } from "@/lib/app/app";
-import { getRootBlockNodes } from "@/lib/app/block-manage";
-import { getEditorFromApp } from "@/lib/app/editors";
-import { withTx } from "@/lib/app/tx";
-import { editorUtils, type EditorEvents } from "@/lib/editor/editor";
-import { outlinerSchema } from "@/lib/editor/schema";
-import { serialize } from "@/lib/editor/utils";
+import { registerAppView, unregisterAppView } from "@/lib/app/views";
 import type { RepoConfig } from "@/lib/repo/schema";
-import { onMounted, onUnmounted, ref } from "vue";
+import {
+  TiptapEditorView,
+  type TiptapEditorViewEvents,
+} from "@/lib/views/tiptap-editor/editor-view";
+import { BlockRefCompletion } from "@/lib/views/tiptap-editor/functionalities/block-ref-completion";
+import { CompositionFix } from "@/lib/views/tiptap-editor/functionalities/composition-fix";
+import { NormalKeymap } from "@/lib/views/tiptap-editor/functionalities/keymap/normal";
+import { markExtensions } from "@/lib/views/tiptap-editor/marks";
+import { nodeExtensions } from "@/lib/views/tiptap-editor/nodes";
+import { EditorContent } from "@tiptap/vue-3";
+import { onMounted, onUnmounted, ref, shallowRef } from "vue";
 
 const props = defineProps<{
   app: App;
@@ -79,50 +85,67 @@ const attachment = useAttachment(app);
 const taskList = useAttachmentTaskList(app);
 
 let editorEventCb: (
-  key: keyof EditorEvents,
-  event: EditorEvents[keyof EditorEvents]
+  key: keyof TiptapEditorViewEvents,
+  event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
 ) => void;
 
+const mainEditorView = shallowRef<TiptapEditorView | undefined>(undefined);
+
 onMounted(() => {
-  if (!wrapper.value) throw new Error("Wrapper not found");
+  // 拿到 EditorContent 的根元素
+  const rootEl = (wrapper.value as any)?.rootEl;
+  if (!(rootEl instanceof HTMLElement)) throw new Error("rootEl not found");
 
   const { mainEditorRoots } = useMainEditorRoots();
-  const mainEditor = getEditorFromApp(app, { id: "main" });
-  editorUtils.setRootBlockIds(mainEditor, mainEditorRoots.value);
-  editorUtils.mount(mainEditor, wrapper.value);
+  mainEditorView.value = new TiptapEditorView(app, {
+    id: "main",
+    extensions: [
+      ...nodeExtensions,
+      ...markExtensions,
+      NormalKeymap,
+      BlockRefCompletion,
+      CompositionFix,
+    ],
+  });
+  registerAppView(app, mainEditorView.value);
+  mainEditorView.value.setRootBlockIds(mainEditorRoots.value);
+  mainEditorView.value.mount(rootEl);
 
+  // TODO
   // 如果当前没有根块，创建一个默认根块
-  if (getRootBlockNodes(app).length == 0) {
-    withTx(app, (tx) => {
-      const { type, content } = serialize(
-        outlinerSchema.nodes.paragraph.create()
-      );
-      tx.createBlockUnder(null, 0, {
-        type,
-        content,
-        folded: false,
-      });
-    });
-  }
+  // if (getRootBlockNodes(app).length == 0) {
+  //   withTx(app, (tx) => {
+  //     const { type, content } = serialize(
+  //       schema.nodes.paragraph.create()
+  //     );
+  //     tx.createBlockUnder(null, 0, {
+  //       type,
+  //       content,
+  //       folded: false,
+  //     });
+  //   });
+  // }
 
   editorEventCb = (
-    key: keyof EditorEvents,
-    event: EditorEvents[keyof EditorEvents]
+    key: keyof TiptapEditorViewEvents,
+    event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
   ) => {
-    completion.handleCompletionRelatedEvent(mainEditor, key, event);
+    completion.handleCompletionRelatedEvent(mainEditorView.value, key, event);
     breadcrumb.handleMainEditorEvent(key, event);
   };
-  mainEditor.on("*", editorEventCb);
+  mainEditorView.value?.on("*", editorEventCb);
 
-  (globalThis as any).mainEditor = mainEditor;
+  (globalThis as any).mainEditor = mainEditorView;
   (globalThis as any).app = app;
 });
 
 onUnmounted(() => {
   // TODO 更好的 cleanup 逻辑
-  const mainEditor = getEditorFromApp(app, { id: "main" });
-  mainEditor.off("*", editorEventCb);
-  editorUtils.unmount(mainEditor);
+  if (mainEditorView.value) {
+    mainEditorView.value.off("*", editorEventCb);
+    mainEditorView.value.unmount();
+    unregisterAppView(app, mainEditorView.value.id);
+  }
   taskList.cleanup();
 });
 </script>

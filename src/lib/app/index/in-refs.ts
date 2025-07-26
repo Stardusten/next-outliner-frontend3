@@ -1,12 +1,13 @@
 import type { BlockDataInner, BlockId } from "@/lib/common/types";
 import { Observable } from "../../common/observable";
-import { outlinerSchema } from "../../editor/schema";
+import { schema } from "../../views/tiptap-editor/editor-view";
 import type { App } from "../app";
 import { getBlockRefs } from "../util";
 import { getAllNodes, getBlockData } from "../block-manage";
 
 export function initInRefs(app: App) {
   app.inRefs = new Map();
+  app.inTags = new Map();
 
   app.on("tx-committed", (e) => {
     for (const change of e.executedOps) {
@@ -15,41 +16,49 @@ export function initInRefs(app: App) {
         if (!blockData) continue;
         if (blockData.type === "text" || blockData.type === "code") {
           const nodeJson = JSON.parse(blockData.content);
-          const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-          const refs = getBlockRefs(pmNode);
+          const pmNode = schema.nodeFromJSON(nodeJson);
+          const refs = getBlockRefs(pmNode, false);
+          const tags = getBlockRefs(pmNode, true);
           for (const ref of refs) addInRef(app, ref, change.blockId);
+          for (const tag of tags) addInTag(app, tag, change.blockId);
         }
       } else if (change.type === "block:delete") {
         const blockData = getBlockData(app, change.blockId, true);
         if (!blockData) continue;
         if (blockData.type === "text" || blockData.type === "code") {
           const nodeJson = JSON.parse(blockData.content);
-          const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-          const refs = getBlockRefs(pmNode);
+          const pmNode = schema.nodeFromJSON(nodeJson);
+          const refs = getBlockRefs(pmNode, false);
+          const tags = getBlockRefs(pmNode, true);
           for (const ref of refs) removeInRef(app, ref, change.blockId);
+          for (const tag of tags) removeInTag(app, tag, change.blockId);
         }
       } else if (change.type === "block:update") {
         const { blockId, newData, oldData } = change;
         if (oldData.type === "text" || oldData.type === "code") {
           const oldJson = JSON.parse(oldData.content);
-          const oldPmNode = outlinerSchema.nodeFromJSON(oldJson);
-          const oldRefs = getBlockRefs(oldPmNode);
+          const oldPmNode = schema.nodeFromJSON(oldJson);
+          const oldRefs = getBlockRefs(oldPmNode, false);
+          const oldTags = getBlockRefs(oldPmNode, true);
           for (const ref of oldRefs) removeInRef(app, ref, blockId);
+          for (const tag of oldTags) removeInTag(app, tag, blockId);
         }
         if (newData && (newData.type === "text" || newData.type === "code")) {
           const newJson = JSON.parse(newData.content);
-          const newPmNode = outlinerSchema.nodeFromJSON(newJson);
-          const refs = getBlockRefs(newPmNode);
+          const newPmNode = schema.nodeFromJSON(newJson);
+          const refs = getBlockRefs(newPmNode, false);
+          const tags = getBlockRefs(newPmNode, true);
           for (const ref of refs) addInRef(app, ref, blockId);
+          for (const tag of tags) addInTag(app, tag, blockId);
         }
       }
     }
   });
+
+  refreshInRefs(app);
+  refreshInTags(app);
 }
 
-/**
- * 获取块的反链
- */
 export function getInRefs(app: App, id: BlockId): Observable<Set<BlockId>> {
   let res = app.inRefs.get(id);
   if (res) return res;
@@ -60,17 +69,44 @@ export function getInRefs(app: App, id: BlockId): Observable<Set<BlockId>> {
   }
 }
 
+export function getInTags(app: App, id: BlockId): Observable<Set<BlockId>> {
+  let res = app.inTags.get(id);
+  if (res) return res;
+  else {
+    res = new Observable(new Set());
+    app.inTags.set(id, res);
+    return res;
+  }
+}
+
 /**
  * 刷新所有块的反链
  */
 export function refreshInRefs(app: App) {
+  app.inRefs.clear();
   for (const node of getAllNodes(app, false)) {
     const data = node.data.toJSON() as BlockDataInner;
     if (data.type === "text" || data.type === "code") {
       const nodeJson = JSON.parse(data.content);
-      const pmNode = outlinerSchema.nodeFromJSON(nodeJson);
-      const refs = getBlockRefs(pmNode);
+      const pmNode = schema.nodeFromJSON(nodeJson);
+      const refs = getBlockRefs(pmNode, false);
       for (const ref of refs) addInRef(app, ref, node.id);
+    }
+  }
+}
+
+/**
+ * 刷新所有块的反链
+ */
+export function refreshInTags(app: App) {
+  app.inTags.clear();
+  for (const node of getAllNodes(app, false)) {
+    const data = node.data.toJSON() as BlockDataInner;
+    if (data.type === "text" || data.type === "code") {
+      const nodeJson = JSON.parse(data.content);
+      const pmNode = schema.nodeFromJSON(nodeJson);
+      const tags = getBlockRefs(pmNode, true);
+      for (const tag of tags) addInTag(app, tag, node.id);
     }
   }
 }
@@ -89,10 +125,33 @@ function addInRef(app: App, a: BlockId, b: BlockId) {
 }
 
 /**
+ * 更新 this.inTags，记录 b 引用了 a
+ */
+function addInTag(app: App, a: BlockId, b: BlockId) {
+  let set = app.inTags.get(a);
+  if (!set) {
+    set = new Observable(new Set([b]));
+    app.inTags.set(a, set);
+  } else {
+    set.update((val) => val.add(b));
+  }
+}
+
+/**
  * 更新 this.inRefs，删除 b 引用了 a
  */
 function removeInRef(app: App, a: BlockId, b: BlockId) {
   const set = app.inRefs.get(a);
+  if (set) {
+    set.update((val) => val.delete(b));
+  }
+}
+
+/**
+ * 更新 this.inTags，删除 b 引用了 a
+ */
+function removeInTag(app: App, a: BlockId, b: BlockId) {
+  const set = app.inTags.get(a);
   if (set) {
     set.update((val) => val.delete(b));
   }

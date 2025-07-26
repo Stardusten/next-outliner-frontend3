@@ -1,13 +1,15 @@
 import type { App } from "@/lib/app/app";
 import type { BlockId, BlockNode } from "@/lib/common/types";
-import type { Editor, EditorEvents } from "@/lib/editor/editor";
-import { editorUtils } from "@/lib/editor/editor";
 import { computed } from "vue";
 import { useLocalStorage } from "./useLocalStorage";
 import type { RepoConfig } from "@/lib/repo/schema";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
 import { useMainEditorRoots } from "./useMainEditorRoots";
+import type {
+  TiptapEditorView,
+  TiptapEditorViewEvents,
+} from "@/lib/views/tiptap-editor/editor-view";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -50,23 +52,23 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
   });
 
   const handleBreadcrumbClick = (
-    editor: Editor,
+    editor: TiptapEditorView,
     item: BreadcrumbItem
   ): void => {
     if (item.blockId) {
-      editorUtils.setRootBlockIds(editor, [item.blockId]);
+      editor.setRootBlockIds([item.blockId]);
     } else {
-      editorUtils.setRootBlockIds(editor, []);
+      editor.setRootBlockIds([]);
     }
   };
 
   const handleMainEditorEvent = (
-    key: keyof EditorEvents,
-    event: EditorEvents[keyof EditorEvents]
+    key: keyof TiptapEditorViewEvents,
+    event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
   ): void => {
     const { mainEditorRoots } = useMainEditorRoots();
     if (key === "root-blocks-changed") {
-      const typedEvent = event as EditorEvents["root-blocks-changed"];
+      const typedEvent = event as TiptapEditorViewEvents["root-blocks-changed"];
       mainEditorRoots.value = typedEvent.rootBlockIds;
     }
   };

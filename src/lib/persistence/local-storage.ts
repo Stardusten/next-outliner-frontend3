@@ -1,8 +1,8 @@
 import { LoroDoc, type LoroTree } from "loro-crdt";
 import { nanoid } from "nanoid";
 import { base64ToUint8Array, uint8ArrayToBase64 } from "../app/util";
-import { outlinerSchema } from "@/lib/editor/schema";
-import { serialize } from "@/lib/editor/utils";
+import { schema } from "@/lib/views/tiptap-editor/editor-view";
+import { serialize } from "@/lib/views/utils";
 import type { Persistence } from "./persistence";
 
 export const BLOCKS_TREE_NAME = "blocks";
@@ -107,7 +107,7 @@ export class LocalStoragePersistence implements Persistence {
       rootNode.data.set("type", "text");
       rootNode.data.set(
         "content",
-        serialize(outlinerSchema.nodes.paragraph.create()).content
+        serialize(schema.nodes.paragraph.create()).content
       );
       rootNode.data.set("folded", false);
       this.writeState(this.docId, doc.export({ mode: "snapshot" })); // 写入初始状态

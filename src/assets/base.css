@@ -86,6 +86,7 @@
   --editor-font-size: 16px;
   --color-guide-line: #e1e4e8;
   --color-bullet-background-collapsed: var(--muted);
+  --color-bullet-dashed-border: #555;
   --color-link: var(--color-primary);
   --color-block-ref: var(--color-link);
   --color-file-inline: var(--color-block-ref);
@@ -95,6 +96,7 @@
   --editor-codeblock-font-size: 14px;
   --editor-codeblock-line-height: 1.4;
   --highlight-keep: #ffe066;
+  --tag-font-size: 0.9em;
 
   /* 语法高亮颜色 */
   --color-syntax-comment: #6a737d;
@@ -145,6 +147,7 @@
   --editor-font-size: 16px;
   --color-guide-line: #30363d;
   --color-bullet-background-collapsed: var(--muted);
+  --color-bullet-dashed-border: #555;
   --color-link: var(--color-primary);
   --color-block-ref: var(--color-link);
   --color-file-inline: var(--color-block-ref);

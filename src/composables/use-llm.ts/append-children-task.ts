@@ -2,12 +2,10 @@ import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { withTx } from "@/lib/app/tx";
 import type { BlockId, BlockNode, SelectionInfo } from "@/lib/common/types";
-import { buildTextContent, toMarkdown } from "@/lib/editor/utils";
+import { buildTextContent, toMarkdown } from "@/lib/views/utils";
 import type { LlmModelConfig } from "./useLlm";
-import { getEditorFromApp, getLastFocusedEditor } from "@/lib/app/editors";
+import { getLastFocusedAppView } from "@/lib/app/views";
 import { nanoid } from "nanoid";
-import { getAbsPos } from "@/lib/editor/editor";
-import { outlinerSchema } from "@/lib/editor/schema";
 import LLM, { type LLMServices, type PartialStreamResponse } from "@/lib/llm";
 import type { Emitter } from "mitt";
 import mitt from "mitt";
@@ -80,7 +78,7 @@ function prepare(app: App, task: LlmAppendChildrenTask) {
         data.set("content", content);
       });
 
-      const editorId = getLastFocusedEditor(app)?.id;
+      const editorId = getLastFocusedAppView(app)?.id;
       const initInsertPos = {
         editorId,
         blockId: llmContentNode.id,
@@ -152,7 +150,7 @@ function insertLlmContent(
   newContent: string
 ) {
   if (!task.lastInsertPos) throw new Error("lastInsertPos is null");
-  const { editorId, blockId, anchor } = task.lastInsertPos;
+  const { viewId: editorId, blockId, anchor } = task.lastInsertPos;
 
   const editor = getEditorFromApp(app, editorId);
   if (!editor.view) throw new Error("editor.view is null");
@@ -162,7 +160,7 @@ function insertLlmContent(
   if (absPos === null) throw new Error("failed to calculate absPos");
 
   const tr = editor.view.state.tr;
-  const frag = Fragment.from([outlinerSchema.text(newContent)]);
+  const frag = Fragment.from([schema.text(newContent)]);
   const slice = new Slice(frag, 0, 0);
   tr.replaceSelection(slice);
   const insertPos = tr.selection.to;

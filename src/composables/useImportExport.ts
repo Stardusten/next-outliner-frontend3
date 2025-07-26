@@ -1,20 +1,19 @@
 import type { App } from "@/lib/app/app";
-import { BLOCKS_TREE_NAME } from "@/lib/persistence/local-storage";
+import { forceSave } from "@/lib/app/saver";
+import { withTx } from "@/lib/app/tx";
 import type {
   BlockDataInner,
   BlockId,
   BlockNode,
   BlockType,
 } from "@/lib/common/types";
-import { outlinerSchema } from "@/lib/editor/schema";
+import { BLOCKS_TREE_NAME } from "@/lib/persistence/local-storage";
 import { LoroDoc } from "loro-crdt";
-import { nanoid } from "nanoid";
 import { Fragment, type Node } from "prosemirror-model";
 import { ref, shallowRef } from "vue";
-import { withTx } from "@/lib/app/tx";
-import { forceSave } from "@/lib/app/saver";
-import { useMainEditorRoots } from "./useMainEditorRoots";
 import { toast } from "vue-sonner";
+import { useMainEditorRoots } from "./useMainEditorRoots";
+import { schema } from "@/lib/views/tiptap-editor/editor-view";
 
 type Block = {
   id: string;
@@ -167,10 +166,10 @@ export function useImportExport(app: App) {
     tmp2new: Record<string, BlockId>
   ) => {
     const nodeJson = JSON.parse(content);
-    const node = outlinerSchema.nodeFromJSON(nodeJson);
-    const blockRefType = outlinerSchema.nodes.blockRef;
-    const paragraphType = outlinerSchema.nodes.paragraph;
-    const codeblockType = outlinerSchema.nodes.codeblock;
+    const node = schema.nodeFromJSON(nodeJson);
+    const blockRefType = schema.nodes.blockRef;
+    const paragraphType = schema.nodes.paragraph;
+    const codeblockType = schema.nodes.codeblock;
 
     const recur = (fragment: Fragment) => {
       const result: Node[] = [];

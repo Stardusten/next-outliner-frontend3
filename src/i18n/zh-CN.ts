@@ -1,12 +1,24 @@
 export const zhCN_messages = {
   repoNotFound: "糟糕！没有找到 ID 为 {id} 的知识库",
   backToSwitchRepo: "返回知识库列表",
+  listItem: {
+    editSearchQuery: "编辑查询表达式",
+    editViewOptions: "视图选项",
+    invalidQuery: "无效的查询表达式",
+    nResults: "{n} 条结果",
+  },
+  editSearchQueryPopup: {
+    queryLabel: "编辑查询表达式",
+    queryPlaceholder: "输入查询表达式...",
+    cancel: "取消",
+    save: "保存",
+  },
   quickadd: {
     tooltip: "快速添加",
     title: "快速添加",
     save: "保存",
     cancel: "取消",
-    selectPlaceholder: "选择放置位置，默认放到根块末尾"
+    selectPlaceholder: "选择放置位置，默认放到根块末尾",
   },
   search: {
     tooltip: "搜索",
