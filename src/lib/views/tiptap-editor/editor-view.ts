@@ -372,6 +372,7 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
     }
 
     // 如果指定了要恢复的选区，并且选区属于当前编辑器，则恢复
+    let setSelectionSuccess = false;
     if (selection != null && selection.viewId === this.id) {
       const anchor = getAbsPos(tr.doc, selection.blockId, selection.anchor);
       const head = selection.head
@@ -379,11 +380,18 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
         : undefined;
       if (anchor !== null) {
         tr = tr.setSelection(TextSelection.create(tr.doc, anchor, head));
+        setSelectionSuccess = true;
       }
       if (selection.scrollIntoView) {
         tr = tr.scrollIntoView();
       }
       this.tiptap.view.focus();
+    }
+
+    // 如果恢复选区失败，则设置选区为文档开头
+    // 防止选中整个文档
+    if (!setSelectionSuccess) {
+      tr = tr.setSelection(TextSelection.create(tr.doc, 0));
     }
 
     this.tiptap.view.dispatch(tr);

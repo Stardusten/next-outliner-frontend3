@@ -114,7 +114,6 @@ onMounted(() => {
   registerAppView(app, mainEditorView.value);
   mainEditorView.value.setRootBlockIds(mainEditorRoots.value);
   mainEditorView.value.mount(rootEl);
-  mainEditorView.value.tiptap?.view.focus(); // 先 focus
 
   // TODO
   // 如果当前没有根块，创建一个默认根块

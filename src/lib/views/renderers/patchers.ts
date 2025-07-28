@@ -74,17 +74,31 @@ function handleBlockCreateOp(
   if (pos === -1) throw new Error("Block not found for create: " + op.blockId);
 
   let skipped = 0;
-  for (let i = parentIndex + 1, p = pos; i < content.length; i++) {
-    if (skipped === op.index) break;
+  let i = parentIndex + 1;
+  let p = pos;
+  while (i < content.length) {
     const listItem = content[i];
     const { level } = listItem.attrs;
+
     if (level === parentLevel + 1) {
+      if (skipped === op.index) {
+        pos = p;
+        break;
+      }
       skipped++;
-      pos = p + listItem.nodeSize;
+    } else if (level <= parentLevel) {
+      // 如果遇到同级或更高级，说明已经超出了父块的范围
+      break;
     }
+
     p += listItem.nodeSize;
+    i++;
   }
-  // 此时 pos 指向插入位置
+
+  // 如果循环结束但还没达到目标位置，说明要插入到最后
+  if (i === content.length || content.length === 0) {
+    pos = p;
+  }
 
   const blockNode = getBlockNode(view.app, op.blockId);
   if (blockNode == null) throw new Error("Block not found: " + op.blockId);
@@ -192,31 +206,47 @@ function handleBlockMoveOp(
   if (!view.tiptap) return;
   let tr = view.tiptap.state.tr;
   let content = tr.doc.content.content;
-  // console.log("handleBlockMoveOp", op);
 
-  // 第一步：找到并删除原位置的块
+  // 第一步：找到并删除目标块及其所有后代
   {
     let pos = -1;
     let listItem: Node | null = null;
+    let listItemIndex = -1;
     for (let i = 0, p = 0; i < content.length; i++) {
       const listItem_ = content[i];
       const { blockId } = listItem_.attrs;
       if (blockId === op.blockId) {
         pos = p;
         listItem = listItem_;
+        listItemIndex = i;
         break;
       }
       p += listItem_.nodeSize;
     }
 
-    if (pos === -1 || listItem == null) {
+    if (pos === -1 || listItem == null || listItemIndex === -1) {
       throw new Error("Block not found for move: " + op.blockId);
     }
 
-    tr = tr.delete(pos, pos + listItem.nodeSize);
+    const level = listItem.attrs.level;
+
+    // 计算包含所有子级的范围
+    let deleteTo = pos + listItem.nodeSize;
+
+    // 跳过所有子级
+    for (let i = listItemIndex + 1, p = deleteTo; i < content.length; i++) {
+      const childItem = content[i];
+      const { level: childLevel } = childItem.attrs;
+      if (childLevel <= level) break; // 遇到同级或更高级，停止
+      deleteTo = p + childItem.nodeSize;
+      p += childItem.nodeSize;
+    }
+
+    tr = tr.delete(pos, deleteTo);
   }
 
-  // 2. 在新位置插入块（基于删除后的新文档）
+  // 2. 找到插入位置
+  // 先找到父块的位置
   {
     content = tr.doc.content.content;
 
@@ -243,39 +273,63 @@ function handleBlockMoveOp(
 
     if (pos === -1) throw new Error("Block not found for move: " + op.blockId);
 
-    let skipped = 0,
-      baseIndex = parentIndex;
-    for (let i = parentIndex + 1, p = pos; i < content.length; i++) {
-      if (skipped === op.index) break;
+    // 然后跳过 op.index 个子块，注意子块的后代也要跳过
+    // 使用改进的跳过逻辑
+    let skipped = 0;
+    let i = parentIndex + 1;
+    let p = pos;
+
+    while (i < content.length) {
       const listItem = content[i];
       const { level } = listItem.attrs;
+
       if (level === parentLevel + 1) {
+        // 检查是否要在这个块前面插入
+        if (skipped === op.index) {
+          pos = p;
+          break;
+        }
+
+        // 跳过这个直接子块
         skipped++;
-        pos = p + listItem.nodeSize;
-        baseIndex = i;
+
+        // 跳过后再检查是否已达到目标位置
+        if (skipped === op.index) {
+          // 需要移动到这个块（及其子块）的末尾
+          let blockEndPos = p + listItem.nodeSize;
+          let j = i + 1;
+          while (j < content.length) {
+            const childItem = content[j];
+            if (childItem.attrs.level <= parentLevel + 1) break;
+            blockEndPos += childItem.nodeSize;
+            j++;
+          }
+          pos = blockEndPos;
+          break;
+        }
+      } else if (level <= parentLevel) {
+        // 如果遇到同级或更高级，说明已经超出了父块的范围
+        break;
       }
+
       p += listItem.nodeSize;
+      i++;
     }
 
-    // 需要跳过 baseListItem 的所有子级
-    for (let i = baseIndex + 1, p = pos; i < content.length; i++) {
-      const listItem = content[i];
-      const { level } = listItem.attrs;
-      if (level <= parentLevel + 1) break;
-      pos = p + listItem.nodeSize;
-      p += listItem.nodeSize;
+    // 如果循环结束但还没达到目标位置，说明要插入到最后
+    if (i === content.length || content.length === 0) {
+      pos = p;
     }
-    // 此时 pos 指向插入位置
 
     const blockNode = getBlockNode(view.app, op.blockId);
     if (blockNode == null) throw new Error("Block not found: " + op.blockId);
-    const [node] = renderBlock({
+    const newNodes = renderBlock({
       editor: view,
       blockNode,
       level: parentLevel + 1,
-      rootOnly: true,
+      rootOnly: false, // 渲染完整子树
     });
-    tr.insert(pos, node);
+    tr.insert(pos, newNodes);
   }
 
   view.tiptap.view.dispatch(tr);

@@ -30,13 +30,18 @@
           />
         </div>
 
-        <div class="flex justify-end gap-2">
-          <Button variant="outline" size="sm" @click="open = false">
-            {{ $t("editSearchQueryPopup.cancel") }}
-          </Button>
-          <Button size="sm" @click="handleSubmit">
-            {{ $t("editSearchQueryPopup.save") }}
-          </Button>
+        <div class="flex justify-between">
+          <div>
+            <a class="text-sm text-muted-foreground cursor-pointer">语法说明</a>
+          </div>
+          <div class="flex gap-2">
+            <Button variant="outline" size="sm" @click="open = false">
+              {{ $t("editSearchQueryPopup.cancel") }}
+            </Button>
+            <Button size="sm" @click="handleSubmit">
+              {{ $t("editSearchQueryPopup.save") }}
+            </Button>
+          </div>
         </div>
       </div>
     </PopoverContent>
