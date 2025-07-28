@@ -1,11 +1,26 @@
 export const zhCN_messages = {
   repoNotFound: "糟糕！没有找到 ID 为 {id} 的知识库",
   backToSwitchRepo: "返回知识库列表",
+  commands: {
+    toSearchBlock: {
+      searchBlockCannotHaveChildren: "搜索块不能有子块",
+      alreadySearchBlock: "当前块已经是搜索块了",
+      onlyTextBlockCanBeSearchBlock: "只有文本块可以被转换为搜索块",
+    },
+  },
+  blockContextMenu: {
+    delete: "删除块",
+    copyBlockRef: "复制块引用",
+  },
   listItem: {
     editSearchQuery: "编辑查询表达式",
     editViewOptions: "视图选项",
     invalidQuery: "无效的查询表达式",
     nResults: "{n} 条结果",
+    refCounterTooltip: "{n} 个块引用了此块",
+    tagCounterTooltip: "{n} 个块打了此标签",
+    refreshSearch: "重新搜索",
+    bulletTooltip: "右键打开块菜单",
   },
   editSearchQueryPopup: {
     queryLabel: "编辑查询表达式",

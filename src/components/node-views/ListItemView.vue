@@ -22,22 +22,27 @@
         }"
         @click.stop="handleClickFoldBtn"
       />
-      <Bullet
-        class="size-[14px] cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-        v-if="bulletType === 'normal'"
-        :class="{
-          // 折叠且有子块时，bullet 周围加一个背景色
-          'bg-[var(--color-bullet-background-collapsed)] rounded-full':
-            node.attrs.folded && node.attrs.hasChildren,
-          // 搜索块的 bullet 加一个虚线边框
-          'border-dashed border-[1px] rounded-full border-[var(--color-bullet-dashed-border)]':
-            node.attrs.isSearchResultRoot,
-        }"
-      />
-      <Search
-        v-if="bulletType === 'search'"
-        class="size-[14px] cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-      />
+
+      <BlockContextMenu :block-id="node.attrs.blockId" :editor="editor">
+        <Bullet
+          v-if="bulletType === 'normal'"
+          class="size-[14px] cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+          :class="{
+            // 折叠且有子块时，bullet 周围加一个背景色
+            'bg-[var(--color-bullet-background-collapsed)] rounded-full':
+              node.attrs.folded && node.attrs.hasChildren,
+            // 搜索块的 bullet 加一个虚线边框
+            'border-dashed border-[1px] rounded-full border-[var(--color-bullet-dashed-border)]':
+              node.attrs.isSearchResultRoot,
+          }"
+          @click.stop="handleClickBullet"
+        />
+
+        <Search
+          v-else-if="bulletType === 'search'"
+          class="size-[14px] cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+        />
+      </BlockContextMenu>
     </div>
     <!--
     min-w-[1px] 保证在没有内容时，也有一点宽度，能看到光标
@@ -63,13 +68,9 @@
           </Button>
         </EditSearchQueryPopup>
 
-        <Tooltip>
+        <Tooltip v-if="node.attrs.type === 'search'">
           <TooltipTrigger as-child>
-            <Button
-              v-if="node.attrs.type === 'search'"
-              variant="secondary"
-              size="2xs-icon"
-            >
+            <Button variant="secondary" size="2xs-icon">
               <Settings2 class="size-[12px]" />
             </Button>
           </TooltipTrigger>
@@ -77,15 +78,55 @@
             {{ $t("listItem.editViewOptions") }}
           </TooltipContent>
         </Tooltip>
+
+        <Tooltip v-if="node.attrs.type === 'search'">
+          <TooltipTrigger as-child>
+            <Button variant="secondary" size="2xs-icon">
+              <RefreshCcw class="size-[12px]" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {{ $t("listItem.refreshSearch") }}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip v-if="refCounter > 0">
+          <TooltipTrigger as-child>
+            <div
+              class="rounded-md cursor-pointer border-1 text-xs min-w-[16px] text-center"
+            >
+              {{ refCounter }}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {{ $t("listItem.refCounterTooltip", { n: refCounter }) }}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip v-if="tagCounter > 0">
+          <TooltipTrigger as-child>
+            <div
+              class="rounded-md cursor-pointer border-1 text-xs px-[4px] text-center"
+            >
+              {{ tagCounter }}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {{ $t("listItem.tagCounterTooltip", { n: tagCounter }) }}
+          </TooltipContent>
+        </Tooltip>
       </div>
-      <div class="flex-1" @click.prevent="focusToContentEnd"></div>
+      <div
+        class="flex-1 cursor-text"
+        @click.prevent="handleClickRightPad"
+      ></div>
     </div>
   </NodeViewWrapper>
 </template>
 
 <script setup lang="ts">
 import { nodeViewProps, NodeViewContent } from "@tiptap/vue-3";
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { TextSelection } from "@tiptap/pm/state";
 import { NodeViewWrapper } from "./NodeViewWrapper";
 import Bullet from "./Bullet.vue";
@@ -96,10 +137,14 @@ import {
   updateSearchQuery,
 } from "@/lib/views/tiptap-editor/commands";
 import { Button } from "../ui/button";
-import { Pencil, Settings2 } from "lucide-vue-next";
+import { Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import Search from "./Search.vue";
 import { useI18n } from "vue-i18n";
+import { getInRefs, getInTags } from "@/lib/app/index/in-refs";
+import type { Observable } from "@/lib/common/observable";
+import type { BlockId } from "@/lib/common/types";
+import BlockContextMenu from "../BlockContextMenu.vue";
 
 const { node, editor, getPos } = defineProps(nodeViewProps);
 const { t } = useI18n();
@@ -132,7 +177,32 @@ const queryStatus = computed(() => {
   };
 });
 
-const focusToContentEnd = () => {
+const refCounter = ref(0);
+const tagCounter = ref(0);
+let inRefs: Observable<Set<BlockId>> | null = null;
+let inTags: Observable<Set<BlockId>> | null = null;
+
+onMounted(() => {
+  inRefs = getInRefs(editor.appView.app, node.attrs.blockId);
+  inRefs.subscribe(
+    (inRefsVal) => {
+      refCounter.value = inRefsVal.size;
+    },
+    { immediate: true }
+  );
+
+  inTags = getInTags(editor.appView.app, node.attrs.blockId);
+  inTags.subscribe(
+    (inTagsVal) => {
+      tagCounter.value = inTagsVal.size;
+    },
+    { immediate: true }
+  );
+});
+
+onUnmounted(() => inRefs?.dispose());
+
+const handleClickRightPad = () => {
   const pos = getPos();
   if (!pos) return;
   const tr = editor.view.state.tr;
@@ -141,6 +211,10 @@ const focusToContentEnd = () => {
   if (!end) return;
   tr.setSelection(end);
   editor.view.dispatch(tr);
+};
+
+const handleClickBullet = () => {
+  editor.appView.setRootBlockIds([node.attrs.blockId]);
 };
 
 const handleClickFoldBtn = () => {

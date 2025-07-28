@@ -1,14 +1,15 @@
 import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
-import type { BlockId } from "@/lib/common/types";
+import type { BlockDataInner, BlockId, BlockNode } from "@/lib/common/types";
 import { Editor as TiptapEditor } from "@tiptap/vue-3";
 import { nanoid } from "nanoid";
 import { schema } from "../tiptap-editor/editor-view";
 import { HighlightMatches } from "../tiptap-editor/functionalities/highlight-matches";
 import { markExtensions } from "../tiptap-editor/marks";
 import { nodeExtensions } from "../tiptap-editor/nodes";
-import { pmNodeFromBlockData } from "../utils";
+import { listItemNodeFromBlockNode } from "../utils";
 import type { AppView, AppViewId } from "../view";
+import { FastListItem } from "../tiptap-editor/nodes/fast-list-item";
 
 export class ReadonlyBlockView implements AppView {
   id: AppViewId;
@@ -27,18 +28,24 @@ export class ReadonlyBlockView implements AppView {
 
   mount(el: HTMLElement): void {
     const blockNode = getBlockNode(this.app, this.blockId)!; // TODO
-    const { doc: docType } = schema.nodes;
-    const deserialized = pmNodeFromBlockData(blockNode, 0, this.app);
-    const doc = docType.create({}, [deserialized]);
 
     this.tiptap = new TiptapEditor({
       element: el,
-      content: doc.toJSON(), // TODO 序列化反序列化多次
       editable: false,
-      extensions: [...nodeExtensions, ...markExtensions, HighlightMatches],
+      extensions: [
+        ...nodeExtensions,
+        ...markExtensions,
+        HighlightMatches,
+        FastListItem,
+      ],
     });
     // @ts-ignore
     this.tiptap.appView = this; // TODO bad idea!
+
+    // 我们用 fastListItem，使用纯 js 实现，渲染速度快得多
+    const fastListItem = this.#toFastListItem(blockNode);
+    const doc = this.tiptap.schema.nodes.doc.create({}, [fastListItem]);
+    this.tiptap.commands.setContent(doc);
 
     this.updateHighlightTerms(); // 初始化高亮
   }
@@ -64,4 +71,23 @@ export class ReadonlyBlockView implements AppView {
   // 空实现
   on(args: any) {}
   off(args: any) {}
+
+  #toFastListItem(blockNode: BlockNode) {
+    if (!this.tiptap) throw new Error("tiptap not mounted");
+
+    const blockData = blockNode.data.toJSON() as BlockDataInner;
+    const json = JSON.parse(blockData.content);
+    const node = schema.nodeFromJSON(json);
+    const fastListItemNode = this.tiptap.schema.nodes.fastListItem.create(
+      {
+        level: 0,
+        blockId: blockNode.id,
+        folded: blockData.folded,
+        type: blockData.type,
+      },
+      node
+    );
+
+    return fastListItemNode;
+  }
 }

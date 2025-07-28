@@ -22,6 +22,8 @@ import type { AppView, AppViewId } from "../view";
 import { markExtensions } from "./marks";
 import { nodeExtensions } from "./nodes";
 import { ListItem } from "./nodes/list-item";
+import { incrementalUpdate } from "../renderers/patchers";
+import { getRootBlockIds } from "@/lib/app/block-manage";
 
 declare module "@tiptap/core" {
   interface Editor {
@@ -147,8 +149,6 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
   extensions: AnyExtension[];
   // 事件监听器
   #appTxCommittedHandler: ((event: AppEvents["tx-committed"]) => void) | null;
-  #clickHandler: ((e: MouseEvent) => void) | null;
-  #contextMenuHandler: ((e: MouseEvent) => void) | null;
   #focusHandler: (() => void) | null;
   // 事件总线
   eb: Emitter<TiptapEditorViewEvents>;
@@ -167,8 +167,6 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
       typeof extension === "function" ? extension(this) : extension
     );
     this.#appTxCommittedHandler = null;
-    this.#clickHandler = null;
-    this.#contextMenuHandler = null;
     this.#focusHandler = null;
     this.eb = mitt<TiptapEditorViewEvents>();
     this.on = this.eb.on;
@@ -284,8 +282,80 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
     throw new Error("Not implemented");
   }
 
-  locateBlock(blockId: BlockId) {
-    throw new Error("Not implemented");
+  async locateBlock(blockId: BlockId) {
+    await withTx(this.app, (tx) => {
+      // 1. 获取目标块的完整路径
+      const targetPath = tx.getBlockPath(blockId);
+      if (!targetPath) {
+        return;
+      }
+
+      // 2. 展开所有祖先块中折叠的块
+      // targetPath 包含目标块本身，所以我们需要排除最后一个元素
+      const ancestors = targetPath.slice(0, -1);
+      for (const ancestorId of ancestors) {
+        tx.updateBlock(ancestorId, { folded: false });
+      }
+
+      // 3. 确定根块：找到当前根块与目标块的公共父块
+      const currentRoots =
+        this.rootBlockIds.length > 0
+          ? this.rootBlockIds
+          : getRootBlockIds(this.app); // todo
+
+      let newRootBlocks: BlockId[] = [];
+
+      if (currentRoots.length === 0 || currentRoots.length > 1) {
+        // 如果当前没有根块，显示所有根块
+        newRootBlocks = [];
+      } else {
+        // 寻找公共父块
+        let commonAncestor: BlockId | null = null;
+
+        for (const rootId of currentRoots) {
+          const rootPath = tx.getBlockPath(rootId);
+          if (!rootPath) continue;
+
+          for (
+            let i = 0;
+            i < Math.min(rootPath.length, targetPath.length);
+            i++
+          ) {
+            if (rootPath[i] === targetPath[i]) {
+              commonAncestor = rootPath[i];
+            } else {
+              break;
+            }
+          }
+
+          if (commonAncestor) {
+            break;
+          }
+        }
+
+        // 如果找到公共祖先，使用它作为新的根块
+        if (commonAncestor) {
+          newRootBlocks = [commonAncestor];
+        } else {
+          // 如果没有公共祖先，显示所有根块
+          newRootBlocks = [];
+        }
+      }
+      this.setRootBlockIds(newRootBlocks);
+      tx.setOrigin("localEditorStructural");
+    });
+
+    // 聚焦到目标块
+    setTimeout(() => {
+      if (!this.tiptap) return;
+      const doc = this.tiptap.state.doc;
+      const absPos = getAbsPos(doc, blockId, 0);
+      if (absPos == null) return;
+      const sel = TextSelection.create(doc, absPos);
+      const tr = this.tiptap.state.tr.setSelection(sel).scrollIntoView();
+      this.tiptap.view.focus();
+      this.tiptap.view.dispatch(tr);
+    });
   }
 
   #rerender(selection?: SelectionInfo, fromStorageSync = false) {
@@ -317,6 +387,46 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
     }
 
     this.tiptap.view.dispatch(tr);
+  }
+
+  #patchStateAccAppTx(appTx: AppEvents["tx-committed"]) {
+    if (!this.tiptap) return;
+
+    try {
+      // 执行增量更新
+      incrementalUpdate(this, appTx);
+
+      // 恢复选区
+      const selection = appTx.meta.selection;
+      if (selection != null && selection.viewId === this.id) {
+        const state = this.tiptap.state;
+        const anchor = getAbsPos(
+          state.doc,
+          selection.blockId,
+          selection.anchor
+        );
+        const head = selection.head
+          ? (getAbsPos(state.doc, selection.blockId, selection.head) ??
+            undefined)
+          : undefined;
+
+        if (anchor !== null) {
+          let tr = state.tr.setSelection(
+            TextSelection.create(state.doc, anchor, head)
+          );
+
+          if (selection.scrollIntoView) {
+            tr = tr.scrollIntoView();
+          }
+
+          this.tiptap.view.dispatch(tr);
+          this.tiptap.view.focus();
+        }
+      }
+    } catch (error) {
+      console.warn("增量更新失败，回退到全量重绘:", error);
+      this.#rerender(appTx.meta.selection, true);
+    }
   }
 
   #wrapDispatchTransaction() {
@@ -386,7 +496,6 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
         updatedIds.add(blockId);
 
         const newData = serialize(listItem.node.firstChild!);
-        console.log("update block", blockId, newData);
         withTx(this.app, (tx) => {
           tx.updateBlock(blockId, newData);
           tx.setOrigin("localEditorContent" + this.id);
@@ -403,12 +512,8 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
       // 如果事件是来自本地编辑器的内容变更，则不更新视图
       if (event.meta.origin === "localEditorContent" + this.id) return;
 
-      // 计算目标选区
-      const selection =
-        event.meta.selection ?? this.getSelectionInfo() ?? undefined;
-
-      // 更新视图
-      this.#rerender(selection, true);
+      // 使用增量更新方法
+      this.#patchStateAccAppTx(event);
     };
     this.app.on("tx-committed", this.#appTxCommittedHandler);
   }

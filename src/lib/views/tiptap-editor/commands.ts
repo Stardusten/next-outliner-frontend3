@@ -13,8 +13,6 @@ import {
   getSelectedListItemInfo,
   oldDeserialize,
   oldSerialize,
-  pmNodeFromBlockData,
-  serialize,
 } from "../utils";
 import type { AppViewId } from "../view";
 import { findCurrListItem, type TiptapEditorView } from "./editor-view";
@@ -22,6 +20,7 @@ import { Codeblock } from "./nodes/codeblock";
 import { File, getFileDisplayMode, getFileType } from "./nodes/file";
 import { ListItem } from "./nodes/list-item";
 import { Search } from "./nodes/search";
+import { i18n } from "@/main";
 
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
@@ -1110,6 +1109,78 @@ export function changeFileDisplayMode(
       const tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
       dispatch(tr);
     }
+    return true;
+  };
+}
+
+export function toSearchBlock(editor: TiptapEditor, query?: string): Command {
+  return function (state, dispatch) {
+    const currListItem = findCurrListItem(state);
+    if (!currListItem) return false;
+
+    const type = currListItem.node?.attrs.type;
+    if (type === "search") {
+      const msg = i18n.global.t("commands.toSearchBlock.alreadySearchBlock");
+      toast.warning(msg);
+      return false;
+    }
+    if (type !== "text") {
+      const msg = i18n.global.t(
+        "commands.toSearchBlock.onlyTextBlockCanBeSearchBlock"
+      );
+      toast.warning(msg);
+      return false;
+    }
+
+    const blockId = currListItem.node.attrs.blockId;
+    const blockNode = getBlockNode(editor.appView.app, blockId);
+    if (!blockNode) return false;
+
+    const children = blockNode.children() ?? [];
+    if (children.length > 0) {
+      const msg = i18n.global.t(
+        "commands.toSearchBlock.searchBlockCannotHaveChildren"
+      );
+      toast.warning(msg);
+      return false;
+    }
+
+    const pnode = currListItem.node.firstChild;
+    if (!pnode) return false;
+    const snode = state.schema.nodes.search.create({ query }, pnode.content);
+    withTx(editor.appView.app, (tx) => {
+      tx.updateBlock(blockId, {
+        type: "search",
+        content: JSON.stringify(snode.toJSON()),
+        folded: false,
+      });
+      tx.setOrigin("localEditorStructural");
+      tx.setSelection({
+        viewId: editor.appView.id,
+        blockId,
+        anchor: 0,
+        head: 0,
+        scrollIntoView: true,
+      });
+    });
+    return true;
+  };
+}
+
+export function recursiveDeleteBlock(
+  editor: TiptapEditor,
+  blockId: BlockId
+): Command {
+  return function () {
+    const { appView: appview } = editor;
+    withTx(appview.app, (tx) => {
+      const descendants = tx.getDescendants(blockId);
+      console.log(descendants);
+      for (let i = descendants.length - 1; i >= 0; i--) {
+        tx.deleteBlock(descendants[i]);
+      }
+      tx.setOrigin("localEditorStructural");
+    });
     return true;
   };
 }

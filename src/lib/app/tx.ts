@@ -88,6 +88,7 @@ export type TxObj = {
   setOrigin: (origin: string) => void;
   getIndex: (blockId: BlockId) => number | null;
   getChildrenIds: (blockId: BlockId | null) => BlockId[];
+  getDescendants: (blockId: BlockId) => BlockId[];
   getParentId: (blockId: BlockId) => BlockId | null;
   getBlockPath: (blockId: BlockId) => BlockId[] | null;
   getBlockData: (blockId: BlockId) => BlockDataInner | null;
@@ -390,7 +391,6 @@ export function getChildrenIdsFromTx(
   tx: Transaction,
   blockId: BlockId | null
 ) {
-  // 基线 childrenIds
   let childrenIds: BlockId[];
   if (blockId === null) {
     // 根层节点
@@ -432,6 +432,24 @@ export function getChildrenIdsFromTx(
   }
 
   return childrenIds;
+}
+
+export function getDescendantsFromTx(
+  app: App,
+  tx: Transaction,
+  blockId: BlockId
+) {
+  const res: BlockId[] = [];
+  const stack: BlockId[] = [];
+  stack.push(blockId);
+  res.push(blockId);
+  while (stack.length > 0) {
+    const curr = stack.pop()!;
+    const children = getChildrenIdsFromTx(app, tx, curr);
+    res.push(...children);
+    stack.push(...children);
+  }
+  return res;
 }
 
 function getIndexFromTx(
@@ -483,6 +501,7 @@ function createTxObj(app: App): TxObj & { _tx: Transaction } {
     getBlockData: (blockId) => getBlockDataFromTx(app, tx, blockId),
     getParentId: (blockId) => getParentIdFromTx(app, tx, blockId),
     getChildrenIds: (blockId) => getChildrenIdsFromTx(app, tx, blockId),
+    getDescendants: (blockId) => getDescendantsFromTx(app, tx, blockId),
     getBlockPath: (blockId) => getBlockPathFromTx(app, tx, blockId),
     getIndex: (blockId) => getIndexFromTx(app, tx, blockId),
     createBlockAfter: (baseId, data) =>

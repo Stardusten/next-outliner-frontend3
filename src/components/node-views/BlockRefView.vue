@@ -1,16 +1,17 @@
 <template>
   <NodeViewWrapper
     as="span"
-    class="cursor-pointer text-[var(--color-block-ref)]"
+    class="block-ref cursor-pointer text-[var(--color-block-ref)]"
     :class="{
       // 标签样式
       'text-[length:var(--tag-font-size)] opacity-60 hover:opacity-100 transition-opacity':
         node.attrs.isTag,
     }"
+    @click.prevent="handleClick"
     :data-block-id="node.attrs.blockId"
     :data-is-tag="node.attrs.isTag"
   >
-    {{ textContentRef }}
+    {{ node.attrs.isTag ? `#${textContentRef}` : textContentRef }}
   </NodeViewWrapper>
 </template>
 
@@ -42,4 +43,8 @@ onMounted(async () => {
 onUnmounted(() => {
   textContent && textContent.dispose();
 });
+
+const handleClick = () => {
+  editor.appView.locateBlock(node.attrs.blockId);
+};
 </script>

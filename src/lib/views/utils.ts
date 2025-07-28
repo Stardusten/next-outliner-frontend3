@@ -89,7 +89,10 @@ export function serialize(node: Node): {
   return { type: "text", content: "" };
 }
 
-export function pmNodeFromBlockData(
+/**
+ * @deprecated 别用，schema 是错误的
+ */
+export function listItemNodeFromBlockNode(
   blockNode: BlockNode,
   level?: number,
   app?: App,

@@ -62,7 +62,9 @@ import {
 } from "@/lib/views/tiptap-editor/editor-view";
 import { BlockRefCompletion } from "@/lib/views/tiptap-editor/functionalities/block-ref-completion";
 import { CompositionFix } from "@/lib/views/tiptap-editor/functionalities/composition-fix";
+import { HighlightCodeblock } from "@/lib/views/tiptap-editor/functionalities/highlight-codeblock";
 import { NormalKeymap } from "@/lib/views/tiptap-editor/functionalities/keymap/normal";
+import { ToCodeblock } from "@/lib/views/tiptap-editor/functionalities/to-codeblock";
 import { markExtensions } from "@/lib/views/tiptap-editor/marks";
 import { nodeExtensions } from "@/lib/views/tiptap-editor/nodes";
 import { EditorContent } from "@tiptap/vue-3";
@@ -105,11 +107,14 @@ onMounted(() => {
       NormalKeymap,
       BlockRefCompletion,
       CompositionFix,
+      HighlightCodeblock,
+      ToCodeblock,
     ],
   });
   registerAppView(app, mainEditorView.value);
   mainEditorView.value.setRootBlockIds(mainEditorRoots.value);
   mainEditorView.value.mount(rootEl);
+  mainEditorView.value.tiptap?.view.focus(); // 先 focus
 
   // TODO
   // 如果当前没有根块，创建一个默认根块

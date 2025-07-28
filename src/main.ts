@@ -6,7 +6,7 @@ import { zhCN_messages } from "./i18n/zh-CN";
 
 const app = createApp(App);
 
-const i18n = createI18n({
+export const i18n = createI18n({
   locale: "zh-CN",
   messages: {
     "zh-CN": zhCN_messages,

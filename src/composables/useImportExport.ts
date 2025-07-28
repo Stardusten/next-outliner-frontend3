@@ -178,7 +178,10 @@ export function useImportExport(app: App) {
         if (child.type === blockRefType) {
           const oldId = child.attrs.blockId;
           const newId = tmp2new[old2tmp[oldId]] ?? oldId;
-          const newNode = blockRefType.create({ blockId: newId });
+          const newNode = blockRefType.create({
+            ...child.attrs,
+            blockId: newId,
+          });
           result.push(newNode);
         } else {
           result.push(child.copy(recur(child.content)));

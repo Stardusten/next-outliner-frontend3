@@ -29,6 +29,7 @@ import {
   selectCurrentListItem,
   splitListItem,
   toggleFocusedFoldState,
+  toSearchBlock,
   undoCommand,
 } from "../../commands";
 
@@ -122,6 +123,7 @@ export const NormalKeymap = Extension.create({
         }),
         "Mod-z": undoCommand(editor),
         "Mod-Shift-z": redoCommand(editor),
+        "Mod-e": toSearchBlock(editor),
       }),
     ];
   },

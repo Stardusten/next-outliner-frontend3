@@ -9,16 +9,35 @@ export function renderBlock(params: {
   blockNode: BlockNode;
   level: number;
   overrideAttrs?: Record<string, any>;
+  rootOnly?: boolean;
 }): Node[] {
-  const { editor, blockNode, level, overrideAttrs } = params;
+  const { editor, blockNode, level, overrideAttrs, rootOnly } = params;
   const blockData = blockNode.data.toJSON() as BlockDataInner;
   switch (blockData.type) {
     case "text":
-      return renderTextBlock({ editor, blockNode, level, overrideAttrs });
+      return renderTextBlock({
+        editor,
+        blockNode,
+        level,
+        overrideAttrs,
+        rootOnly,
+      });
     case "code":
-      return renderCodeBlock({ editor, blockNode, level, overrideAttrs });
+      return renderCodeBlock({
+        editor,
+        blockNode,
+        level,
+        overrideAttrs,
+        rootOnly,
+      });
     case "search":
-      return renderSearchBlock({ editor, blockNode, level, overrideAttrs });
+      return renderSearchBlock({
+        editor,
+        blockNode,
+        level,
+        overrideAttrs,
+        rootOnly,
+      });
     default:
       throw new Error(`unexpected block type. got "${blockData.type}"`);
   }
@@ -30,8 +49,9 @@ function renderTextBlock(params: {
   blockData?: BlockDataInner;
   level: number;
   overrideAttrs?: Record<string, any>;
+  rootOnly?: boolean;
 }): Node[] {
-  let { editor, blockNode, blockData, level, overrideAttrs } = params;
+  let { editor, blockNode, blockData, level, overrideAttrs, rootOnly } = params;
   if (!editor.tiptap) throw new Error("tiptap no init");
   const schema = editor.tiptap.schema;
   const result: Node[] = [];
@@ -61,7 +81,7 @@ function renderTextBlock(params: {
   result.push(listItemNode);
 
   // 如果块有子节点且未被折叠，递归渲染子节点
-  if (hasChildren && !blockData.folded) {
+  if (hasChildren && !blockData.folded && !rootOnly) {
     for (const child of children) {
       const childNodes = renderBlock({
         editor,
@@ -81,8 +101,9 @@ function renderCodeBlock(params: {
   blockData?: BlockDataInner;
   level: number;
   overrideAttrs?: Record<string, any>;
+  rootOnly?: boolean;
 }): Node[] {
-  let { editor, blockNode, blockData, level, overrideAttrs } = params;
+  let { editor, blockNode, blockData, level, overrideAttrs, rootOnly } = params;
   if (!editor.tiptap) throw new Error("tiptap no init");
   const schema = editor.tiptap.schema;
   const result: Node[] = [];
@@ -112,7 +133,7 @@ function renderCodeBlock(params: {
   result.push(listItemNode);
 
   // 如果块有子节点且未被折叠，递归渲染子节点
-  if (hasChildren && !blockData.folded) {
+  if (hasChildren && !blockData.folded && !rootOnly) {
     for (const child of children) {
       const childNodes = renderBlock({
         editor,
@@ -132,8 +153,9 @@ function renderSearchBlock(params: {
   blockData?: BlockDataInner;
   level: number;
   overrideAttrs?: Record<string, any>;
+  rootOnly?: boolean;
 }): Node[] {
-  let { editor, blockNode, blockData, level, overrideAttrs } = params;
+  let { editor, blockNode, blockData, level, overrideAttrs, rootOnly } = params;
   if (!editor.tiptap) throw new Error("tiptap no init");
   const schema = editor.tiptap.schema;
   const result: Node[] = [];
@@ -183,7 +205,7 @@ function renderSearchBlock(params: {
 
   // 如果未折叠，执行 query 得到搜索结果
   // 然后将搜索结果视为子节点递归渲染
-  if (!blockData.folded) {
+  if (!blockData.folded && !rootOnly) {
     if (res instanceof Error) {
       console.error("Invalid query result", res);
     } else {
