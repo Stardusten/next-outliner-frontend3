@@ -4,7 +4,7 @@
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent class="w-[200px]">
-      <ContextMenuItem>
+      <ContextMenuItem @click="handleCopyBlockRef">
         <Link />
         {{ $t("blockContextMenu.copyBlockRef") }}
       </ContextMenuItem>
@@ -33,6 +33,15 @@ const props = defineProps<{
   editor: Editor;
 }>();
 const { blockId, editor } = props;
+
+const handleCopyBlockRef = () => {
+  if (!editor) return;
+  try {
+    navigator.clipboard.writeText(blockId);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
 const handleDelete = () => {
   if (!editor) return;
