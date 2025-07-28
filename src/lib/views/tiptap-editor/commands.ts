@@ -4,7 +4,11 @@ import { Node } from "@tiptap/pm/model";
 import { NodeSelection, TextSelection, type Command } from "@tiptap/pm/state";
 import { toast } from "vue-sonner";
 import type { AttachmentTaskInfo } from "../../app/attachment/storage";
-import { getBlockData, getBlockNode } from "../../app/block-manage";
+import {
+  getBlockData,
+  getBlockNode,
+  getRootBlockNodes,
+} from "../../app/block-manage";
 import { getTextContent } from "../../app/index/text-content";
 import { withTx } from "../../app/tx";
 import type { BlockId } from "../../common/types";
@@ -493,15 +497,13 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
     const currentBlockData = getBlockData(appview.app, currentBlockId);
     if (!currentBlockData) return false;
 
-    // 不能合并有子块的块
-    const children = currentBlockNode.children();
-    if (children && children.length > 0) return false;
-
     // 找到前一个可以合并的块
     const parentBlockNode = currentBlockNode.parent();
-    if (!parentBlockNode) return false; // 根块无法合并
 
-    const siblings = parentBlockNode.children();
+    const siblings =
+      parentBlockNode == null
+        ? getRootBlockNodes(appview.app)
+        : parentBlockNode.children();
     if (!siblings) return false;
 
     const currentIndex = currentBlockNode.index();

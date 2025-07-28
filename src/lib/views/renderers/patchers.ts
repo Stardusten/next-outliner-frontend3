@@ -6,8 +6,6 @@ import { Node } from "@tiptap/pm/model";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { renderBlock } from "./basic-outline";
 
-type AppTxEvent = AppEvents["tx-committed"];
-
 export function incrementalUpdate(
   view: TiptapEditorView,
   tx: AppEvents["tx-committed"]
@@ -68,8 +66,8 @@ function handleBlockCreateOp(
       p += listItem.nodeSize;
     }
   } else {
-    pos = content[0].nodeSize;
-    parentIndex = 0;
+    pos = 0;
+    parentIndex = -1;
   }
   // 此时 pos 指向父块末尾
 
@@ -238,8 +236,8 @@ function handleBlockMoveOp(
         p += listItem.nodeSize;
       }
     } else {
-      pos = content[0].nodeSize;
-      parentIndex = 0;
+      pos = 0;
+      parentIndex = -1;
     }
     // 此时 pos 指向父块末尾
 
