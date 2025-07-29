@@ -73,22 +73,44 @@ function handleBlockCreateOp(
 
   if (pos === -1) throw new Error("Block not found for create: " + op.blockId);
 
+  // 使用与移动操作相同的跳过逻辑
   let skipped = 0;
   let i = parentIndex + 1;
   let p = pos;
+
   while (i < content.length) {
     const listItem = content[i];
     const { level } = listItem.attrs;
 
     if (level === parentLevel + 1) {
+      // 检查是否要在这个块前面插入
       if (skipped === op.index) {
         pos = p;
         break;
       }
+
+      // 跳过这个直接子块
       skipped++;
+
+      // 跳过后再检查是否已达到目标位置
+      if (skipped === op.index) {
+        // 需要移动到这个块（及其子块）的末尾
+        let blockEndPos = p + listItem.nodeSize;
+        let j = i + 1;
+        while (j < content.length) {
+          const childItem = content[j];
+          if (childItem.attrs.level <= parentLevel + 1) break;
+          blockEndPos += childItem.nodeSize;
+          j++;
+        }
+        pos = blockEndPos;
+        break;
+      }
     } else if (level <= parentLevel) {
       // 如果遇到同级或更高级，说明已经超出了父块的范围
       break;
+    } else {
+      // 跳过后代块
     }
 
     p += listItem.nodeSize;
@@ -97,8 +119,14 @@ function handleBlockCreateOp(
 
   // 如果循环结束但还没达到目标位置，说明要插入到最后
   if (i === content.length || content.length === 0) {
+    console.log(
+      `循环结束，插入到最后: i=${i}, content.length=${content.length}, 最终pos=${p}`
+    );
     pos = p;
   }
+
+  console.log(`最终插入位置: pos=${pos}`);
+  // 此时 pos 指向插入位置
 
   const blockNode = getBlockNode(view.app, op.blockId);
   if (blockNode == null) throw new Error("Block not found: " + op.blockId);
