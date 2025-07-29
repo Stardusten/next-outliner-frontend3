@@ -204,7 +204,7 @@ onUnmounted(() => inRefs?.dispose());
 
 const handleClickRightPad = () => {
   const pos = getPos();
-  if (!pos) return;
+  if (pos === undefined) return;
   const tr = editor.view.state.tr;
   const $pos = editor.view.state.doc.resolve(pos + node.nodeSize);
   const end = TextSelection.findFrom($pos, -1);

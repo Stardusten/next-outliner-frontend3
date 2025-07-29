@@ -11,7 +11,13 @@
     :data-block-id="node.attrs.blockId"
     :data-is-tag="node.attrs.isTag"
   >
-    {{ node.attrs.isTag ? `#${textContentRef}` : textContentRef }}
+    {{
+      textContentRef
+        ? node.attrs.isTag
+          ? `#${textContentRef}`
+          : textContentRef
+        : ""
+    }}
   </NodeViewWrapper>
 </template>
 
@@ -23,7 +29,7 @@ import type { Observable } from "@/lib/common/observable";
 
 const { node, editor } = defineProps(nodeViewProps);
 let textContent: Observable<string> | null = null;
-const textContentRef = ref<string>("unknown");
+const textContentRef = ref<string | undefined>(undefined);
 
 onMounted(async () => {
   // 这里使用异步导入，防止循环依赖
