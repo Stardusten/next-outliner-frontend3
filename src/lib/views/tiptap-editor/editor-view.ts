@@ -397,7 +397,7 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
     this.tiptap.view.dispatch(tr);
   }
 
-  #patchStateAccAppTx(appTx: AppEvents["tx-committed"]) {
+  async #patchStateAccAppTx(appTx: AppEvents["tx-committed"]) {
     if (!this.tiptap) return;
 
     try {

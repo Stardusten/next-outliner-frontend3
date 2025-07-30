@@ -30,12 +30,6 @@ div.list-item-x span.file-inline[class*="failed"] {
   cursor: default;
 }
 
-a {
-  color: var(--color-link);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 div.list-item-x pre {
   margin: 0;
 }

@@ -52,7 +52,8 @@
       class="list-item-right flex flex-1 flex-nowrap select-none"
       contenteditable="false"
     >
-      <div class="flex-0-0-auto flex items-center pl-[8px] gap-1">
+      <div class="cursor-text w-[8px]"></div>
+      <div class="flex-0-0-auto flex items-center gap-1">
         <div v-if="queryStatus" :class="queryStatus.class">
           ({{ queryStatus.content }})
         </div>
@@ -242,6 +243,14 @@ const handleQueryUpdate = (newQuery: string) => {
 .spacing-loose div.list-item-x {
   padding: 4px 0;
   line-height: 24px;
+}
+
+/* 链接样式 */
+a {
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
 }
 
 div.list-item-x[data-level="0"] {

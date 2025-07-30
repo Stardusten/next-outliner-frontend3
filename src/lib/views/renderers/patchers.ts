@@ -42,101 +42,265 @@ export function incrementalUpdate(
   }
 }
 
-function handleBlockCreateOp(
-  view: TiptapEditorView,
-  op: TxExecutedOperation & { type: "block:create" }
-) {
-  if (!view.tiptap) return;
-  const tr = view.tiptap.state.tr;
-  const content = tr.doc.content.content;
+// ================== 工具函数 ==================
 
-  let pos = -1,
-    parentIndex = -1,
-    parentLevel = -1;
-  if (op.parent) {
-    for (let i = 0, p = 0; i < content.length; i++) {
-      const listItem = content[i];
-      const { blockId, level } = listItem.attrs;
-      if (blockId === op.parent) {
-        pos = p + listItem.nodeSize;
-        parentIndex = i;
-        parentLevel = level;
-        break;
-      }
-      p += listItem.nodeSize;
+interface BlockPosition {
+  pos: number;
+  index: number;
+}
+
+interface ParentInfo {
+  pos: number;
+  index: number;
+  level: number;
+}
+
+/**
+ * 查找块的位置信息
+ */
+function findBlockPosition(
+  content: readonly Node[],
+  blockId: string
+): BlockPosition | null {
+  for (let i = 0, p = 0; i < content.length; i++) {
+    const listItem = content[i];
+    if (listItem.attrs.blockId === blockId) {
+      return { pos: p, index: i };
     }
-  } else {
-    pos = 0;
-    parentIndex = -1;
+    p += listItem.nodeSize;
   }
-  // 此时 pos 指向父块末尾
+  return null;
+}
 
-  if (pos === -1) throw new Error("Block not found for create: " + op.blockId);
+/**
+ * 查找父块信息
+ */
+function findParentInfo(
+  content: readonly Node[],
+  parentId: string | null
+): ParentInfo {
+  if (!parentId) {
+    return { pos: 0, index: -1, level: -1 };
+  }
 
-  // 使用与移动操作相同的跳过逻辑
+  for (let i = 0, p = 0; i < content.length; i++) {
+    const listItem = content[i];
+    const { blockId, level } = listItem.attrs;
+    if (blockId === parentId) {
+      return {
+        pos: p + listItem.nodeSize, // 指向父块末尾
+        index: i,
+        level,
+      };
+    }
+    p += listItem.nodeSize;
+  }
+
+  throw new Error(`Parent block not found: ${parentId}`);
+}
+
+/**
+ * 计算插入位置
+ * @param content 文档内容
+ * @param parentInfo 父块信息
+ * @param targetIndex 目标索引
+ * @returns 插入位置
+ */
+function calculateInsertPosition(
+  content: readonly Node[],
+  parentInfo: ParentInfo,
+  targetIndex: number
+): number {
+  const { pos: startPos, index: parentIndex, level: parentLevel } = parentInfo;
+  const targetLevel = parentLevel + 1;
+
   let skipped = 0;
   let i = parentIndex + 1;
-  let p = pos;
+  let p = startPos;
 
   while (i < content.length) {
     const listItem = content[i];
     const { level } = listItem.attrs;
 
-    if (level === parentLevel + 1) {
+    if (level === targetLevel) {
       // 检查是否要在这个块前面插入
-      if (skipped === op.index) {
-        pos = p;
-        break;
+      if (skipped === targetIndex) {
+        return p;
       }
 
       // 跳过这个直接子块
       skipped++;
 
       // 跳过后再检查是否已达到目标位置
-      if (skipped === op.index) {
+      if (skipped === targetIndex) {
         // 需要移动到这个块（及其子块）的末尾
-        let blockEndPos = p + listItem.nodeSize;
-        let j = i + 1;
-        while (j < content.length) {
-          const childItem = content[j];
-          if (childItem.attrs.level <= parentLevel + 1) break;
-          blockEndPos += childItem.nodeSize;
-          j++;
-        }
-        pos = blockEndPos;
-        break;
+        return calculateBlockEndPosition(content, i, targetLevel);
       }
     } else if (level <= parentLevel) {
-      // 如果遇到同级或更高级，说明已经超出了父块的范围
+      // 遇到同级或更高级，停止
       break;
-    } else {
-      // 跳过后代块
     }
+    // 其他情况：level > targetLevel，跳过后代块
 
     p += listItem.nodeSize;
     i++;
   }
 
-  // 如果循环结束但还没达到目标位置，说明要插入到最后
-  if (i === content.length || content.length === 0) {
-    console.log(
-      `循环结束，插入到最后: i=${i}, content.length=${content.length}, 最终pos=${p}`
-    );
-    pos = p;
+  // 如果循环结束还没达到目标位置，插入到最后
+  return p;
+}
+
+/**
+ * 计算块（及其子块）的结束位置
+ */
+function calculateBlockEndPosition(
+  content: readonly Node[],
+  blockIndex: number,
+  blockLevel: number
+): number {
+  const listItem = content[blockIndex];
+  let endPos = 0;
+
+  // 计算到这个块的位置
+  for (let i = 0; i <= blockIndex; i++) {
+    endPos += content[i].nodeSize;
   }
 
-  console.log(`最终插入位置: pos=${pos}`);
-  // 此时 pos 指向插入位置
+  // 跳过所有子级
+  for (let i = blockIndex + 1; i < content.length; i++) {
+    const childItem = content[i];
+    if (childItem.attrs.level <= blockLevel) break;
+    endPos += childItem.nodeSize;
+  }
+
+  return endPos;
+}
+
+/**
+ * 计算子树范围（用于删除操作）
+ */
+function calculateSubtreeRange(
+  content: readonly Node[],
+  blockIndex: number
+): { start: number; end: number } {
+  const listItem = content[blockIndex];
+  const level = listItem.attrs.level;
+
+  // 计算起始位置
+  let start = 0;
+  for (let i = 0; i < blockIndex; i++) {
+    start += content[i].nodeSize;
+  }
+
+  // 计算结束位置
+  let end = start + listItem.nodeSize;
+  for (let i = blockIndex + 1; i < content.length; i++) {
+    const childItem = content[i];
+    if (childItem.attrs.level <= level) break;
+    end += childItem.nodeSize;
+  }
+
+  return { start, end };
+}
+
+// ================== 关联更新处理 ==================
+
+/**
+ * 更新块的关联属性（如 hasChildren）
+ */
+function updateRelatedBlocks(
+  view: TiptapEditorView,
+  tr: any,
+  affectedParentIds: Set<string>
+) {
+  if (affectedParentIds.size === 0) return tr;
+
+  const content = tr.doc.content.content;
+
+  // 为每个受影响的父块重新渲染（只渲染父块本身）
+  for (const parentId of affectedParentIds) {
+    const blockPos = findBlockPosition(content, parentId);
+    if (!blockPos) continue; // 父块可能已被删除或不存在
+
+    const listItem = content[blockPos.index];
+    const level = listItem.attrs.level;
+
+    // 只重新渲染父块本身，不渲染子块
+    const blockNode = getBlockNode(view.app, parentId as any);
+    if (blockNode == null) continue;
+
+    const [newParentNode] = renderBlock({
+      editor: view,
+      blockNode,
+      level,
+      rootOnly: true, // 只渲染根节点，不渲染子树
+    });
+
+    // 只替换父块本身，保留所有子块
+    const parentEndPos = blockPos.pos + listItem.nodeSize;
+    tr = tr.replaceWith(blockPos.pos, parentEndPos, newParentNode);
+  }
+
+  return tr;
+}
+
+/**
+ * 收集受影响的父块ID
+ */
+function collectAffectedParents(operations: {
+  oldParents?: (string | null)[];
+  newParents?: (string | null)[];
+}): Set<string> {
+  const affectedParents = new Set<string>();
+
+  // 添加旧父块
+  if (operations.oldParents) {
+    for (const parentId of operations.oldParents) {
+      if (parentId) affectedParents.add(parentId);
+    }
+  }
+
+  // 添加新父块
+  if (operations.newParents) {
+    for (const parentId of operations.newParents) {
+      if (parentId) affectedParents.add(parentId);
+    }
+  }
+
+  return affectedParents;
+}
+
+// ================== 操作处理函数 ==================
+
+function handleBlockCreateOp(
+  view: TiptapEditorView,
+  op: TxExecutedOperation & { type: "block:create" }
+) {
+  if (!view.tiptap) return;
+  let tr = view.tiptap.state.tr;
+  const content = tr.doc.content.content;
+
+  const parentInfo = findParentInfo(content, op.parent);
+  const insertPos = calculateInsertPosition(content, parentInfo, op.index);
 
   const blockNode = getBlockNode(view.app, op.blockId);
   if (blockNode == null) throw new Error("Block not found: " + op.blockId);
+
   const [node] = renderBlock({
     editor: view,
     blockNode,
-    level: parentLevel + 1,
+    level: parentInfo.level + 1,
     rootOnly: true,
   });
-  tr.insert(pos, node);
+
+  tr = tr.insert(insertPos, node);
+
+  // 更新受影响的父块
+  const affectedParents = collectAffectedParents({
+    newParents: [op.parent],
+  });
+  tr = updateRelatedBlocks(view, tr, affectedParents);
+
   view.tiptap.view.dispatch(tr);
 }
 
@@ -145,41 +309,17 @@ function handleBlockUpdateOp(
   op: TxExecutedOperation & { type: "block:update" }
 ) {
   if (!view.tiptap) return;
-  const tr = view.tiptap.state.tr;
+  let tr = view.tiptap.state.tr;
   const content = tr.doc.content.content;
 
-  // 找到要更新的块
-  let pos = -1;
-  let listItemIndex = -1;
-  for (let i = 0, p = 0; i < content.length; i++) {
-    const listItem = content[i];
-    const { blockId } = listItem.attrs;
-    if (blockId === op.blockId) {
-      pos = p;
-      listItemIndex = i;
-      break;
-    }
-    p += listItem.nodeSize;
-  }
-
-  if (pos === -1 || listItemIndex === -1) {
+  const blockPos = findBlockPosition(content, op.blockId);
+  if (!blockPos) {
     throw new Error("Block not found for update: " + op.blockId);
   }
 
-  const listItem = content[listItemIndex];
+  const listItem = content[blockPos.index];
   const level = listItem.attrs.level;
-
-  // 计算包含所有子级的范围（参考 handleBlockMoveOp）
-  let replaceTo = pos + listItem.nodeSize;
-
-  // 跳过所有子级
-  for (let i = listItemIndex + 1, p = replaceTo; i < content.length; i++) {
-    const childItem = content[i];
-    const { level: childLevel } = childItem.attrs;
-    if (childLevel <= level) break; // 遇到同级或更高级，停止
-    replaceTo = p + childItem.nodeSize;
-    p += childItem.nodeSize;
-  }
+  const range = calculateSubtreeRange(content, blockPos.index);
 
   // 重新渲染整个子树
   const blockNode = getBlockNode(view.app, op.blockId);
@@ -192,8 +332,7 @@ function handleBlockUpdateOp(
     rootOnly: false, // 渲染完整子树
   });
 
-  // 替换整个范围
-  tr.replaceWith(pos, replaceTo, newNodes);
+  tr = tr.replaceWith(range.start, range.end, newNodes);
   view.tiptap.view.dispatch(tr);
 }
 
@@ -202,28 +341,27 @@ function handleBlockDeleteOp(
   op: TxExecutedOperation & { type: "block:delete" }
 ) {
   if (!view.tiptap) return;
-  const tr = view.tiptap.state.tr;
+  let tr = view.tiptap.state.tr;
   const content = tr.doc.content.content;
 
-  // 找到要删除的块
-  let pos = -1;
-  let listItem: Node | null = null;
-  for (let i = 0, p = 0; i < content.length; i++) {
-    const listItem_ = content[i];
-    const { blockId } = listItem_.attrs;
-    if (blockId === op.blockId) {
-      pos = p;
-      listItem = listItem_;
-      break;
-    }
-    p += listItem_.nodeSize;
+  const blockPos = findBlockPosition(content, op.blockId);
+  if (!blockPos) {
+    throw new Error("Block not found for delete: " + op.blockId);
   }
 
-  if (pos === -1 || listItem == null)
-    throw new Error("Block not found for delete: " + op.blockId);
+  // 获取被删除块的父块信息（用于后续更新）
+  const deletedBlock = content[blockPos.index];
+  const deletedBlockParent = getBlockParentId(content, blockPos.index);
 
-  // 删除单个块
-  tr.delete(pos, pos + listItem.nodeSize);
+  const listItem = content[blockPos.index];
+  tr = tr.delete(blockPos.pos, blockPos.pos + listItem.nodeSize);
+
+  // 更新受影响的父块
+  const affectedParents = collectAffectedParents({
+    oldParents: [deletedBlockParent],
+  });
+  tr = updateRelatedBlocks(view, tr, affectedParents);
+
   view.tiptap.view.dispatch(tr);
 }
 
@@ -235,130 +373,61 @@ function handleBlockMoveOp(
   let tr = view.tiptap.state.tr;
   let content = tr.doc.content.content;
 
-  // 第一步：找到并删除目标块及其所有后代
-  {
-    let pos = -1;
-    let listItem: Node | null = null;
-    let listItemIndex = -1;
-    for (let i = 0, p = 0; i < content.length; i++) {
-      const listItem_ = content[i];
-      const { blockId } = listItem_.attrs;
-      if (blockId === op.blockId) {
-        pos = p;
-        listItem = listItem_;
-        listItemIndex = i;
-        break;
-      }
-      p += listItem_.nodeSize;
-    }
-
-    if (pos === -1 || listItem == null || listItemIndex === -1) {
-      throw new Error("Block not found for move: " + op.blockId);
-    }
-
-    const level = listItem.attrs.level;
-
-    // 计算包含所有子级的范围
-    let deleteTo = pos + listItem.nodeSize;
-
-    // 跳过所有子级
-    for (let i = listItemIndex + 1, p = deleteTo; i < content.length; i++) {
-      const childItem = content[i];
-      const { level: childLevel } = childItem.attrs;
-      if (childLevel <= level) break; // 遇到同级或更高级，停止
-      deleteTo = p + childItem.nodeSize;
-      p += childItem.nodeSize;
-    }
-
-    tr = tr.delete(pos, deleteTo);
+  // 第一步：删除原位置的块（包括所有子级）
+  const blockPos = findBlockPosition(content, op.blockId);
+  if (!blockPos) {
+    throw new Error("Block not found for move: " + op.blockId);
   }
 
-  // 2. 找到插入位置
-  // 先找到父块的位置
-  {
-    content = tr.doc.content.content;
+  const range = calculateSubtreeRange(content, blockPos.index);
+  tr = tr.delete(range.start, range.end);
 
-    let pos = -1,
-      parentIndex = -1,
-      parentLevel = -1;
-    if (op.parent) {
-      for (let i = 0, p = 0; i < content.length; i++) {
-        const listItem = content[i];
-        const { blockId, level } = listItem.attrs;
-        if (blockId === op.parent) {
-          pos = p + listItem.nodeSize;
-          parentIndex = i;
-          parentLevel = level;
-          break;
-        }
-        p += listItem.nodeSize;
-      }
-    } else {
-      pos = 0;
-      parentIndex = -1;
-    }
-    // 此时 pos 指向父块末尾
+  // 第二步：在新位置插入块
+  content = tr.doc.content.content;
+  const parentInfo = findParentInfo(content, op.parent);
+  const insertPos = calculateInsertPosition(content, parentInfo, op.index);
 
-    if (pos === -1) throw new Error("Block not found for move: " + op.blockId);
+  const blockNode = getBlockNode(view.app, op.blockId);
+  if (blockNode == null) throw new Error("Block not found: " + op.blockId);
 
-    // 然后跳过 op.index 个子块，注意子块的后代也要跳过
-    // 使用改进的跳过逻辑
-    let skipped = 0;
-    let i = parentIndex + 1;
-    let p = pos;
+  const newNodes = renderBlock({
+    editor: view,
+    blockNode,
+    level: parentInfo.level + 1,
+    rootOnly: false, // 渲染完整子树
+  });
 
-    while (i < content.length) {
-      const listItem = content[i];
-      const { level } = listItem.attrs;
+  tr = tr.insert(insertPos, newNodes);
 
-      if (level === parentLevel + 1) {
-        // 检查是否要在这个块前面插入
-        if (skipped === op.index) {
-          pos = p;
-          break;
-        }
-
-        // 跳过这个直接子块
-        skipped++;
-
-        // 跳过后再检查是否已达到目标位置
-        if (skipped === op.index) {
-          // 需要移动到这个块（及其子块）的末尾
-          let blockEndPos = p + listItem.nodeSize;
-          let j = i + 1;
-          while (j < content.length) {
-            const childItem = content[j];
-            if (childItem.attrs.level <= parentLevel + 1) break;
-            blockEndPos += childItem.nodeSize;
-            j++;
-          }
-          pos = blockEndPos;
-          break;
-        }
-      } else if (level <= parentLevel) {
-        // 如果遇到同级或更高级，说明已经超出了父块的范围
-        break;
-      }
-
-      p += listItem.nodeSize;
-      i++;
-    }
-
-    // 如果循环结束但还没达到目标位置，说明要插入到最后
-    if (i === content.length || content.length === 0) {
-      pos = p;
-    }
-
-    const blockNode = getBlockNode(view.app, op.blockId);
-    if (blockNode == null) throw new Error("Block not found: " + op.blockId);
-    const newNodes = renderBlock({
-      editor: view,
-      blockNode,
-      level: parentLevel + 1,
-      rootOnly: false, // 渲染完整子树
-    });
-    tr.insert(pos, newNodes);
-  }
+  // 第三步：更新受影响的父块
+  const affectedParents = collectAffectedParents({
+    oldParents: [op.oldParent],
+    newParents: [op.parent],
+  });
+  tr = updateRelatedBlocks(view, tr, affectedParents);
 
   view.tiptap.view.dispatch(tr);
+}
+
+/**
+ * 获取块的父块ID
+ */
+function getBlockParentId(
+  content: readonly Node[],
+  blockIndex: number
+): string | null {
+  const targetBlock = content[blockIndex];
+  const targetLevel = targetBlock.attrs.level;
+
+  if (targetLevel === 0) return null; // 根级块没有父块
+
+  // 向前查找父级
+  for (let i = blockIndex - 1; i >= 0; i--) {
+    const block = content[i];
+    if (block.attrs.level === targetLevel - 1) {
+      return block.attrs.blockId;
+    }
+  }
+
+  return null;
 }

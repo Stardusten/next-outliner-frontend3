@@ -193,12 +193,17 @@ function execTx(
   tx.status = "pending";
 
   // 如果没有指定 beforeSelection，则记录当前选区到 meta.beforeSelection
+  const editor = getLastFocusedAppView(app);
+  const sel =
+    editor instanceof TiptapEditorView ? editor.getSelectionInfo() : null;
+
   if (!tx.meta.beforeSelection) {
-    const editor = getLastFocusedAppView(app);
-    if (editor instanceof TiptapEditorView) {
-      const sel = editor.getSelectionInfo();
-      sel && (tx.meta.beforeSelection = sel);
-    }
+    sel && (tx.meta.beforeSelection = sel);
+  }
+
+  // 如果没有指定 selection，则记录当前选区到 meta.selection（保持选区不变）
+  if (!tx.meta.selection) {
+    sel && (tx.meta.selection = sel);
   }
 
   try {
