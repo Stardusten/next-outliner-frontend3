@@ -126,26 +126,26 @@
 </template>
 
 <script setup lang="ts">
-import { nodeViewProps, NodeViewContent } from "@tiptap/vue-3";
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { TextSelection } from "@tiptap/pm/state";
-import { NodeViewWrapper } from "./NodeViewWrapper";
-import Bullet from "./Bullet.vue";
-import FoldBtn from "./FoldBtn.vue";
-import EditSearchQueryPopup from "./EditSearchQueryPopup.vue";
+import { getInRefs, getInTags } from "@/lib/app/index/in-refs";
+import type { Observable } from "@/lib/common/observable";
+import type { BlockId } from "@/lib/common/types";
 import {
   toggleFocusedFoldState,
   updateSearchQuery,
 } from "@/lib/views/tiptap-editor/commands";
-import { Button } from "../ui/button";
+import { TextSelection } from "@tiptap/pm/state";
+import { NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import { Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import Search from "./Search.vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { getInRefs, getInTags } from "@/lib/app/index/in-refs";
-import type { Observable } from "@/lib/common/observable";
-import type { BlockId } from "@/lib/common/types";
 import BlockContextMenu from "../BlockContextMenu.vue";
+import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import Bullet from "./Bullet.vue";
+import EditSearchQueryPopup from "./EditSearchQueryPopup.vue";
+import FoldBtn from "./FoldBtn.vue";
+import { NodeViewWrapper } from "./NodeViewWrapper";
+import Search from "./Search.vue";
 
 const { node, editor, getPos } = defineProps(nodeViewProps);
 const { t } = useI18n();
@@ -220,12 +220,12 @@ const handleClickBullet = () => {
 
 const handleClickFoldBtn = () => {
   const cmd = toggleFocusedFoldState(editor, undefined, node.attrs.blockId);
-  editor.appView.execCommand(cmd);
+  editor.appView.execCommand(cmd, true);
 };
 
 const handleQueryUpdate = (newQuery: string) => {
   const cmd = updateSearchQuery(editor, newQuery, node.attrs.blockId);
-  editor.appView.execCommand(cmd);
+  editor.appView.execCommand(cmd, true);
 };
 </script>
 

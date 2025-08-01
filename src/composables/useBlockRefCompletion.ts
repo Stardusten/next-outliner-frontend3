@@ -7,15 +7,15 @@ import { getTextContent } from "@/lib/app/index/text-content";
 import { Paragraph } from "@/lib/views/tiptap-editor/nodes/paragraph";
 import { BlockRef } from "@/lib/views/tiptap-editor/nodes/block-ref";
 import {
-  schema,
   TiptapEditorView,
   type CompletionStatus,
   type TiptapEditorViewEvents,
 } from "@/lib/views/tiptap-editor/editor-view";
 import { getFocusingAppView } from "@/lib/app/views";
 import { executeCompletion } from "@/lib/views/tiptap-editor/functionalities/block-ref-completion";
+import type { Schema } from "@tiptap/pm/model";
 
-function isSingleRefBlock(block: BlockNode) {
+function isSingleRefBlock(schema: Schema, block: BlockNode) {
   const data = block.data.toJSON() as BlockDataInner;
   const nodeJson = JSON.parse(data.content);
   const node = schema.nodeFromJSON(nodeJson);
@@ -119,7 +119,7 @@ export function useBlockRefCompletion(app: App) {
             if (focusedBlockId && blockNode.id === focusedBlockId) continue;
             // 只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种
             // 因为这会与其原身混淆
-            if (isSingleRefBlock(blockNode)) continue;
+            if (isSingleRefBlock(app.detachedSchema, blockNode)) continue;
             blocks.push(blockNode);
           }
         }

@@ -25,6 +25,10 @@ export const File = Node.create({
       status: { default: "uploaded" }, // "uploading-{progress}" | "uploaded"
     };
   },
+  renderHTML({ node, HTMLAttributes }) {
+    // todo
+    return ["div", HTMLAttributes, node.attrs.filename];
+  },
 });
 
 export type FileType =

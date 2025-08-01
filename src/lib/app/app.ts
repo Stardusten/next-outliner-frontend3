@@ -1,26 +1,27 @@
+import type { Schema } from "@tiptap/pm/model";
 import type { LoroDoc, LoroTree } from "loro-crdt";
-import type { Persistence } from "../persistence/persistence";
-import type { AttachmentStorage } from "./attachment/storage";
 import type { Emitter } from "mitt";
+import mitt from "mitt";
 import type { Observable } from "../common/observable";
-import type { BlockId, BlocksVersion, SelectionInfo } from "../common/types";
-import { initFullTextIndex, type FullTextIndexConfig } from "./index/fulltext";
 import type { AsyncTaskQueue } from "../common/taskQueue";
 import type { DebouncedTimer } from "../common/timer/debounced";
+import type { BlockId, BlocksVersion, SelectionInfo } from "../common/types";
+import type { Persistence } from "../persistence/persistence";
+import { detachedSchema } from "../views/tiptap-editor/schema";
+import type { AppView, AppViewId } from "../views/view";
+import type { AttachmentStorage } from "./attachment/storage";
+import { initCompacter } from "./compacter";
+import { initFullTextIndex, type FullTextIndexConfig } from "./index/fulltext";
 import { initInRefs } from "./index/in-refs";
-import mitt from "mitt";
 import { initTextContent } from "./index/text-content";
 import { initSaver } from "./saver";
-import { initCompacter } from "./compacter";
 import {
   initTransactionManager,
-  type Transaction,
   type TxExecutedOperation,
   type TxMeta,
 } from "./tx";
-import { initAppViews } from "./views";
 import { initUndoRedoManager } from "./undo-redo";
-import type { AppView, AppViewId } from "../views/view";
+import { initAppViews } from "./views";
 
 export type AppEvents = {
   "tx-committed": {
@@ -45,6 +46,7 @@ export type App = {
   tree: LoroTree;
   persistence: Persistence;
   attachmentStorage: AttachmentStorage | null;
+  detachedSchema: Schema;
 
   // 事件总线
   eb: Emitter<AppEvents>;
@@ -106,6 +108,7 @@ export function createApp(
     docId,
     persistence,
     attachmentStorage,
+    detachedSchema,
   } as App;
 
   initEb(app);

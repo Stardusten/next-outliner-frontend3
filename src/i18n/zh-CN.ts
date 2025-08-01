@@ -11,6 +11,15 @@ export const zhCN_messages = {
   blockContextMenu: {
     delete: "删除块",
     copyBlockRef: "复制块引用",
+    copyAs: "复制为...",
+    copyAsMarkdown: "Markdown",
+    copyAsPureText: "纯文本",
+    copyAsHtml: "HTML",
+    pasteAs: "粘贴为...",
+    pasteAsMarkdownSingleBlock: "Markdown（单个块）",
+    pasteAsMarkdownAutoSplit: "Markdown（自动拆分块）",
+    pasteAsPureTextSingleBlock: "纯文本（单个块）",
+    pasteAsPureTextAutoSplit: "纯文本（自动拆分块）",
   },
   listItem: {
     editSearchQuery: "编辑查询表达式",

@@ -3,7 +3,7 @@ import type { TiptapEditorView } from "../tiptap-editor/editor-view";
 import type { SelectionInfo } from "@/lib/common/types";
 import type { TxExecutedOperation } from "@/lib/app/tx";
 import { Node } from "@tiptap/pm/model";
-import { getBlockNode } from "@/lib/app/block-manage";
+import { getBlockNode, getBlockData } from "@/lib/app/block-manage";
 import { renderBlock } from "./basic-outline";
 
 export function incrementalUpdate(
@@ -382,7 +382,22 @@ function handleBlockMoveOp(
   const range = calculateSubtreeRange(content, blockPos.index);
   tr = tr.delete(range.start, range.end);
 
-  // 第二步：在新位置插入块
+  // 第二步：检查新父块是否折叠，如果折叠则跳过插入
+  if (op.parent) {
+    const parentBlockData = getBlockData(view.app, op.parent);
+    if (parentBlockData && parentBlockData.folded) {
+      // 父块是折叠的，只更新受影响的父块但不插入新节点
+      const affectedParents = collectAffectedParents({
+        oldParents: [op.oldParent],
+        newParents: [op.parent],
+      });
+      tr = updateRelatedBlocks(view, tr, affectedParents);
+      view.tiptap.view.dispatch(tr);
+      return;
+    }
+  }
+
+  // 第三步：在新位置插入块（只有当父块未折叠时才执行）
   content = tr.doc.content.content;
   const parentInfo = findParentInfo(content, op.parent);
   const insertPos = calculateInsertPosition(content, parentInfo, op.index);
@@ -399,7 +414,7 @@ function handleBlockMoveOp(
 
   tr = tr.insert(insertPos, newNodes);
 
-  // 第三步：更新受影响的父块
+  // 第四步：更新受影响的父块
   const affectedParents = collectAffectedParents({
     oldParents: [op.oldParent],
     newParents: [op.parent],

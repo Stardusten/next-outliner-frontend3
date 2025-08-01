@@ -22,32 +22,40 @@
 </template>
 
 <script setup lang="ts">
-import { nodeViewProps } from "@tiptap/vue-3";
-import { NodeViewWrapper } from "./NodeViewWrapper";
-import { onMounted, onUnmounted, ref } from "vue";
 import type { Observable } from "@/lib/common/observable";
+import { nodeViewProps } from "@tiptap/vue-3";
+import { onUnmounted, ref, watch } from "vue";
+import { NodeViewWrapper } from "./NodeViewWrapper";
+import { getTextContentReactive } from "@/lib/app/index/text-content";
 
 const { node, editor } = defineProps(nodeViewProps);
 let textContent: Observable<string> | null = null;
-const textContentRef = ref<string | undefined>(undefined);
+const textContentRef = ref<string>("");
 
-onMounted(async () => {
-  // 这里使用异步导入，防止循环依赖
-  const { getTextContentReactive } = await import(
-    "@/lib/app/index/text-content"
-  );
-  const app = editor.appView.app;
-  textContent = getTextContentReactive(app, node.attrs.blockId);
-  textContent.subscribe(
-    (textContent) => {
-      textContentRef.value = textContent;
-    },
-    { immediate: true }
-  );
-});
+watch(
+  () => node.attrs.blockId,
+  async (blockId) => {
+    if (textContent) {
+      textContent.dispose();
+      textContent = null;
+    }
+    const app = editor.appView.app;
+    textContent = getTextContentReactive(app, blockId);
+    textContent.subscribe(
+      (textContent) => {
+        textContentRef.value = textContent;
+      },
+      { immediate: true }
+    );
+  },
+  { immediate: true }
+);
 
 onUnmounted(() => {
-  textContent && textContent.dispose();
+  if (textContent) {
+    textContent.dispose();
+    textContent = null;
+  }
 });
 
 const handleClick = () => {

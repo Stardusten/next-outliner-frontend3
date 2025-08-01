@@ -68,7 +68,9 @@ import { ToCodeblock } from "@/lib/views/tiptap-editor/functionalities/to-codebl
 import { markExtensions } from "@/lib/views/tiptap-editor/marks";
 import { nodeExtensions } from "@/lib/views/tiptap-editor/nodes";
 import { EditorContent } from "@tiptap/vue-3";
+import { TextSelection } from "@tiptap/pm/state";
 import { onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { PasteHtmlOrPlainText } from "@/lib/views/tiptap-editor/functionalities/PasteHtml";
 
 const props = defineProps<{
   app: App;
@@ -109,11 +111,19 @@ onMounted(() => {
       CompositionFix,
       HighlightCodeblock,
       ToCodeblock,
+      PasteHtmlOrPlainText,
     ],
   });
   registerAppView(app, mainEditorView.value);
   mainEditorView.value.setRootBlockIds(mainEditorRoots.value);
   mainEditorView.value.mount(rootEl);
+
+  // 聚焦到开头
+  setTimeout(() => {
+    const tiptap = mainEditorView.value?.tiptap;
+    tiptap?.commands.setTextSelection(0);
+    tiptap?.view.focus();
+  });
 
   // TODO
   // 如果当前没有根块，创建一个默认根块

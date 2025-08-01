@@ -53,10 +53,7 @@ import type { BlockId } from "@/lib/common/types";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
 import { toast } from "vue-sonner";
-import {
-  schema,
-  TiptapEditorView,
-} from "@/lib/views/tiptap-editor/editor-view";
+import { TiptapEditorView } from "@/lib/views/tiptap-editor/editor-view";
 import { registerAppView } from "@/lib/app/views";
 
 const { app } = defineProps<{
@@ -102,7 +99,9 @@ watch(open, async (openVal) => {
     const { idMapping } = await withTx(app, (tx) => {
       // 根块底部创建一个新块
       const index = tx.getChildrenIds(null).length;
-      const newContent = oldSerialize(schema.nodes.paragraph.create());
+      const newContent = oldSerialize(
+        app.detachedSchema.nodes.paragraph.create()
+      );
       newBlockTmpId = tx.createBlockUnder(null, index, {
         type: "text",
         folded: false,

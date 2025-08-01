@@ -1,13 +1,13 @@
 import type { BlockDataInner, BlockId } from "@/lib/common/types";
 import { Observable } from "../../common/observable";
-import { schema } from "../../views/tiptap-editor/editor-view";
 import type { App } from "../app";
-import { getBlockRefs } from "../util";
 import { getAllNodes, getBlockData } from "../block-manage";
+import { getBlockRefs } from "../util";
 
 export function initInRefs(app: App) {
   app.inRefs = new Map();
   app.inTags = new Map();
+  const schema = app.detachedSchema;
 
   app.on("tx-committed", (e) => {
     for (const change of e.executedOps) {
@@ -88,7 +88,7 @@ export function refreshInRefs(app: App) {
     const data = node.data.toJSON() as BlockDataInner;
     if (data.type === "text" || data.type === "code") {
       const nodeJson = JSON.parse(data.content);
-      const pmNode = schema.nodeFromJSON(nodeJson);
+      const pmNode = app.detachedSchema.nodeFromJSON(nodeJson);
       const refs = getBlockRefs(pmNode, false);
       for (const ref of refs) addInRef(app, ref, node.id);
     }
@@ -104,7 +104,7 @@ export function refreshInTags(app: App) {
     const data = node.data.toJSON() as BlockDataInner;
     if (data.type === "text" || data.type === "code") {
       const nodeJson = JSON.parse(data.content);
-      const pmNode = schema.nodeFromJSON(nodeJson);
+      const pmNode = app.detachedSchema.nodeFromJSON(nodeJson);
       const tags = getBlockRefs(pmNode, true);
       for (const tag of tags) addInTag(app, tag, node.id);
     }

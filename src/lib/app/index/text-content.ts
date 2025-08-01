@@ -1,11 +1,8 @@
-import { Observable } from "../../common/observable";
-import { schema } from "../../views/tiptap-editor/editor-view";
 import type { BlockId } from "@/lib/common/types";
+import { Observable } from "../../common/observable";
 import type { App } from "../app";
-import { getInRefs } from "./in-refs";
 import { getBlockData } from "../block-manage";
-import { BlockRef } from "@/lib/views/tiptap-editor/nodes/block-ref";
-import { Codeblock } from "@/lib/views/tiptap-editor/nodes/codeblock";
+import { getInRefs } from "./in-refs";
 
 export function initTextContent(app: App) {
   app.textContentCache = new Map();
@@ -91,6 +88,10 @@ function loadTextContentToCache(
   if (visited.has(blockId)) return;
   visited.add(blockId);
 
+  const schema = app.detachedSchema;
+  const blockRefType = schema.nodes.blockRef.name;
+  const codeblockType = schema.nodes.codeblock.name;
+
   if (app.textContentCache.has(blockId)) return;
 
   const blockData = getBlockData(app, blockId);
@@ -104,11 +105,11 @@ function loadTextContentToCache(
     const arr: string[] = [];
     node.content.descendants((currNode) => {
       if (currNode.isText) arr.push(currNode.text ?? "");
-      else if (currNode.type.name === BlockRef.name) {
+      else if (currNode.type.name === blockRefType) {
         const blockId = currNode.attrs.blockId;
         const content = getTextContent(app, blockId, visited);
         arr.push(content);
-      } else if (currNode.type.name === Codeblock.name) {
+      } else if (currNode.type.name === codeblockType) {
         arr.push(currNode.textContent);
       }
     });

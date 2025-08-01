@@ -13,7 +13,6 @@ import { Fragment, type Node } from "prosemirror-model";
 import { ref, shallowRef } from "vue";
 import { toast } from "vue-sonner";
 import { useMainEditorRoots } from "./useMainEditorRoots";
-import { schema } from "@/lib/views/tiptap-editor/editor-view";
 
 type Block = {
   id: string;
@@ -166,6 +165,7 @@ export function useImportExport(app: App) {
     tmp2new: Record<string, BlockId>
   ) => {
     const nodeJson = JSON.parse(content);
+    const schema = app.detachedSchema;
     const node = schema.nodeFromJSON(nodeJson);
     const blockRefType = schema.nodes.blockRef;
     const paragraphType = schema.nodes.paragraph;
