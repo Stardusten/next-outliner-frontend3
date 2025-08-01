@@ -70,7 +70,7 @@ import { nodeExtensions } from "@/lib/views/tiptap-editor/nodes";
 import { EditorContent } from "@tiptap/vue-3";
 import { TextSelection } from "@tiptap/pm/state";
 import { onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { PasteHtmlOrPlainText } from "@/lib/views/tiptap-editor/functionalities/PasteHtml";
+import { PasteHtmlOrPlainText } from "@/lib/views/tiptap-editor/functionalities/paste-html";
 
 const props = defineProps<{
   app: App;

@@ -235,7 +235,8 @@ export const PasteHtmlOrPlainText = Extension.create({
                 const pNodeJson = JSON.parse(block.content);
                 const pNode = schema.nodeFromJSON(pNodeJson);
                 const tr = view.state.tr;
-                tr.replaceSelectionWith(pNode);
+                const slice = new Slice(pNode.content, 0, 0);
+                tr.replaceSelection(slice);
                 view.dispatch(tr);
               } else {
                 const idMapping = new Map<string, BlockId>(); // old id -> new id
