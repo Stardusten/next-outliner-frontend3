@@ -18,20 +18,16 @@ export function useSearch(app: App) {
   const searchResults = ref<SearchResult[]>([]);
   const activeIndex = ref(0);
 
-  // 执行搜索
   const performSearch = (query: string) => {
-    searchQuery.value = query;
-
     if (!query.trim()) {
       searchResults.value = [];
       activeIndex.value = 0;
       return;
     }
 
-    // 使用全文索引搜索，获取带分数的结果
     const searchResultsWithScore = searchBlocksWithScore(app, query, 100);
-
     const results: SearchResult[] = [];
+
     for (const { id, score } of searchResultsWithScore) {
       const blockNode = getBlockNode(app, id);
       if (blockNode) {
@@ -46,14 +42,29 @@ export function useSearch(app: App) {
     activeIndex.value = 0;
   };
 
-  // 设置活动索引（用于键盘导航）
+  /**
+   * 防抖执行搜索
+   */
+  const DEBOUNCE_DELAY = 300; // ms
+  let debounceTimer: number | undefined;
+  const debouncedSearch = (query: string) => {
+    if (debounceTimer) window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => {
+      performSearch(query);
+    }, DEBOUNCE_DELAY);
+  };
+
+  const setQuery = (query: string) => {
+    searchQuery.value = query;
+    debouncedSearch(query);
+  };
+
   const setActiveIndex = (index: number) => {
     if (index >= 0 && index < searchResults.value.length) {
       activeIndex.value = index;
     }
   };
 
-  // 导航到下一项
   const navigateDown = () => {
     if (searchResults.value.length > 0) {
       const nextIndex = Math.min(
@@ -64,7 +75,6 @@ export function useSearch(app: App) {
     }
   };
 
-  // 导航到上一项
   const navigateUp = () => {
     if (searchResults.value.length > 0) {
       const prevIndex = Math.max(activeIndex.value - 1, 0);
@@ -72,7 +82,6 @@ export function useSearch(app: App) {
     }
   };
 
-  // 选择当前活动项
   const selectCurrentItem = () => {
     const currentItem = searchResults.value[activeIndex.value];
     if (currentItem) {
@@ -80,7 +89,6 @@ export function useSearch(app: App) {
     }
   };
 
-  // 选择指定的块
   const selectBlock = (result: SearchResult) => {
     const editor = getLastFocusedAppView(app);
     if (editor instanceof TiptapEditorView) {
@@ -89,22 +97,15 @@ export function useSearch(app: App) {
     closeSearch();
   };
 
-  // 重置搜索弹窗状态
   const resetSearch = () => {
     searchQuery.value = "";
     searchResults.value = [];
     activeIndex.value = 0;
   };
 
-  // 关闭搜索弹窗
   const closeSearch = () => {
     searchVisible.value = false;
     resetSearch();
-  };
-
-  // 更新搜索查询
-  const updateSearchQuery = (query: string) => {
-    performSearch(query);
   };
 
   return {
@@ -114,8 +115,7 @@ export function useSearch(app: App) {
     searchResults,
     activeIndex,
     // 搜索功能
-    performSearch,
-    updateSearchQuery,
+    setQuery,
     resetSearch,
     closeSearch,
     // 导航功能

@@ -136,16 +136,16 @@ import {
 import { TextSelection } from "@tiptap/pm/state";
 import { NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import { Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BlockContextMenu from "../BlockContextMenu.vue";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import Bullet from "./Bullet.vue";
-import EditSearchQueryPopup from "./EditSearchQueryPopup.vue";
-import FoldBtn from "./FoldBtn.vue";
+import Bullet from "../icons/Bullet.vue";
+import EditSearchQueryPopup from "../EditSearchQueryPopup.vue";
+import FoldBtn from "../icons/FoldBtn.vue";
 import { NodeViewWrapper } from "./NodeViewWrapper";
-import Search from "./Search.vue";
+import Search from "../icons/Search.vue";
 
 const { node, editor, getPos } = defineProps(nodeViewProps);
 const { t } = useI18n();
@@ -183,25 +183,41 @@ const tagCounter = ref(0);
 let inRefs: Observable<Set<BlockId>> | null = null;
 let inTags: Observable<Set<BlockId>> | null = null;
 
-onMounted(() => {
-  inRefs = getInRefs(editor.appView.app, node.attrs.blockId);
-  inRefs.subscribe(
-    (inRefsVal) => {
-      refCounter.value = inRefsVal.size;
-    },
-    { immediate: true }
-  );
+watch(
+  () => node.attrs.blockId,
+  (blockId) => {
+    if (inRefs != null) {
+      inRefs.dispose();
+      inRefs = null;
+    }
+    if (inTags != null) {
+      inTags.dispose();
+      inTags = null;
+    }
 
-  inTags = getInTags(editor.appView.app, node.attrs.blockId);
-  inTags.subscribe(
-    (inTagsVal) => {
-      tagCounter.value = inTagsVal.size;
-    },
-    { immediate: true }
-  );
+    inRefs = getInRefs(editor.appView.app, blockId);
+    inRefs.subscribe(
+      (inRefsVal) => {
+        refCounter.value = inRefsVal.size;
+      },
+      { immediate: true }
+    );
+
+    inTags = getInTags(editor.appView.app, blockId);
+    inTags.subscribe(
+      (inTagsVal) => {
+        tagCounter.value = inTagsVal.size;
+      },
+      { immediate: true }
+    );
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  inRefs?.dispose();
+  inTags?.dispose();
 });
-
-onUnmounted(() => inRefs?.dispose());
 
 const handleClickRightPad = () => {
   const pos = getPos();

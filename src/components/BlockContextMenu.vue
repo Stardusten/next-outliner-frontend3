@@ -51,9 +51,19 @@
         </ContextMenuSubContent>
       </ContextMenuSub>
 
+      <ContextMenuItem>
+        <CornerDownRight />
+        {{ $t("blockContextMenu.moveBlock") }}
+      </ContextMenuItem>
+
       <ContextMenuItem @click="handleCopyBlockRef">
         <Link />
         {{ $t("blockContextMenu.copyBlockRef") }}
+      </ContextMenuItem>
+
+      <ContextMenuItem @click="handleCopyBlockRef">
+        <Scissors />
+        {{ $t("blockContextMenu.cutBlock") }}
       </ContextMenuItem>
 
       <ContextMenuItem variant="destructive" @click="handleDelete">
@@ -65,7 +75,15 @@
 </template>
 
 <script setup lang="ts">
-import { Clipboard, Copy, Link, Text, Trash } from "lucide-vue-next";
+import {
+  Clipboard,
+  Copy,
+  CornerDownRight,
+  Link,
+  Scissors,
+  Text,
+  Trash,
+} from "lucide-vue-next";
 import {
   ContextMenu,
   ContextMenuContent,

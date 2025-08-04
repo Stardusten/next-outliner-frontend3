@@ -14,7 +14,12 @@
       @click="selectBlock(block)"
     >
       <div class="flex-1 overflow-hidden text-foreground">
-        <SearchResultItem :block="block" :app="app" :search-query="query" />
+        <SearchResultItem
+          :block="block"
+          :app="app"
+          :search-query="query"
+          show-path
+        />
       </div>
     </div>
     <div
@@ -30,7 +35,7 @@
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 import { computed, nextTick, ref, watch } from "vue";
-import SearchResultItem from "./search-popup/SearchResultItem.vue";
+import SearchResultItem from "./ReadonlyBlockView.vue";
 
 interface Props {
   visible: boolean;

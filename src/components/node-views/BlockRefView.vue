@@ -1,24 +1,27 @@
 <template>
-  <NodeViewWrapper
-    as="span"
-    class="block-ref cursor-pointer text-[var(--color-block-ref)]"
-    :class="{
-      // 标签样式
-      'text-[length:var(--tag-font-size)] opacity-60 hover:opacity-100 transition-opacity':
-        node.attrs.isTag,
-    }"
-    @click.prevent="handleClick"
-    :data-block-id="node.attrs.blockId"
-    :data-is-tag="node.attrs.isTag"
-  >
-    {{
-      textContentRef
-        ? node.attrs.isTag
-          ? `#${textContentRef}`
-          : textContentRef
-        : ""
-    }}
-  </NodeViewWrapper>
+  <BlockRefContextMenu :node="node">
+    <NodeViewWrapper
+      as="span"
+      class="block-ref cursor-pointer text-[var(--color-block-ref)] rounded-sm"
+      :class="{
+        // 标签样式
+        'text-[length:var(--tag-font-size)] opacity-60 hover:opacity-100 transition-opacity':
+          node.attrs.isTag,
+        'outline-[1px] outline-offset-[1px]': selected,
+      }"
+      @click.prevent="handleClick"
+      :data-block-id="node.attrs.blockId"
+      :data-is-tag="node.attrs.isTag"
+    >
+      {{
+        textContentRef
+          ? node.attrs.isTag
+            ? `#${textContentRef}`
+            : textContentRef
+          : ""
+      }}
+    </NodeViewWrapper>
+  </BlockRefContextMenu>
 </template>
 
 <script setup lang="ts">
@@ -27,8 +30,9 @@ import { nodeViewProps } from "@tiptap/vue-3";
 import { onUnmounted, ref, watch } from "vue";
 import { NodeViewWrapper } from "./NodeViewWrapper";
 import { getTextContentReactive } from "@/lib/app/index/text-content";
+import BlockRefContextMenu from "../BlockRefContextMenu.vue";
 
-const { node, editor } = defineProps(nodeViewProps);
+const { node, editor, selected } = defineProps(nodeViewProps);
 let textContent: Observable<string> | null = null;
 const textContentRef = ref<string>("");
 

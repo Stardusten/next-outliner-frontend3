@@ -193,7 +193,12 @@ export function useImportExport(app: App) {
     };
 
     if (type == "text") {
-      const paragraph = paragraphType.create({}, recur(node.content));
+      const paragraph = paragraphType.create(
+        {
+          ...node.attrs,
+        },
+        recur(node.content)
+      );
       return JSON.stringify(paragraph.toJSON());
     } else if (type == "code") {
       const codeblock = codeblockType.create(
@@ -202,7 +207,22 @@ export function useImportExport(app: App) {
       );
       return JSON.stringify(codeblock.toJSON());
     } else if (type === "search") {
-      const search = searchType.create({}, recur(node.content));
+      // TODO maybe better idea?
+      let query: string = node.attrs.query;
+      for (const [k, v] of Object.entries(old2tmp)) {
+        query = query.replaceAll(`"${k}"`, `"${v}"`);
+        query = query.replaceAll(`${k}`, `${v}`);
+      }
+      for (const [k, v] of Object.entries(tmp2new)) {
+        query = query.replaceAll(`"${k}"`, `"${v}"`);
+        query = query.replaceAll(`${k}`, `${v}`);
+      }
+      const search = searchType.create(
+        {
+          ...node.attrs,
+        },
+        recur(node.content)
+      );
       return JSON.stringify(search.toJSON());
     } else throw new Error("不支持的块类型");
   };

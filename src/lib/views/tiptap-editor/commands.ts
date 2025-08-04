@@ -1,6 +1,6 @@
 import { useAttachment } from "@/composables";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import { Node } from "@tiptap/pm/model";
+import { Node, Schema } from "@tiptap/pm/model";
 import { NodeSelection, TextSelection, type Command } from "@tiptap/pm/state";
 import { toast } from "vue-sonner";
 import type { AttachmentTaskInfo } from "../../app/attachment/storage";
@@ -10,8 +10,8 @@ import {
   getRootBlockNodes,
 } from "../../app/block-manage";
 import { getTextContent } from "../../app/index/text-content";
-import { withTx } from "../../app/tx";
-import type { BlockId } from "../../common/types";
+import { withTx, type TxObj } from "../../app/tx";
+import type { BlockDataInner, BlockId } from "../../common/types";
 import {
   buildBlockRefStr,
   getSelectedListItemInfo,
@@ -25,11 +25,27 @@ import { File, getFileDisplayMode, getFileType } from "./nodes/file";
 import { ListItem } from "./nodes/list-item";
 import { Search } from "./nodes/search";
 import { i18n } from "@/main";
+import { useBlockClipboard } from "@/composables/useBlockClipboard";
 
+/**
+ * 判断一个 List Item Node 内容是不是空的
+ */
 export function isEmptyListItem(node: Node): boolean {
   const pNode = node.firstChild;
   if (!pNode) return true;
   return pNode.content.size === 0;
+}
+
+/**
+ * 判断一个块是否是空块
+ */
+export function isEmptyBlock(
+  schema: Schema,
+  blockData: BlockDataInner
+): boolean {
+  const nodeJson = JSON.parse(blockData.content);
+  const node = schema.nodeFromJSON(nodeJson);
+  return node && node.content.size === 0;
 }
 
 export function promoteSelected(editor: TiptapEditor): Command {
@@ -91,7 +107,7 @@ export function demoteSelected(editor: TiptapEditor): Command {
 }
 
 export function splitListItem(editor: TiptapEditor): Command {
-  return function (state) {
+  return function (state, dispatch) {
     const { appView: appview, schema } = editor;
 
     const { $from } = state.selection;
@@ -106,6 +122,8 @@ export function splitListItem(editor: TiptapEditor): Command {
 
     const paragraphNode = listItem.firstChild;
     if (!paragraphNode) return false;
+
+    if (!dispatch) return true;
 
     const splitPos = $from.parentOffset;
     if (splitPos === 0) {
@@ -152,6 +170,7 @@ export function splitListItem(editor: TiptapEditor): Command {
   };
 }
 
+/** 删除空块 */
 export function deleteEmptyListItem(
   editor: TiptapEditor,
   direction: "backward" | "forward" = "backward"
@@ -159,21 +178,20 @@ export function deleteEmptyListItem(
   return function (state, dispatch) {
     const { appView: appview } = editor;
     const { $from, empty } = state.selection;
-    // 该命令只在光标位于块开头且没有选中内容时触发
+    // 触发条件：
+    // 1. 光标位于块开头且没有选中内容
+    // 2. 块必须为空
+    // 3. 没有子块
     if (!empty || $from.parentOffset !== 0) return false;
 
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
-
-    // 块必须为空
-    if (listItemInfo.node.textContent.length > 0) return false;
+    if (!isEmptyListItem(listItemInfo.node)) return false; // 块内容必须为空
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-
     const currentBlockNode = getBlockNode(appview.app, blockId);
     if (!currentBlockNode) return false;
-
     const children = currentBlockNode.children() ?? [];
 
     // 不删除有子块的块
@@ -237,6 +255,8 @@ export function deleteEmptyListItem(
     // 如果这是编辑器中唯一的根块，则不删除
     if (!focusTarget) return false;
 
+    if (!dispatch) return true;
+
     withTx(appview.app, (tx) => {
       tx.deleteBlock(blockId);
       tx.setSelection(focusTarget);
@@ -247,25 +267,16 @@ export function deleteEmptyListItem(
   };
 }
 
+/** 选中当前聚焦的整个 listItem */
 export function selectCurrentListItem(editor: TiptapEditor): Command {
   return function (state, dispatch) {
-    const { appView: appview } = editor;
-
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
-
     const { node: listItem, pos } = listItemInfo;
 
-    // listItem 的内容是一个 paragraph 节点。
-    // 文本内容的起始位置在 listItem 和 paragraph 的开标签之后，即 pos + 2。
     const from = pos + 2;
-
-    // 根据 schema，listItem 的第一个也是唯一一个子节点是 paragraph。
-    // paragraphNode.content.size 就是其内部文本内容的长度。
     const paragraphNode = listItem.firstChild!;
     const to = from + paragraphNode.content.size;
-
-    // 创建一个覆盖从 'from' 到 'to' 的文本选区。
     const selection = TextSelection.create(state.doc, from, to);
 
     if (dispatch) {
@@ -279,23 +290,19 @@ export function selectCurrentListItem(editor: TiptapEditor): Command {
 
 /**
  * 删除选中的内容
- *
- * - 如果选择为空，pass
- * - 如果选中了多个 listItem，stop
  */
 export function deleteSelected(): Command {
   return function (state, dispatch) {
     const { from, to, empty } = state.selection;
+    if (empty) return false; // 该命令仅处理非空选择
 
-    if (empty) return false; // 该命令仅处理非空选择。
-
+    // 如果选中了多个 listItem，什么都不做
     const { start, end, cross } = getSelectedListItemInfo(state);
     if (!start || !end || cross) return true;
 
     // 选择在单个 listItem 内
     const { node: listItem, pos: listItemPos } = start;
     const paragraphNode = listItem.firstChild;
-
     if (!paragraphNode) return false;
 
     const paraContentStartPos = listItemPos + 2; // 在 listItem 和段落开标签之后
@@ -303,20 +310,15 @@ export function deleteSelected(): Command {
 
     // 如果试图删除整个块的内容，将块内容替换为空
     // 因为默认行为会直接删掉这个块
-    if (from <= paraContentStartPos && to >= paraContentEndPos) {
-      if (dispatch) {
-        const tr = state.tr.replaceWith(
-          paraContentStartPos,
-          paraContentEndPos,
-          []
-        );
-        dispatch(tr);
-      }
-      return true;
+    if (dispatch) {
+      const tr = state.tr.replaceWith(
+        Math.max(from, paraContentStartPos),
+        Math.min(to, paraContentEndPos),
+        []
+      );
+      dispatch(tr);
     }
-
-    // 如果是在单个块内的部分选择，则让 Prosemirror 处理。
-    return false;
+    return true;
   };
 }
 
@@ -336,6 +338,8 @@ export function updateSearchQuery(
       targetBlockId = listItemInfo.node.attrs.blockId as BlockId;
       if (!targetBlockId) return false;
     }
+
+    if (!dispatch) return true;
 
     withTx(appview.app, (tx) => {
       const blockData = tx.getBlockData(targetBlockId);
@@ -372,15 +376,15 @@ export function toggleFocusedFoldState(
     const listItemInfo = findCurrListItem(state);
     if (!listItemInfo) return false;
 
-    if (!targetBlockId) {
+    if (!targetBlockId)
       targetBlockId = listItemInfo.node.attrs.blockId as BlockId;
-      if (!targetBlockId) return false;
-    }
+    if (!targetBlockId) return false;
+
+    if (!dispatch) return true;
 
     const currentBlockData = getBlockData(appview.app, targetBlockId);
-    if (!currentBlockData || targetState === currentBlockData.folded) {
+    if (!currentBlockData || targetState === currentBlockData.folded)
       return true;
-    }
 
     withTx(appview.app, (tx) => {
       tx.updateBlock(targetBlockId, {
@@ -395,12 +399,13 @@ export function toggleFocusedFoldState(
 
 export function copyBlockRef(editor: TiptapEditor): Command {
   return function (state, dispatch) {
-    const { appView: appview } = editor;
     const listItemInfo = findCurrListItem(state);
     if (listItemInfo == null) return true;
 
     const blockId = listItemInfo.node.attrs.blockId;
     if (blockId == null) return true;
+
+    if (!dispatch) return true;
 
     if (navigator.clipboard) {
       const clipboard = navigator.clipboard as any;
@@ -422,18 +427,16 @@ export function moveBlockUp(editor: TiptapEditor): Command {
   return function (state, dispatch) {
     const { appView: appview } = editor;
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
-    }
+    if (!listItemInfo) return false;
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-
     const blockNode = getBlockNode(appview.app, blockId);
     if (!blockNode) return false;
-
     const index = blockNode.index()!;
     if (index === 0) return false; // 已经是第一个块
+
+    if (!dispatch) return true;
 
     withTx(appview.app, (tx) => {
       const parentId = tx.getParentId(blockId)!;
@@ -449,19 +452,17 @@ export function moveBlockDown(editor: TiptapEditor): Command {
   return function (state, dispatch) {
     const { appView: appview } = editor;
     const listItemInfo = findCurrListItem(state);
-    if (!listItemInfo) {
-      return false;
-    }
+    if (!listItemInfo) return false;
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-
     const blockNode = getBlockNode(appview.app, blockId);
     if (!blockNode) return false;
-
     const index = blockNode.index()!;
     const parentNode = blockNode.parent()!;
     if (index >= parentNode.children()!.length - 1) return false; // 已经是最后一个块
+
+    if (!dispatch) return true;
 
     withTx(appview.app, (tx) => {
       const parentId = tx.getParentId(blockId)!;
@@ -549,44 +550,61 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
       );
     }
 
-    // 合并两个段落的内容
-    let mergedParagraphNode;
+    // 检查前一个块是否为空
     const prevContentSize = prevParagraphNode.content.size;
-
     if (prevContentSize === 0) {
-      // 前一个块为空，直接使用当前块的内容
-      mergedParagraphNode = currentParagraphNode;
-    } else if (currentParagraphNode.content.size === 0) {
-      // 当前块为空，直接使用前一个块的内容
-      mergedParagraphNode = prevParagraphNode;
+      // 前一个块为空，删除前一个块，保留当前块
+      withTx(appview.app, (tx) => {
+        // 1. 删除前一个块
+        tx.deleteBlock(prevBlockId);
+        // 2. 设置光标位置到当前块开头
+        const selection = {
+          viewId: appview.id,
+          blockId: currentBlockId,
+          anchor: 0,
+        };
+        tx.setSelection(selection);
+        tx.setOrigin("localEditorStructural");
+      });
     } else {
-      // 两个块都有内容，需要合并
-      const mergedContent = prevParagraphNode.content.append(
-        currentParagraphNode.content
-      );
-      mergedParagraphNode = schema.nodes.paragraph.create(null, mergedContent);
+      // 前一个块不为空，执行合并逻辑
+      let mergedParagraphNode;
+
+      if (currentParagraphNode.content.size === 0) {
+        // 当前块为空，直接使用前一个块的内容
+        mergedParagraphNode = prevParagraphNode;
+      } else {
+        // 两个块都有内容，需要合并
+        const mergedContent = prevParagraphNode.content.append(
+          currentParagraphNode.content
+        );
+        mergedParagraphNode = schema.nodes.paragraph.create(
+          null,
+          mergedContent
+        );
+      }
+
+      // 序列化合并后的内容
+      const mergedSerialized = oldSerialize(mergedParagraphNode);
+
+      // 计算光标在合并后的位置（在原前一个块内容的末尾）
+      const mergePoint = prevContentSize;
+
+      withTx(appview.app, (tx) => {
+        // 1. 更新前一个块的内容为合并后的内容
+        tx.updateBlock(prevBlockId, { content: mergedSerialized });
+        // 2. 删除当前块
+        tx.deleteBlock(currentBlockId);
+        // 3. 设置光标位置
+        const selection = {
+          viewId: appview.id,
+          blockId: prevBlockId,
+          anchor: mergePoint,
+        };
+        tx.setSelection(selection);
+        tx.setOrigin("localEditorStructural");
+      });
     }
-
-    // 序列化合并后的内容
-    const mergedSerialized = oldSerialize(mergedParagraphNode);
-
-    // 计算光标在合并后的位置（在原前一个块内容的末尾）
-    const mergePoint = prevContentSize;
-
-    withTx(appview.app, (tx) => {
-      // 1. 更新前一个块的内容为合并后的内容
-      tx.updateBlock(prevBlockId, { content: mergedSerialized });
-      // 2. 删除当前块
-      tx.deleteBlock(currentBlockId);
-      // 3. 设置光标位置
-      const selection = {
-        viewId: appview.id,
-        blockId: prevBlockId,
-        anchor: mergePoint,
-      };
-      tx.setSelection(selection);
-      tx.setOrigin("localEditorStructural");
-    });
 
     return true;
   };
@@ -1184,5 +1202,115 @@ export function recursiveDeleteBlock(
       tx.setOrigin("localEditorStructural");
     });
     return true;
+  };
+}
+
+export function addToBlockClipboard(editor: TiptapEditor): Command {
+  return function (state, dispatch) {
+    const listItemInfo = findCurrListItem(state);
+    if (!listItemInfo) return false;
+
+    const blockId = listItemInfo.node.attrs.blockId as BlockId;
+    if (!blockId) return false;
+
+    if (!dispatch) return true;
+
+    const clipboard = useBlockClipboard(editor.appView.app);
+    clipboard.addBlock(blockId);
+
+    return true;
+  };
+}
+
+/**
+ * 移动一个块到指定位置
+ * @param blockId 要移动的块，如果不指定，默认为编辑器当前聚焦的块
+ */
+export function moveBlockTo(
+  editor: TiptapEditor,
+  blockId: BlockId | undefined,
+  parent: BlockId | null,
+  index: number
+): Command {
+  return function (state, dispatch) {
+    let tgtId = blockId;
+    if (!tgtId) {
+      const listItemInfo = findCurrListItem(state);
+      if (!listItemInfo) return false;
+
+      tgtId = listItemInfo.node.attrs.blockId as BlockId;
+      if (!tgtId) return false;
+    }
+
+    if (!dispatch) return true;
+
+    withTx(editor.appView.app, (tx) => {
+      tx.moveBlock(tgtId, parent, index);
+      tx.setOrigin("localEditorStructural");
+    });
+    return true;
+  };
+}
+
+/**
+ * 移动多个块到指定位置
+ * @param blockIds 要移动的所有块的 ID
+ */
+export function moveBlocksTo(
+  editor: TiptapEditor,
+  blockIds: BlockId[],
+  parent: BlockId | null,
+  index: number
+): Command {
+  return function (state, dispatch) {
+    if (!dispatch) return true;
+
+    withTx(editor.appView.app, (tx) => {
+      for (let i = blockIds.length - 1; i >= 0; i--) {
+        tx.moveBlock(blockIds[i], parent, index);
+      }
+      tx.setOrigin("localEditorStructural");
+    });
+    return true;
+  };
+}
+
+export function deleteCharBefore(): Command {
+  return function (state, dispatch) {
+    const listItemInfo = findCurrListItem(state);
+    if (!listItemInfo) return false;
+
+    const { empty, anchor } = state.selection;
+    if (!empty) return false; // 仅当没有选中内容时可用
+
+    if (anchor > listItemInfo.pos + 2) {
+      if (dispatch) {
+        const tr = state.tr.delete(anchor - 1, anchor);
+        dispatch(tr);
+      }
+      return true;
+    }
+
+    return false;
+  };
+}
+
+export function deleteCharAfter(): Command {
+  return function (state, dispatch) {
+    const listItemInfo = findCurrListItem(state);
+    if (!listItemInfo) return false;
+
+    const { empty, anchor } = state.selection;
+    if (!empty) return false; // 仅当没有选中内容时可用
+
+    if (anchor + 1 < listItemInfo.pos + listItemInfo.node.nodeSize - 1) {
+      if (dispatch) {
+        const tr = state.tr.delete(anchor, anchor + 1);
+        dispatch(tr);
+      }
+      return true;
+    }
+
+    return false;
   };
 }

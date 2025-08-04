@@ -233,6 +233,9 @@ function execTx(
           const blockId = idMapping[op.blockId] ?? op.blockId;
           const oldBlockNode = app.tree.getNodeByID(blockId);
           if (!oldBlockNode) throw new Error(`要删除的块 ${blockId} 不存在`);
+          const children = oldBlockNode.children() ?? [];
+          if (children.length > 0)
+            throw new Error(`要删除的块 ${blockId} 有子块，不能删除`);
           const oldData = oldBlockNode.data.toJSON() as BlockDataInner;
           const oldParent = oldBlockNode.parent()?.id ?? null;
           const oldIndex = oldBlockNode.index()!;

@@ -8,6 +8,7 @@ import { findCurrListItem } from "../../editor-view";
 import type { EditorState, Command } from "@tiptap/pm/state";
 import { keymap } from "@tiptap/pm/keymap";
 import {
+  addToBlockClipboard,
   backspaceAfterCharBeforeExpandedFile,
   codeblockIndent,
   codeblockInsertLineBreak,
@@ -17,6 +18,8 @@ import {
   codeblockSelectAll,
   copyBlockRef,
   deleteBeforeCharBeforeExpandedFile,
+  deleteCharAfter,
+  deleteCharBefore,
   deleteEmptyListItem,
   deleteSelected,
   demoteSelected,
@@ -77,7 +80,9 @@ export const NormalKeymap = Extension.create({
             deleteEmptyListItem(editor),
             mergeWithPreviousBlock(editor),
             deleteSelected(),
-            backspaceAfterCharBeforeExpandedFile()
+            backspaceAfterCharBeforeExpandedFile(),
+            deleteCharBefore(),
+            stop
           ),
           code: chainCommands(
             deleteEmptyListItem(editor),
@@ -89,7 +94,9 @@ export const NormalKeymap = Extension.create({
           text: chainCommands(
             deleteEmptyListItem(editor, "forward"),
             deleteSelected(),
-            deleteBeforeCharBeforeExpandedFile()
+            deleteBeforeCharBeforeExpandedFile(),
+            deleteCharAfter(),
+            stop
           ),
           code: chainCommands(
             deleteEmptyListItem(editor),
@@ -124,6 +131,7 @@ export const NormalKeymap = Extension.create({
         "Mod-z": undoCommand(editor),
         "Mod-Shift-z": redoCommand(editor),
         "Mod-e": toSearchBlock(editor),
+        "Mod-x": addToBlockClipboard(editor),
       }),
     ];
   },

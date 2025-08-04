@@ -22,6 +22,8 @@
         </Button>
       </QuickAdd>
 
+      <ClipboardPopup :app="app" />
+
       <!-- 附件 -->
       <AttachmentPopup :attachment="attachment" :task-list="taskList">
         <Button variant="ghost" size="xs-icon">
@@ -57,6 +59,7 @@ import {
   Folder,
   MoreHorizontal,
   CirclePlus,
+  Clipboard,
 } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import MoreMenu from "./more-menu/MoreMenu.vue";
@@ -75,6 +78,7 @@ import { Button } from "../ui/button";
 import { getLastFocusedAppView } from "@/lib/app/views";
 import QuickAdd from "../QuickAdd.vue";
 import SearchPopup from "../search-popup/SearchPopup.vue";
+import ClipboardPopup from "./clipboard/ClipboardPopup.vue";
 
 const props = defineProps<{
   app: App;

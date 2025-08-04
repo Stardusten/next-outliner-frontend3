@@ -62,7 +62,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ref, watch } from "vue";
-import { Label } from "../ui/label";
+import { Label } from "./ui/label";
 
 const props = defineProps<{
   initQuery?: string;

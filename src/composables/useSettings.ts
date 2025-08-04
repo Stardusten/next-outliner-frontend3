@@ -329,6 +329,19 @@ const settingsConfig: SettingsPageConfig[] = [
           },
         ],
       },
+      {
+        id: "experimental",
+        title: "实验性功能",
+        settings: [
+          {
+            id: "incrementalUpdate",
+            type: "toggle",
+            label: "增量更新",
+            settingPath: "editor.incrementalUpdate",
+            defaultValue: false,
+          },
+        ],
+      },
     ],
   },
   {

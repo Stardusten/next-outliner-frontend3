@@ -24,6 +24,9 @@ import { nodeExtensions } from "./nodes";
 import { ListItem } from "./nodes/list-item";
 import { incrementalUpdate } from "../renderers/patchers";
 import { getRootBlockIds } from "@/lib/app/block-manage";
+import { useRepoConfigs } from "@/composables/useRepoConfigs";
+import type { ComputedRef } from "vue";
+import type { RepoConfig } from "@/lib/repo/schema";
 
 declare module "@tiptap/core" {
   interface Editor {
@@ -155,6 +158,7 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
   on: Emitter<TiptapEditorViewEvents>["on"];
   off: Emitter<TiptapEditorViewEvents>["off"];
   deferredContentSyncTask: (() => void) | null;
+  repoConfig: ComputedRef<RepoConfig | null>;
 
   constructor(app: App, params: Partial<TiptapEditorViewOptions> = {}) {
     const options = withDefaults(params);
@@ -172,6 +176,8 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
     this.on = this.eb.on;
     this.off = this.eb.off;
     this.deferredContentSyncTask = null;
+    const { currentRepo } = useRepoConfigs();
+    this.repoConfig = currentRepo;
   }
 
   mount(el: HTMLElement): void {
@@ -251,7 +257,6 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
   getFocusedBlockId(): BlockId | null {
     if (!this.tiptap) throw new Error("Editor not mounted");
     const state = this.tiptap.state;
-    const sel = state.selection;
     const listItemInfo = findCurrListItem(state);
     return listItemInfo?.node.attrs.blockId ?? null;
   }
@@ -520,8 +525,13 @@ export class TiptapEditorView implements AppView<TiptapEditorViewEvents> {
       // 如果事件是来自本地编辑器的内容变更，则不更新视图
       if (event.meta.origin === "localEditorContent" + this.id) return;
 
-      // 使用增量更新方法
-      this.#patchStateAccAppTx(event);
+      const incrementalUpdate = this.repoConfig.value?.editor.incrementalUpdate;
+      if (incrementalUpdate) this.#patchStateAccAppTx(event);
+      else {
+        const selection =
+          event.meta.selection ?? this.getSelectionInfo() ?? undefined;
+        this.#rerender(selection, true);
+      }
     };
     this.app.on("tx-committed", this.#appTxCommittedHandler);
   }

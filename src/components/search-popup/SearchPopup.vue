@@ -11,24 +11,35 @@
       </Tooltip>
     </DialogTrigger>
 
+    <!-- [&>button]:hidden 隐藏关闭按钮 -->
     <DialogContent
-      class="max-w-[500px] max-h-[500px] p-0 gap-0"
+      class="max-w-[500px] max-h-[500px] p-0 gap-0 [&>button]:hidden"
       transparent-overlay
       @close-auto-focus.prevent
     >
       <DialogTitle class="hidden" />
       <!-- 搜索输入框 -->
-      <div class="flex items-center gap-2 px-3 py-3 border-b">
-        <Search :size="16" class="text-muted-foreground shrink-0" />
+      <div class="flex items-center border-b">
+        <div class="flex items-center justify-center w-10 h-[44px] shrink-0">
+          <Search :size="16" class="text-muted-foreground" />
+        </div>
         <input
           ref="inputRef"
-          v-model="searchQuery"
-          class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+          :value="searchQuery"
+          class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground h-[44px] px-2"
           placeholder="搜索块内容..."
           @keydown="handleKeyDown"
           @input="handleInput"
           @compositionend="handleCompositionEnd"
         />
+        <div class="flex items-center gap-1 pr-2 shrink-0">
+          <Button variant="ghost" size="xs-icon" class="text-muted-foreground">
+            <Eye />
+          </Button>
+          <Button variant="ghost" size="xs-icon" class="text-muted-foreground">
+            <Settings2 />
+          </Button>
+        </div>
       </div>
 
       <!-- 搜索结果列表 -->
@@ -41,24 +52,13 @@
           :class="{ 'bg-muted/50': index === activeIndex }"
           @click="selectBlock(result)"
         >
-          <div class="text-sm text-foreground overflow-hidden">
-            <SearchResultItem
-              :block="result.block"
-              :app="app"
-              :search-query="searchQuery"
-            />
-          </div>
-          <div
-            class="flex items-center justify-between mt-1 text-xs text-muted-foreground"
-          >
-            <span class="font-mono">{{ result.block.id.slice(0, 8) }}</span>
-            <span
-              v-if="result.score"
-              class="bg-primary/10 text-primary px-2 py-0.5 rounded font-mono"
-            >
-              {{ result.score.toFixed(2) }}
-            </span>
-          </div>
+          <SearchResultItem
+            :block="result.block"
+            :app="app"
+            :search-query="searchQuery"
+            class="text-sm **:text-nowrap! **:text-ellipsis! **:overflow-hidden!"
+            show-path
+          />
         </div>
         <div
           v-if="searchQuery && searchResults.length === 0"
@@ -78,23 +78,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from "vue";
-import { Search } from "lucide-vue-next";
-import SearchResultItem from "./SearchResultItem.vue";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { App } from "@/lib/app/app";
 import type { useSearch } from "@/composables";
-import {
-  TooltipProvider,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "../ui/tooltip";
+import type { App } from "@/lib/app/app";
+import { Eye, Search, Settings2 } from "lucide-vue-next";
+import { nextTick, onMounted, ref, watch } from "vue";
+import SearchResultItem from "../ReadonlyBlockView.vue";
+import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 const props = defineProps<{
   app: App;
@@ -106,8 +102,7 @@ const {
   searchResults,
   searchQuery,
   activeIndex,
-  updateSearchQuery,
-  performSearch,
+  setQuery,
   closeSearch,
   navigateDown,
   navigateUp,
@@ -175,21 +170,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 };
 
-// 处理输入事件
 const handleInput = (e: Event) => {
-  // 检查是否正在输入法合成中
-  if ((e as any).isComposing) {
-    return;
-  }
-
-  updateSearchQuery(searchQuery.value);
-  performSearch(searchQuery.value);
+  if ((e as any).isComposing) return;
+  const value = (e.target as HTMLInputElement).value;
+  setQuery(value);
 };
 
-// 处理输入法合成结束事件
-const handleCompositionEnd = () => {
-  updateSearchQuery(searchQuery.value);
-  performSearch(searchQuery.value);
+const handleCompositionEnd = (e: Event) => {
+  const value = (e.target as HTMLInputElement).value;
+  setQuery(value);
 };
 
 // 监听 activeIndex 变化，自动滚动

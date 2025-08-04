@@ -41,6 +41,7 @@ const editorSchema = z.object({
   unknownFileDefaultDisplayMode: z
     .enum(["inline", "expanded", "preview"])
     .default("expanded"),
+  incrementalUpdate: z.boolean().default(false),
 });
 
 // 附件存储设置 schema - 标准化
