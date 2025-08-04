@@ -131,7 +131,7 @@ export const NormalKeymap = Extension.create({
         "Mod-z": undoCommand(editor),
         "Mod-Shift-z": redoCommand(editor),
         "Mod-e": toSearchBlock(editor),
-        "Mod-x": addToBlockClipboard(editor),
+        "Mod-Shift-x": addToBlockClipboard(editor),
       }),
     ];
   },
