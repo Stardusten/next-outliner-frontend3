@@ -1,7 +1,7 @@
 <template>
   <NodeViewWrapper
     as="div"
-    class="list-item-x relative leading-[24px] flex flex-wrap !outline-none ml-[calc(var(--level)*32px+36px)]"
+    class="list-item-x relative leading-[24px] flex flex-wrap !outline-none ml-[calc(var(--level)*32px+36px)] focus-within:text-red-500!"
     :style="{ '--level': node.attrs.level }"
     :data-level="node.attrs.level"
     :data-block-id="node.attrs.blockId"
@@ -122,21 +122,53 @@
         @click.prevent="handleClickRightPad"
       ></div>
     </div>
+
+    <!-- 代码块右上角的语言选择器和复制按钮 -->
+    <div
+      v-if="node.attrs.type === 'code' && focused"
+      class="flex gap-2 absolute right-0 -top-[32px]"
+    >
+      <Select
+        :model-value="node.firstChild!.attrs.lang"
+        @update:model-value="handleLangChange"
+      >
+        <SelectTrigger
+          class="h-8! min-w-36 bg-transparent! focus-visible:outline-none focus-visible:ring-transparent"
+        >
+          {{ node.firstChild!.attrs.lang }}
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="lang in languages" :value="lang">
+            {{ lang }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="outline" class="size-8 bg-transparent!">
+            <Copy />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {{ $t("listItem.copyCode") }}
+        </TooltipContent>
+      </Tooltip>
+    </div>
   </NodeViewWrapper>
 </template>
 
 <script setup lang="ts">
 import { getInRefs, getInTags } from "@/lib/app/index/in-refs";
-import type { Observable } from "@/lib/common/observable";
 import type { BlockId } from "@/lib/common/types";
 import {
   toggleFocusedFoldState,
+  updateCodeblockLang,
   updateSearchQuery,
-} from "@/lib/views/tiptap-editor/commands";
+} from "@/lib/views/editable-outline/commands";
 import { TextSelection } from "@tiptap/pm/state";
 import { NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
-import { Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { Copy, Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BlockContextMenu from "../BlockContextMenu.vue";
 import { Button } from "../ui/button";
@@ -146,6 +178,8 @@ import EditSearchQueryPopup from "../EditSearchQueryPopup.vue";
 import FoldBtn from "../icons/FoldBtn.vue";
 import { NodeViewWrapper } from "./NodeViewWrapper";
 import Search from "../icons/Search.vue";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
+import { languages } from "@/lib/views/common/functionalities/highlight-codeblock";
 
 const { node, editor, getPos } = defineProps(nodeViewProps);
 const { t } = useI18n();
@@ -178,45 +212,24 @@ const queryStatus = computed(() => {
   };
 });
 
-const refCounter = ref(0);
-const tagCounter = ref(0);
-let inRefs: Observable<Set<BlockId>> | null = null;
-let inTags: Observable<Set<BlockId>> | null = null;
+const handleLangChange = (lang: any) => {
+  const cmd = updateCodeblockLang(editor, node.attrs.blockId, lang);
+  editor.appView.execCommand(cmd, true);
+};
 
-watch(
-  () => node.attrs.blockId,
-  (blockId) => {
-    if (inRefs != null) {
-      inRefs.dispose();
-      inRefs = null;
-    }
-    if (inTags != null) {
-      inTags.dispose();
-      inTags = null;
-    }
-
-    inRefs = getInRefs(editor.appView.app, blockId);
-    inRefs.subscribe(
-      (inRefsVal) => {
-        refCounter.value = inRefsVal.size;
-      },
-      { immediate: true }
-    );
-
-    inTags = getInTags(editor.appView.app, blockId);
-    inTags.subscribe(
-      (inTagsVal) => {
-        tagCounter.value = inTagsVal.size;
-      },
-      { immediate: true }
-    );
-  },
-  { immediate: true }
+const focused = computed(
+  () => editor.appView.focusedBlockId.value === node.attrs.blockId
 );
 
-onUnmounted(() => {
-  inRefs?.dispose();
-  inTags?.dispose();
+const refCounter = ref(0);
+const tagCounter = ref(0);
+
+const inRefs = computed(() => {
+  return getInRefs(editor.appView.app, node.attrs.blockId);
+});
+
+const inTags = computed(() => {
+  return getInTags(editor.appView.app, node.attrs.blockId);
 });
 
 const handleClickRightPad = () => {

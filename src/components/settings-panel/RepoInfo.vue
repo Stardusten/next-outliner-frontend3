@@ -35,9 +35,9 @@
 import { useRepoConfigs } from "@/composables/useRepoConfigs";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
-import { clipboard } from "@/lib/views/utils";
 import { toast } from "vue-sonner";
 import { useRouter } from "vue-router";
+import { clipboard } from "@/lib/common/clipboard";
 
 const repoConfigs = useRepoConfigs();
 const { currentRepo } = repoConfigs;

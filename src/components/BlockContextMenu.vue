@@ -95,10 +95,11 @@ import {
 } from "./ui/context-menu";
 import type { BlockId } from "@/lib/common/types";
 import type { Editor } from "@tiptap/core";
-import { recursiveDeleteBlock } from "@/lib/views/tiptap-editor/commands";
+import { recursiveDeleteBlock } from "@/lib/views/editable-outline/commands";
 import Markdown from "./icons/Markdown.vue";
 import Html from "./icons/Html.vue";
-import { toMarkdown } from "@/lib/views/utils";
+import { toMarkdown } from "@/lib/common/markdown";
+import { clipboard } from "@/lib/common/clipboard";
 
 const props = defineProps<{
   blockId: BlockId;
@@ -108,11 +109,7 @@ const { blockId, editor } = props;
 
 const handleCopyBlockRef = () => {
   if (!editor) return;
-  try {
-    navigator.clipboard.writeText(blockId);
-  } catch (err) {
-    console.error(err);
-  }
+  clipboard.writeText(blockId);
 };
 
 const handleDelete = () => {
@@ -123,10 +120,6 @@ const handleDelete = () => {
 
 const handleCopyAsMarkdown = () => {
   const markdown = toMarkdown(editor.appView.app, [blockId]);
-  try {
-    navigator.clipboard.writeText(markdown);
-  } catch (err) {
-    console.error(err);
-  }
+  clipboard.writeText(markdown);
 };
 </script>

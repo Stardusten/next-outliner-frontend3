@@ -25,41 +25,16 @@
 </template>
 
 <script setup lang="ts">
-import type { Observable } from "@/lib/common/observable";
-import { nodeViewProps } from "@tiptap/vue-3";
-import { onUnmounted, ref, watch } from "vue";
-import { NodeViewWrapper } from "./NodeViewWrapper";
 import { getTextContentReactive } from "@/lib/app/index/text-content";
+import { nodeViewProps } from "@tiptap/vue-3";
+import { computed } from "vue";
 import BlockRefContextMenu from "../BlockRefContextMenu.vue";
+import { NodeViewWrapper } from "./NodeViewWrapper";
 
 const { node, editor, selected } = defineProps(nodeViewProps);
-let textContent: Observable<string> | null = null;
-const textContentRef = ref<string>("");
-
-watch(
-  () => node.attrs.blockId,
-  async (blockId) => {
-    if (textContent) {
-      textContent.dispose();
-      textContent = null;
-    }
-    const app = editor.appView.app;
-    textContent = getTextContentReactive(app, blockId);
-    textContent.subscribe(
-      (textContent) => {
-        textContentRef.value = textContent;
-      },
-      { immediate: true }
-    );
-  },
-  { immediate: true }
-);
-
-onUnmounted(() => {
-  if (textContent) {
-    textContent.dispose();
-    textContent = null;
-  }
+const textContentRef = computed(() => {
+  const refVar = getTextContentReactive(editor.appView.app, node.attrs.blockId);
+  return refVar.value;
 });
 
 const handleClick = () => {

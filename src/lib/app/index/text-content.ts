@@ -1,8 +1,9 @@
 import type { BlockId } from "@/lib/common/types";
-import { Observable } from "../../common/observable";
 import type { App } from "../app";
 import { getBlockData } from "../block-manage";
 import { getInRefs } from "./in-refs";
+import type { Ref } from "vue";
+import { shallowRef } from "vue";
 
 export function initTextContent(app: App) {
   app.textContentCache = new Map();
@@ -11,16 +12,16 @@ export function initTextContent(app: App) {
   /**
    * 注册一个监听器，当一个块内容更新时
    * 1. 触发文本内容缓存失效
-   * 2. 更新对应 Observable，如果有
+   * 2. 更新对应 ref，如果有
    */
   app.on("tx-committed", (e) => {
     for (const change of e.executedOps) {
       if (change.type === "block:update") {
         // 触发文本内容缓存失效
         invalidateTextContent(app, change.blockId);
-        // 更新对应 Observable
+        // 更新对应 ref
         const obs = getTextContentReactive(app, change.blockId);
-        obs.set(getTextContent(app, change.blockId));
+        obs.value = getTextContent(app, change.blockId);
       }
     }
   });
@@ -44,14 +45,11 @@ export function getTextContent(
 export function getTextContentReactive(
   app: App,
   blockId: BlockId
-): Observable<string> {
+): Ref<string> {
   const obs = app.textContentObs.get(blockId);
   if (obs) return obs;
   else {
-    const obsNew = new Observable(getTextContent(app, blockId));
-    obsNew.setDisposer(() => {
-      app.textContentObs.delete(blockId);
-    });
+    const obsNew = shallowRef(getTextContent(app, blockId));
     app.textContentObs.set(blockId, obsNew);
     return obsNew;
   }
@@ -71,7 +69,7 @@ export function invalidateTextContent(app: App, blockId?: BlockId): void {
 function invalidateTextContentCache(app: App, blockId?: BlockId): void {
   if (blockId) {
     const inRefs = getInRefs(app, blockId);
-    for (const ref of inRefs.get()) {
+    for (const ref of inRefs.value) {
       invalidateTextContentCache(app, ref); // 递归
     }
     app.textContentCache.delete(blockId);

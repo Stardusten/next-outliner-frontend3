@@ -3,8 +3,11 @@ import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
 import { getLastFocusedAppView } from "@/lib/app/views";
 import { type BlockId, type BlockNode } from "@/lib/common/types";
-import { moveBlocksTo, moveBlockTo } from "@/lib/views/tiptap-editor/commands";
-import { TiptapEditorView } from "@/lib/views/tiptap-editor/editor-view";
+import {
+  moveBlocksTo,
+  moveBlockTo,
+} from "@/lib/views/editable-outline/commands";
+import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
 import { i18n } from "@/main";
 import { ref, computed } from "vue";
 import { toast } from "vue-sonner";
@@ -52,7 +55,7 @@ export function useBlockClipboard(app: App) {
 
   const _getFocusedInfo = () => {
     const appView = getLastFocusedAppView(app);
-    if (!appView || !(appView instanceof TiptapEditorView)) {
+    if (!appView || !(appView instanceof EditableOutlineView)) {
       toast.warning(t("clipboardPopup.noAppFocused"));
       return;
     }

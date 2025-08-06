@@ -27,16 +27,13 @@ import {
 import type { Node } from "@tiptap/pm/model";
 import { toast } from "vue-sonner";
 import { useI18n } from "vue-i18n";
+import { clipboard } from "@/lib/common/clipboard";
 
 const { node } = defineProps<{ node: Node }>();
 const { t } = useI18n();
 
 const handleCopyBlockRefId = () => {
-  try {
-    navigator.clipboard.writeText(node.attrs.blockId);
-    toast.success(t("blockRefContextMenu.copyBlockRefIdSuccess"));
-  } catch (e) {
-    console.error(e);
-  }
+  clipboard.writeText(node.attrs.blockId);
+  toast.success(t("blockRefContextMenu.copyBlockRefIdSuccess"));
 };
 </script>

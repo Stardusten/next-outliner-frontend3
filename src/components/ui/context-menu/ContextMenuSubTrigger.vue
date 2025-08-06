@@ -7,7 +7,7 @@ import {
   type ContextMenuSubTriggerProps,
   useForwardProps,
 } from "reka-ui";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/common/tailwindcss";
 
 const props = defineProps<
   ContextMenuSubTriggerProps & {

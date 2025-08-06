@@ -4,15 +4,15 @@ import type { BlockDataInner, BlockNode } from "@/lib/common/types";
 import { searchBlocks } from "@/lib/app/index/fulltext";
 import { getAllNodes, getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
-import { Paragraph } from "@/lib/views/tiptap-editor/nodes/paragraph";
-import { BlockRef } from "@/lib/views/tiptap-editor/nodes/block-ref";
+import { Paragraph } from "@/lib/schema/nodes/paragraph";
+import { BlockRef } from "@/lib/schema/nodes/block-ref";
 import {
-  TiptapEditorView,
+  EditableOutlineView,
   type CompletionStatus,
-  type TiptapEditorViewEvents,
-} from "@/lib/views/tiptap-editor/editor-view";
+  type EditableOutlineViewEvents,
+} from "@/lib/views/editable-outline/editable-outline";
 import { getFocusingAppView } from "@/lib/app/views";
-import { executeCompletion } from "@/lib/views/tiptap-editor/functionalities/block-ref-completion";
+import { executeCompletion } from "@/lib/views/editable-outline/functionalities/block-ref-completion";
 import type { Schema } from "@tiptap/pm/model";
 
 function isSingleRefBlock(schema: Schema, block: BlockNode) {
@@ -40,15 +40,15 @@ export function useBlockRefCompletion(app: App) {
 
   // 编辑器事件处理
   function handleCompletionRelatedEvent(
-    editor: TiptapEditorView,
-    key: keyof TiptapEditorViewEvents,
-    event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
+    editor: EditableOutlineView,
+    key: keyof EditableOutlineViewEvents,
+    event: EditableOutlineViewEvents[keyof EditableOutlineViewEvents]
   ) {
     switch (key) {
       case "completion":
         handleCompletionEvent(
           editor,
-          (event as TiptapEditorViewEvents["completion"]).status
+          (event as EditableOutlineViewEvents["completion"]).status
         );
         break;
       case "completion-next":
@@ -65,7 +65,7 @@ export function useBlockRefCompletion(app: App) {
 
   // 处理补全事件
   const handleCompletionEvent = (
-    editor: TiptapEditorView,
+    editor: EditableOutlineView,
     status: CompletionStatus | null
   ) => {
     if (status) {
@@ -94,14 +94,14 @@ export function useBlockRefCompletion(app: App) {
   };
 
   // 加载可用的块列表
-  const loadAvailableBlocks = (editor: TiptapEditorView, query?: string) => {
+  const loadAvailableBlocks = (editor: EditableOutlineView, query?: string) => {
     const blocks: BlockNode[] = [];
     if (query && query.trim()) {
       // 使用全文搜索查找匹配的块
       const searchResults = searchBlocks(app, query, 100);
 
       const focusedEditor = getFocusingAppView(app);
-      if (!(focusedEditor instanceof TiptapEditorView))
+      if (!(focusedEditor instanceof EditableOutlineView))
         // TODO
         throw new Error("Focused editor is not a TiptapEditorView");
       const focusedBlockId = focusedEditor
@@ -143,7 +143,7 @@ export function useBlockRefCompletion(app: App) {
   };
 
   // 补全相关函数
-  const handleBlockSelect = (editor: TiptapEditorView, block: BlockNode) => {
+  const handleBlockSelect = (editor: EditableOutlineView, block: BlockNode) => {
     // 插入选中的块引用
     editor.tiptap && executeCompletion(block.id, editor.tiptap.view);
     // 关闭补全窗口
@@ -170,7 +170,7 @@ export function useBlockRefCompletion(app: App) {
     }
   };
 
-  const handleCompletionSelect = (editor: TiptapEditorView) => {
+  const handleCompletionSelect = (editor: EditableOutlineView) => {
     const selectedBlock = availableBlocks.value[completionActiveIndex.value];
     if (selectedBlock) {
       handleBlockSelect(editor, selectedBlock);

@@ -1,15 +1,12 @@
 import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
 import type { BlockDataInner, BlockId, BlockNode } from "@/lib/common/types";
+import { schemaExts } from "@/lib/schema/schema";
 import { Editor as TiptapEditor } from "@tiptap/vue-3";
 import { nanoid } from "nanoid";
-import { schema } from "../tiptap-editor/editor-view";
-import { HighlightMatches } from "../tiptap-editor/functionalities/highlight-matches";
-import { markExtensions } from "../tiptap-editor/marks";
-import { nodeExtensions } from "../tiptap-editor/nodes";
-import { listItemNodeFromBlockNode } from "../utils";
+import { FastListItem } from "../../schema/nodes/fast-list-item";
+import { HighlightMatches } from "../common/functionalities/highlight-matches";
 import type { AppView, AppViewId } from "../view";
-import { FastListItem } from "../tiptap-editor/nodes/fast-list-item";
 
 export class ReadonlyBlockView implements AppView {
   id: AppViewId;
@@ -32,12 +29,7 @@ export class ReadonlyBlockView implements AppView {
     this.tiptap = new TiptapEditor({
       element: el,
       editable: false,
-      extensions: [
-        ...nodeExtensions,
-        ...markExtensions,
-        HighlightMatches,
-        FastListItem,
-      ],
+      extensions: [...schemaExts, HighlightMatches, FastListItem],
     });
     // @ts-ignore
     this.tiptap.appView = this; // TODO bad idea!
@@ -75,6 +67,7 @@ export class ReadonlyBlockView implements AppView {
   #toFastListItem(blockNode: BlockNode) {
     if (!this.tiptap) throw new Error("tiptap not mounted");
 
+    const schema = this.tiptap.schema;
     const blockData = blockNode.data.toJSON() as BlockDataInner;
     const json = JSON.parse(blockData.content);
     const node = schema.nodeFromJSON(json);

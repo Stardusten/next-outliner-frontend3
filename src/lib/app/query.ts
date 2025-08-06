@@ -6,18 +6,18 @@ import { getInRefs, getInTags } from "./index/in-refs";
 export function execQuery(app: App, query: string): BlockId[] | Error {
   const hasRefTo = (blockId: BlockId) => {
     const res = getInRefs(app, blockId);
-    return [...res.get()];
+    return [...res.value];
   };
 
   const hasTagTo = (blockId: BlockId) => {
     const res = getInTags(app, blockId);
-    return [...res.get()];
+    return [...res.value];
   };
 
   const hasRefOrTagTo = (blockId: BlockId) => {
     const res1 = getInRefs(app, blockId);
     const res2 = getInTags(app, blockId);
-    return [...res1.get(), ...res2.get()];
+    return [...res1.value, ...res2.value];
   };
 
   const all = () => {

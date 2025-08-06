@@ -33,12 +33,35 @@
           @compositionend="handleCompositionEnd"
         />
         <div class="flex items-center gap-1 pr-2 shrink-0">
-          <Button variant="ghost" size="xs-icon" class="text-muted-foreground">
-            <Eye />
-          </Button>
-          <Button variant="ghost" size="xs-icon" class="text-muted-foreground">
-            <Settings2 />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                variant="ghost"
+                size="xs-icon"
+                class="text-muted-foreground"
+              >
+                <Eye />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {{ $t("search.showPreview") }}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                variant="ghost"
+                size="xs-icon"
+                class="text-muted-foreground"
+              >
+                <Settings2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {{ $t("search.editSearchOptions") }}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -64,13 +87,13 @@
           v-if="searchQuery && searchResults.length === 0"
           class="p-5 text-center text-sm text-muted-foreground"
         >
-          没有找到匹配的块
+          {{ $t("search.noMatch") }}
         </div>
         <div
           v-if="!searchQuery"
           class="p-5 text-center text-sm text-muted-foreground italic"
         >
-          输入关键词开始搜索
+          {{ $t("search.noMatchDescription") }}
         </div>
       </div>
     </DialogContent>

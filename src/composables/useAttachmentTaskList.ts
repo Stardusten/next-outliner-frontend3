@@ -12,7 +12,34 @@ export type { AttachmentTaskType, AttachmentTaskStatus, ProgressInfo };
 export type AttachmentTask = AttachmentTaskInfo;
 
 // 全局任务列表 - 从 storage 事件同步
-const tasks = ref<AttachmentTask[]>([]);
+const tasks = ref<AttachmentTask[]>([
+  // {
+  //   id: "",
+  //   type: "upload",
+  //   filename: "斗破苍穹.txt",
+  //   size: 0,
+  //   status: "success",
+  //   progress: 0,
+  //   error: "",
+  //   prefix: "",
+  //   path: "",
+  //   startTime: 0,
+  //   endTime: 0,
+  // },
+  // {
+  //   id: "",
+  //   type: "upload",
+  //   filename: "斗罗大陆.txt",
+  //   size: 0,
+  //   status: "progress",
+  //   progress: 50,
+  //   error: "",
+  //   prefix: "",
+  //   path: "",
+  //   startTime: 0,
+  //   endTime: 0,
+  // },
+]);
 
 // 计算属性
 const taskCounts = computed(() => {
@@ -171,6 +198,13 @@ export const useAttachmentTaskList = (app: App) => {
     );
   };
 
+  // 是否可以清空已完成任务
+  const canClearCompletedTasks = computed(() => {
+    return tasks.value.some(
+      (task) => task.status === "success" || task.status === "error"
+    );
+  });
+
   // 清空特定状态的任务
   const clearTasksByStatus = (status: AttachmentTaskStatus): void => {
     tasks.value = tasks.value.filter((task) => task.status !== status);
@@ -190,6 +224,7 @@ export const useAttachmentTaskList = (app: App) => {
     removeTask,
     clearAllTasks,
     clearCompletedTasks,
+    canClearCompletedTasks,
     clearTasksByStatus,
 
     // 工具函数

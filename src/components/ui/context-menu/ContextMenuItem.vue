@@ -7,7 +7,7 @@ import {
   type ContextMenuItemProps,
   useForwardPropsEmits,
 } from "reka-ui";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/common/tailwindcss";
 
 const props = withDefaults(
   defineProps<

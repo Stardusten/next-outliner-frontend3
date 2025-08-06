@@ -1,6 +1,6 @@
 import { AsyncTaskQueue } from "../common/taskQueue";
 import type { BlockDataInner, BlockId, SelectionInfo } from "../common/types";
-import { TiptapEditorView } from "../views/tiptap-editor/editor-view";
+import { EditableOutlineView } from "../views/editable-outline/editable-outline";
 import type { App } from "./app";
 import { getLastFocusedAppView } from "./views";
 
@@ -195,7 +195,7 @@ function execTx(
   // 如果没有指定 beforeSelection，则记录当前选区到 meta.beforeSelection
   const editor = getLastFocusedAppView(app);
   const sel =
-    editor instanceof TiptapEditorView ? editor.getSelectionInfo() : null;
+    editor instanceof EditableOutlineView ? editor.getSelectionInfo() : null;
 
   if (!tx.meta.beforeSelection) {
     sel && (tx.meta.beforeSelection = sel);

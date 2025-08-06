@@ -1,6 +1,16 @@
 export const zhCN_messages = {
   repoNotFound: "糟糕！没有找到 ID 为 {id} 的知识库",
   backToSwitchRepo: "返回知识库列表",
+  attachmentMgr: {
+    title: "附件管理",
+    tooltip: "附件管理",
+    nTasks: "{n} 个任务",
+    upload: "上传文件",
+    browse: "浏览文件",
+    noTask: "暂无任务",
+    noTaskDescription: "上传或下载文件后，任务将显示在这里",
+    clearCompletedTasks: "清空已完成任务",
+  },
   commands: {
     toSearchBlock: {
       searchBlockCannotHaveChildren: "搜索块不能有子块",
@@ -37,6 +47,7 @@ export const zhCN_messages = {
     tagCounterTooltip: "{n} 个块打了此标签",
     refreshSearch: "重新搜索",
     bulletTooltip: "右键打开块菜单",
+    copyCode: "复制代码块",
   },
   editSearchQueryPopup: {
     queryLabel: "编辑查询表达式",
@@ -71,6 +82,10 @@ export const zhCN_messages = {
   },
   search: {
     tooltip: "搜索",
+    showPreview: "搜索结果右侧显示可编辑预览",
+    editSearchOptions: "搜索选项",
+    noMatch: "没有找到匹配的块",
+    noMatchDescription: "输入关键词开始搜索",
   },
   moremenu: {
     tooltip: "更多选项",
@@ -131,8 +146,5 @@ export const zhCN_messages = {
         switchRepo: "切换知识库",
       },
     },
-  },
-  attachmentMgr: {
-    tooltip: "附件管理",
   },
 };

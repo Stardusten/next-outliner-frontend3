@@ -2,12 +2,11 @@ import type { Schema } from "@tiptap/pm/model";
 import type { LoroDoc, LoroTree } from "loro-crdt";
 import type { Emitter } from "mitt";
 import mitt from "mitt";
-import type { Observable } from "../common/observable";
 import type { AsyncTaskQueue } from "../common/taskQueue";
-import type { DebouncedTimer } from "../common/timer/debounced";
+import type { DebouncedTimer } from "../common/debounced";
 import type { BlockId, BlocksVersion, SelectionInfo } from "../common/types";
 import type { Persistence } from "../persistence/persistence";
-import { detachedSchema } from "../views/tiptap-editor/schema";
+import { detachedSchema } from "../schema/schema";
 import type { AppView, AppViewId } from "../views/view";
 import type { AttachmentStorage } from "./attachment/storage";
 import { initCompacter } from "./compacter";
@@ -22,6 +21,7 @@ import {
 } from "./tx";
 import { initUndoRedoManager } from "./undo-redo";
 import { initAppViews } from "./views";
+import type { Ref } from "vue";
 
 export type AppEvents = {
   "tx-committed": {
@@ -56,8 +56,8 @@ export type App = {
   lastEvent: AppEvents["tx-committed"] | null;
 
   // 反链管理
-  inRefs: Map<BlockId, Observable<Set<BlockId>>>;
-  inTags: Map<BlockId, Observable<Set<BlockId>>>;
+  inRefs: Map<BlockId, Ref<Set<BlockId>>>;
+  inTags: Map<BlockId, Ref<Set<BlockId>>>;
 
   // 全文索引
   flexsearch: any;
@@ -66,7 +66,7 @@ export type App = {
 
   // 文本内容管理
   textContentCache: Map<BlockId, string>;
-  textContentObs: Map<BlockId, Observable<string>>;
+  textContentObs: Map<BlockId, Ref<string>>;
 
   // 视图
   appViews: Record<AppViewId, AppView<any>>;

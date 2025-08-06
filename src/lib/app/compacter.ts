@@ -1,5 +1,5 @@
 import type { App } from "./app";
-import { DebouncedTimer } from "@/lib/common/timer/debounced";
+import { DebouncedTimer } from "@/lib/common/debounced";
 
 const compactDelay = 10000; // 10 秒空闲后压缩
 const compactMaxDelay = 60000; // 最长 1min 必须压缩一次

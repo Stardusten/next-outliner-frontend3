@@ -5,7 +5,7 @@ import type { BlockNode } from "@/lib/common/types";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
 import { getLastFocusedAppView } from "@/lib/app/views";
-import { TiptapEditorView } from "@/lib/views/tiptap-editor/editor-view";
+import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
 
 export interface SearchResult {
   block: BlockNode;
@@ -91,7 +91,7 @@ export function useSearch(app: App) {
 
   const selectBlock = (result: SearchResult) => {
     const editor = getLastFocusedAppView(app);
-    if (editor instanceof TiptapEditorView) {
+    if (editor instanceof EditableOutlineView) {
       editor.locateBlock(result.block.id);
     }
     closeSearch();

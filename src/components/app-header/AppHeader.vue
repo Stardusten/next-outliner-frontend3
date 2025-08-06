@@ -25,11 +25,7 @@
       <ClipboardPopup :app="app" />
 
       <!-- 附件 -->
-      <AttachmentPopup :attachment="attachment" :task-list="taskList">
-        <Button variant="ghost" size="xs-icon">
-          <Folder :size="18" />
-        </Button>
-      </AttachmentPopup>
+      <AttachmentPopup :attachment="attachment" :task-list="taskList" />
 
       <!-- 搜索 -->
       <SearchPopup :search="search" :app="app">
@@ -53,18 +49,6 @@
 </template>
 
 <script setup lang="ts">
-import {
-  Menu,
-  Search,
-  Folder,
-  MoreHorizontal,
-  CirclePlus,
-  Clipboard,
-} from "lucide-vue-next";
-import { computed, ref } from "vue";
-import MoreMenu from "./more-menu/MoreMenu.vue";
-import AttachmentPopup from "./attachment-popup/AttachmentPopup.vue";
-import Breadcrumb from "./breadcrumb/Breadcrumb.vue";
 import type {
   useAttachment,
   useAttachmentTaskList,
@@ -74,11 +58,16 @@ import type {
   useSettings,
 } from "@/composables";
 import type { App } from "@/lib/app/app";
-import { Button } from "../ui/button";
 import { getLastFocusedAppView } from "@/lib/app/views";
+import { CirclePlus, Menu, MoreHorizontal, Search } from "lucide-vue-next";
+import { computed } from "vue";
 import QuickAdd from "../QuickAdd.vue";
 import SearchPopup from "../search-popup/SearchPopup.vue";
+import { Button } from "../ui/button";
+import AttachmentPopup from "./attachment-popup/AttachmentPopup.vue";
+import Breadcrumb from "./breadcrumb/Breadcrumb.vue";
 import ClipboardPopup from "./clipboard/ClipboardPopup.vue";
+import MoreMenu from "./more-menu/MoreMenu.vue";
 
 const props = defineProps<{
   app: App;

@@ -48,12 +48,12 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import type { App } from "@/lib/app/app";
 import { withTx } from "@/lib/app/tx";
-import { oldSerialize, serialize } from "@/lib/views/utils";
+import { contentNodeToStr, contentNodeToStrAndType } from "@/lib/schema/utils";
 import type { BlockId } from "@/lib/common/types";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
 import { toast } from "vue-sonner";
-import { TiptapEditorView } from "@/lib/views/tiptap-editor/editor-view";
+import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
 import { registerAppView } from "@/lib/app/views";
 
 const { app } = defineProps<{
@@ -62,7 +62,7 @@ const { app } = defineProps<{
 
 const open = ref(false);
 const wrapper = ref<HTMLElement | null>(null);
-let editor: TiptapEditorView | null = null;
+let editor: EditableOutlineView | null = null;
 let closeBySave = false; // 是否通过保存按钮关闭
 
 async function deleteCreatedBlock() {
@@ -94,12 +94,12 @@ watch(open, async (openVal) => {
       console.error("Wrapper not found, cannot mount editor");
       return;
     }
-    editor = new TiptapEditorView(app, { id: "quickAdd" });
+    editor = new EditableOutlineView(app, { id: "quickAdd" });
     let newBlockTmpId: BlockId | null = null;
     const { idMapping } = await withTx(app, (tx) => {
       // 根块底部创建一个新块
       const index = tx.getChildrenIds(null).length;
-      const newContent = oldSerialize(
+      const newContent = contentNodeToStr(
         app.detachedSchema.nodes.paragraph.create()
       );
       newBlockTmpId = tx.createBlockUnder(null, index, {

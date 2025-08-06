@@ -1,5 +1,5 @@
 import type { BlockDataInner, BlockId } from "@/lib/common/types";
-import { Observable } from "../../common/observable";
+import { shallowRef, type Ref } from "vue";
 import type { App } from "../app";
 import { getAllNodes, getBlockData } from "../block-manage";
 import { getBlockRefs } from "../util";
@@ -59,21 +59,21 @@ export function initInRefs(app: App) {
   refreshInTags(app);
 }
 
-export function getInRefs(app: App, id: BlockId): Observable<Set<BlockId>> {
+export function getInRefs(app: App, id: BlockId): Ref<Set<BlockId>> {
   let res = app.inRefs.get(id);
   if (res) return res;
   else {
-    res = new Observable(new Set());
+    res = shallowRef(new Set());
     app.inRefs.set(id, res);
     return res;
   }
 }
 
-export function getInTags(app: App, id: BlockId): Observable<Set<BlockId>> {
+export function getInTags(app: App, id: BlockId): Ref<Set<BlockId>> {
   let res = app.inTags.get(id);
   if (res) return res;
   else {
-    res = new Observable(new Set());
+    res = shallowRef(new Set());
     app.inTags.set(id, res);
     return res;
   }
@@ -117,10 +117,10 @@ export function refreshInTags(app: App) {
 function addInRef(app: App, a: BlockId, b: BlockId) {
   let set = app.inRefs.get(a);
   if (!set) {
-    set = new Observable(new Set([b]));
+    set = shallowRef(new Set([b]));
     app.inRefs.set(a, set);
   } else {
-    set.update((val) => val.add(b));
+    set.value.add(b);
   }
 }
 
@@ -130,10 +130,10 @@ function addInRef(app: App, a: BlockId, b: BlockId) {
 function addInTag(app: App, a: BlockId, b: BlockId) {
   let set = app.inTags.get(a);
   if (!set) {
-    set = new Observable(new Set([b]));
+    set = shallowRef(new Set([b]));
     app.inTags.set(a, set);
   } else {
-    set.update((val) => val.add(b));
+    set.value.add(b);
   }
 }
 
@@ -143,7 +143,7 @@ function addInTag(app: App, a: BlockId, b: BlockId) {
 function removeInRef(app: App, a: BlockId, b: BlockId) {
   const set = app.inRefs.get(a);
   if (set) {
-    set.update((val) => val.delete(b));
+    set.value.delete(b);
   }
 }
 
@@ -153,6 +153,6 @@ function removeInRef(app: App, a: BlockId, b: BlockId) {
 function removeInTag(app: App, a: BlockId, b: BlockId) {
   const set = app.inTags.get(a);
   if (set) {
-    set.update((val) => val.delete(b));
+    set.value.delete(b);
   }
 }

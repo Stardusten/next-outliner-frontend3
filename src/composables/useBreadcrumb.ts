@@ -7,9 +7,9 @@ import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
 import { useMainEditorRoots } from "./useMainEditorRoots";
 import type {
-  TiptapEditorView,
-  TiptapEditorViewEvents,
-} from "@/lib/views/tiptap-editor/editor-view";
+  EditableOutlineView,
+  EditableOutlineViewEvents,
+} from "@/lib/views/editable-outline/editable-outline";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -52,7 +52,7 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
   });
 
   const handleBreadcrumbClick = (
-    editor: TiptapEditorView,
+    editor: EditableOutlineView,
     item: BreadcrumbItem
   ): void => {
     if (item.blockId) {
@@ -63,12 +63,13 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
   };
 
   const handleMainEditorEvent = (
-    key: keyof TiptapEditorViewEvents,
-    event: TiptapEditorViewEvents[keyof TiptapEditorViewEvents]
+    key: keyof EditableOutlineViewEvents,
+    event: EditableOutlineViewEvents[keyof EditableOutlineViewEvents]
   ): void => {
     const { mainEditorRoots } = useMainEditorRoots();
     if (key === "root-blocks-changed") {
-      const typedEvent = event as TiptapEditorViewEvents["root-blocks-changed"];
+      const typedEvent =
+        event as EditableOutlineViewEvents["root-blocks-changed"];
       mainEditorRoots.value = typedEvent.rootBlockIds;
     }
   };

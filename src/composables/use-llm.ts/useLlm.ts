@@ -2,7 +2,7 @@ import type { App } from "@/lib/app/app";
 import type { BlockId } from "@/lib/common/types";
 import { ref } from "vue";
 import LLM from "../../lib/llm";
-import { AppendChildrenTaskUtils } from "./append-children-task";
+// import { AppendChildrenTaskUtils } from "./append-children-task";
 
 export type LlmModelConfig = {
   service: string;
@@ -49,43 +49,41 @@ export function useLlm(app: App, config?: any) {
   };
 
   const createAppendChildrenTask = (ctxBlockId: BlockId) => {
-    const llmConfig = config
-      ? {
-          service: config.llm?.serviceProvider || defaultLlmConfig.service,
-          baseUrl: config.llm?.baseUrl || defaultLlmConfig.baseUrl,
-          model: config.llm?.modelName || defaultLlmConfig.model,
-          apiKey: config.llm?.apiKey || defaultLlmConfig.apiKey,
-          temperature: config.llm?.temperature || defaultLlmConfig.temperature,
-          think:
-            config.llm?.enableThinking !== undefined
-              ? config.llm.enableThinking
-              : defaultLlmConfig.think,
-        }
-      : defaultLlmConfig;
-    const task = AppendChildrenTaskUtils.create(app, ctxBlockId, llmConfig);
-
-    // 监听任务状态变化，更新 thinkingBlockIds
-    const listener = (status: any) => {
-      if (status === "generating") {
-        thinkingBlockIds.value.add(ctxBlockId);
-      } else if (
-        status === "success" ||
-        status === "aborted" ||
-        status === "failed"
-      ) {
-        thinkingBlockIds.value.delete(ctxBlockId);
-        task.eb.off("update:status", listener);
-      }
-    };
-    task.eb.on("update:status", listener);
-
-    return {
-      task,
-      start: () => AppendChildrenTaskUtils.start(app, task),
-      abort: () => AppendChildrenTaskUtils.abort(task),
-      on: task.eb.on,
-      off: task.eb.off,
-    };
+    // const llmConfig = config
+    //   ? {
+    //       service: config.llm?.serviceProvider || defaultLlmConfig.service,
+    //       baseUrl: config.llm?.baseUrl || defaultLlmConfig.baseUrl,
+    //       model: config.llm?.modelName || defaultLlmConfig.model,
+    //       apiKey: config.llm?.apiKey || defaultLlmConfig.apiKey,
+    //       temperature: config.llm?.temperature || defaultLlmConfig.temperature,
+    //       think:
+    //         config.llm?.enableThinking !== undefined
+    //           ? config.llm.enableThinking
+    //           : defaultLlmConfig.think,
+    //     }
+    //   : defaultLlmConfig;
+    // const task = AppendChildrenTaskUtils.create(app, ctxBlockId, llmConfig);
+    // // 监听任务状态变化，更新 thinkingBlockIds
+    // const listener = (status: any) => {
+    //   if (status === "generating") {
+    //     thinkingBlockIds.value.add(ctxBlockId);
+    //   } else if (
+    //     status === "success" ||
+    //     status === "aborted" ||
+    //     status === "failed"
+    //   ) {
+    //     thinkingBlockIds.value.delete(ctxBlockId);
+    //     task.eb.off("update:status", listener);
+    //   }
+    // };
+    // task.eb.on("update:status", listener);
+    // return {
+    //   task,
+    //   start: () => AppendChildrenTaskUtils.start(app, task),
+    //   abort: () => AppendChildrenTaskUtils.abort(task),
+    //   on: task.eb.on,
+    //   off: task.eb.off,
+    // };
   };
 
   return {
