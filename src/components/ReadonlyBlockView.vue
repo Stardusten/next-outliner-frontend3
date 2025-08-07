@@ -78,7 +78,7 @@ function updateHighlight(searchQuery?: string) {
     } else {
       // 将搜索词按空格分割，支持多关键词高亮
       const terms = searchQuery.trim().split(/\s+/).filter(Boolean);
-      console.log(searchQuery, terms);
+      // console.log(searchQuery, terms);
       view.value.updateHighlightTerms(terms);
     }
   }

@@ -25,13 +25,13 @@ export const BlockRef = Node.create({
       },
     ];
   },
-  // renderHTML({ HTMLAttributes }) {
-  //   return [
-  //     "span",
-  //     mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
-  //     0,
-  //   ];
-  // },
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
+      0,
+    ];
+  },
   addNodeView() {
     return VueNodeViewRenderer(BlockRefView);
   },

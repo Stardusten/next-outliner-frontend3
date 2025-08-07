@@ -1,5 +1,5 @@
 import type { BlockDataInner, BlockId } from "@/lib/common/types";
-import { shallowRef, type Ref } from "vue";
+import { ref, type Ref } from "vue";
 import type { App } from "../app";
 import { getAllNodes, getBlockData } from "../block-manage";
 import { getBlockRefs } from "../util";
@@ -63,7 +63,7 @@ export function getInRefs(app: App, id: BlockId): Ref<Set<BlockId>> {
   let res = app.inRefs.get(id);
   if (res) return res;
   else {
-    res = shallowRef(new Set());
+    res = ref(new Set());
     app.inRefs.set(id, res);
     return res;
   }
@@ -73,7 +73,7 @@ export function getInTags(app: App, id: BlockId): Ref<Set<BlockId>> {
   let res = app.inTags.get(id);
   if (res) return res;
   else {
-    res = shallowRef(new Set());
+    res = ref(new Set());
     app.inTags.set(id, res);
     return res;
   }
@@ -117,7 +117,7 @@ export function refreshInTags(app: App) {
 function addInRef(app: App, a: BlockId, b: BlockId) {
   let set = app.inRefs.get(a);
   if (!set) {
-    set = shallowRef(new Set([b]));
+    set = ref(new Set([b]));
     app.inRefs.set(a, set);
   } else {
     set.value.add(b);
@@ -130,7 +130,7 @@ function addInRef(app: App, a: BlockId, b: BlockId) {
 function addInTag(app: App, a: BlockId, b: BlockId) {
   let set = app.inTags.get(a);
   if (!set) {
-    set = shallowRef(new Set([b]));
+    set = ref(new Set([b]));
     app.inTags.set(a, set);
   } else {
     set.value.add(b);

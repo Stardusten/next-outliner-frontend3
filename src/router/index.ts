@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
-import SwitchRepoView from "@/views/SwitchRepoView.vue";
-import EditRepoView from "@/views/EditRepoView.vue";
+import SwitchRepoView from "@/pages/SwitchRepoView.vue";
+import EditRepoView from "@/pages/EditRepoView.vue";
 
 const routes = [
   {

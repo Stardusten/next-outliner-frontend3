@@ -75,5 +75,5 @@ onMounted(() => {
 @import url("https://cdn.jsdelivr.net/gh/satouriko/LxgwWenKai_Webfonts@v1.101/dist/LXGWWenKaiMono-Bold.css");
 
 @import "./assets/base.css";
-@import "./lib/views/tiptap-editor/editor.css";
+@import "./lib/views/editor.css";
 </style>

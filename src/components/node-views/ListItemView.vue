@@ -221,15 +221,14 @@ const focused = computed(
   () => editor.appView.focusedBlockId.value === node.attrs.blockId
 );
 
-const refCounter = ref(0);
-const tagCounter = ref(0);
-
-const inRefs = computed(() => {
-  return getInRefs(editor.appView.app, node.attrs.blockId);
+const refCounter = computed(() => {
+  const inRefs = getInRefs(editor.appView.app, node.attrs.blockId);
+  return inRefs.value.size;
 });
 
-const inTags = computed(() => {
-  return getInTags(editor.appView.app, node.attrs.blockId);
+const tagCounter = computed(() => {
+  const inTags = getInTags(editor.appView.app, node.attrs.blockId);
+  return inTags.value.size;
 });
 
 const handleClickRightPad = () => {
