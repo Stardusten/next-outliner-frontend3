@@ -1,9 +1,10 @@
+import type { NodeViewRenderer } from "@tiptap/vue-3";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { NodeView } from "prosemirror-view";
-import { FastListItem } from "../../schema/nodes/fast-list-item";
+import { FastListItem } from "../../nodes/fast-list-item";
 
 // - list-item-content
-export class FastListItemNodeView implements NodeView {
+class FastListItemNodeView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
 
@@ -31,3 +32,7 @@ export class FastListItemNodeView implements NodeView {
     this.dom.remove();
   }
 }
+
+export const fastListItemNodeViewRenderer: NodeViewRenderer = (props) => {
+  return new FastListItemNodeView(props.node);
+};

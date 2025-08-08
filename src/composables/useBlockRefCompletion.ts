@@ -4,15 +4,15 @@ import type { BlockDataInner, BlockNode } from "@/lib/common/types";
 import { searchBlocks } from "@/lib/app/index/fulltext";
 import { getAllNodes, getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
-import { Paragraph } from "@/lib/schema/nodes/paragraph";
-import { BlockRef } from "@/lib/schema/nodes/block-ref";
+import { Paragraph } from "@/lib/tiptap/nodes/paragraph";
+import { BlockRef } from "@/lib/tiptap/nodes/block-ref";
 import {
   EditableOutlineView,
   type CompletionStatus,
   type EditableOutlineViewEvents,
-} from "@/lib/views/editable-outline/editable-outline";
+} from "@/lib/app-views/editable-outline/editable-outline";
 import { getFocusingAppView } from "@/lib/app/views";
-import { executeCompletion } from "@/lib/views/editable-outline/functionalities/block-ref-completion";
+import { executeCompletion } from "@/lib/tiptap/functionalities/block-ref-completion";
 import type { Schema } from "@tiptap/pm/model";
 
 function isSingleRefBlock(schema: Schema, block: BlockNode) {

@@ -1,6 +1,6 @@
 import { Extension } from "@tiptap/vue-3";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
-import { type CompletionStatus } from "../editable-outline";
+import { type CompletionStatus } from "../../app-views/editable-outline/editable-outline";
 import type { EditorView } from "@tiptap/pm/view";
 
 /**

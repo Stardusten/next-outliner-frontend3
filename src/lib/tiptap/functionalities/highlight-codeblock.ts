@@ -88,7 +88,10 @@ function getDecorations(doc: ProseMirrorNode, nodeName: string) {
   return DecorationSet.create(doc, decorations);
 }
 
+const HIGHLIGHT_CODEBLOCK_NAME = "highlightCodeblock";
+
 export const HighlightCodeblock = Extension.create({
+  name: HIGHLIGHT_CODEBLOCK_NAME,
   addProseMirrorPlugins() {
     const nodeName = "codeblock";
 

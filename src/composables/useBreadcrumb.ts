@@ -9,7 +9,7 @@ import { useMainEditorRoots } from "./useMainEditorRoots";
 import type {
   EditableOutlineView,
   EditableOutlineViewEvents,
-} from "@/lib/views/editable-outline/editable-outline";
+} from "@/lib/app-views/editable-outline/editable-outline";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 

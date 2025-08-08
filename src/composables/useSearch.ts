@@ -5,7 +5,7 @@ import type { BlockNode } from "@/lib/common/types";
 import { getBlockNode } from "@/lib/app/block-manage";
 import { getTextContent } from "@/lib/app/index/text-content";
 import { getLastFocusedAppView } from "@/lib/app/views";
-import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
+import { EditableOutlineView } from "@/lib/app-views/editable-outline/editable-outline";
 
 export interface SearchResult {
   block: BlockNode;

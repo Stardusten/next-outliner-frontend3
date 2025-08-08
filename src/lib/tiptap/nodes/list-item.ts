@@ -1,5 +1,6 @@
 import ListItemView from "@/components/node-views/ListItemView.vue";
 import { mergeAttributes, Node, VueNodeViewRenderer } from "@tiptap/vue-3";
+import { listItemNodeViewRenderer } from "../js-node-views/list-item/list-item";
 
 export const ListItem = Node.create({
   name: "listItem",
@@ -44,6 +45,6 @@ export const ListItem = Node.create({
     ];
   },
   addNodeView() {
-    return VueNodeViewRenderer(ListItemView);
+    return listItemNodeViewRenderer;
   },
 });

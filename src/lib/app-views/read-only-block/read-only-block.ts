@@ -1,12 +1,12 @@
 import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
 import type { BlockDataInner, BlockId, BlockNode } from "@/lib/common/types";
-import { schemaExts } from "@/lib/schema/schema";
+import { schemaExts } from "@/lib/tiptap/schema";
 import { Editor as TiptapEditor } from "@tiptap/vue-3";
 import { nanoid } from "nanoid";
-import { FastListItem } from "../../schema/nodes/fast-list-item";
-import { HighlightMatches } from "../common/functionalities/highlight-matches";
-import type { AppView, AppViewId } from "../view";
+import { FastListItem } from "../../tiptap/nodes/fast-list-item";
+import { HighlightMatches } from "../../tiptap/functionalities/highlight-matches";
+import type { AppView, AppViewId } from "../types";
 
 export class ReadonlyBlockView implements AppView {
   id: AppViewId;

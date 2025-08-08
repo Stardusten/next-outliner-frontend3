@@ -1,6 +1,6 @@
 import type { BlockId } from "@/lib/common/types";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
-import { BlockRef } from "../schema/nodes/block-ref";
+import { BlockRef } from "../tiptap/nodes/block-ref";
 
 export function uint8ArrayToBase64(array: Uint8Array): string {
   // 分块处理大数组，避免栈溢出

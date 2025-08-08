@@ -1,7 +1,7 @@
 import { Extension } from "@tiptap/vue-3";
 import { inputRules, InputRule } from "@tiptap/pm/inputrules";
 import { TextSelection } from "@tiptap/pm/state";
-import { findCurrListItem } from "../../common/utils";
+import { findCurrListItem } from "../utils";
 
 export const ToCodeblock = Extension.create({
   addProseMirrorPlugins() {
@@ -20,25 +20,27 @@ export const ToCodeblock = Extension.create({
             if ($from.parentOffset !== paragraph.content.size) return null;
 
             // 将 currentListItem 的内容换成空 codeblock
-            const tr = state.tr;
+            let tr = state.tr;
             const lang = match[1];
             const codeblock = schema.nodes.codeblock.create({ lang });
 
             // 更新列表项的类型为 code
-            tr.setNodeMarkup(currListItem.pos, null, {
+            tr = tr.setNodeMarkup(currListItem.pos, null, {
               ...currListItem.node.attrs,
               type: "code",
             });
 
             // 替换内容为代码块
-            tr.replaceWith(
+            tr = tr.replaceWith(
               currListItem.pos + 1,
               currListItem.pos + currListItem.node.nodeSize - 1,
               codeblock
             );
 
             // 将光标移动到代码块的第一个字符
-            tr.setSelection(TextSelection.create(tr.doc, currListItem.pos + 2));
+            tr = tr.setSelection(
+              TextSelection.create(tr.doc, currListItem.pos + 2)
+            );
 
             return tr;
           }),

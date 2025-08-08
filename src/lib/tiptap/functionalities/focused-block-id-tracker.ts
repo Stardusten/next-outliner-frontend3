@@ -1,5 +1,5 @@
 import { Extension } from "@tiptap/vue-3";
-import { EditableOutlineView } from "../editable-outline";
+import { EditableOutlineView } from "../../app-views/editable-outline/editable-outline";
 
 const SELECTION_TRACKER = "selectionTracker";
 

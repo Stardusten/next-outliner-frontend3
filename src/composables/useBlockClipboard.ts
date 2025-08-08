@@ -6,8 +6,8 @@ import { type BlockId, type BlockNode } from "@/lib/common/types";
 import {
   moveBlocksTo,
   moveBlockTo,
-} from "@/lib/views/editable-outline/commands";
-import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
+} from "@/lib/app-views/editable-outline/commands";
+import { EditableOutlineView } from "@/lib/app-views/editable-outline/editable-outline";
 import { i18n } from "@/main";
 import { ref, computed } from "vue";
 import { toast } from "vue-sonner";
@@ -94,6 +94,7 @@ export function useBlockClipboard(app: App) {
     const info = _getFocusedInfo();
     if (!info) return;
     const { appView, parent, index } = info;
+    const n = blockNodesCutted.value.length;
 
     const cmd = moveBlocksTo(
       appView.tiptap!,
@@ -104,9 +105,7 @@ export function useBlockClipboard(app: App) {
     appView.execCommand(cmd, true);
     removeAllBlocks();
 
-    toast.success(
-      t("clipboardPopup.blocksPasted", { n: blockCutted.value.length })
-    );
+    toast.success(t("clipboardPopup.blocksPasted", { n }));
   };
 
   return {

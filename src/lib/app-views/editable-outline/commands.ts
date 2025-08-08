@@ -14,17 +14,17 @@ import {
 import { getTextContent } from "../../app/index/text-content";
 import { withTx } from "../../app/tx";
 import type { BlockDataInner, BlockId } from "../../common/types";
-import { Codeblock } from "../../schema/nodes/codeblock";
-import { File, getFileDisplayMode, getFileType } from "../../schema/nodes/file";
-import { ListItem } from "../../schema/nodes/list-item";
-import { Search } from "../../schema/nodes/search";
-import { findCurrListItem, getSelectedListItemInfo } from "../common/utils";
+import { Codeblock } from "../../tiptap/nodes/codeblock";
+import { File, getFileDisplayMode, getFileType } from "../../tiptap/nodes/file";
+import { ListItem } from "../../tiptap/nodes/list-item";
+import { Search } from "../../tiptap/nodes/search";
+import { findCurrListItem, getSelectedListItemInfo } from "@/lib/tiptap/utils";
 import {
   buildBlockRefStr,
   contentNodeToStr,
   str2ContentNode,
-} from "../../schema/utils";
-import type { AppViewId } from "../view";
+} from "../../tiptap/utils";
+import type { AppViewId } from "../types";
 
 /**
  * 判断一个 List Item Node 内容是不是空的

@@ -53,25 +53,25 @@ import { useBreadcrumb } from "@/composables/useBreadcrumb";
 import { useImportExport } from "@/composables/useImportExport";
 import { useMainEditorRoots } from "@/composables/useMainEditorRoots";
 import { useSearch } from "@/composables/useSearch";
-import type { App } from "@/lib/app/app";
-import { registerAppView, unregisterAppView } from "@/lib/app/views";
-import type { RepoConfig } from "@/lib/repo/schema";
 import {
   EditableOutlineView,
   type EditableOutlineViewEvents,
-} from "@/lib/views/editable-outline/editable-outline";
-import { BlockRefCompletion } from "@/lib/views/editable-outline/functionalities/block-ref-completion";
-import { CompositionFix } from "@/lib/views/editable-outline/functionalities/composition-fix";
-import { HighlightCodeblock } from "@/lib/views/common/functionalities/highlight-codeblock";
-import { NormalKeymap } from "@/lib/views/editable-outline/functionalities/keymap/normal";
-import { ToCodeblock } from "@/lib/views/editable-outline/functionalities/to-codeblock";
-import { markExtensions } from "@/lib/schema/marks";
-import { nodeExtensions } from "@/lib/schema/nodes";
+} from "@/lib/app-views/editable-outline/editable-outline";
+import "@/lib/app-views/editable-outline/style.css";
+import type { App } from "@/lib/app/app";
+import { registerAppView, unregisterAppView } from "@/lib/app/views";
+import type { RepoConfig } from "@/lib/repo/schema";
+import { BlockRefCompletion } from "@/lib/tiptap/functionalities/block-ref-completion";
+import { CompositionFix } from "@/lib/tiptap/functionalities/composition-fix";
+import { FocusedBlockIdTracker } from "@/lib/tiptap/functionalities/focused-block-id-tracker";
+import { HighlightCodeblock } from "@/lib/tiptap/functionalities/highlight-codeblock";
+import { NormalKeymap } from "@/lib/tiptap/functionalities/keymap/normal";
+import { PasteHtmlOrPlainText } from "@/lib/tiptap/functionalities/paste-html";
+import { ToCodeblock } from "@/lib/tiptap/functionalities/to-codeblock";
+import { markExtensions } from "@/lib/tiptap/marks";
+import { nodeExtensions } from "@/lib/tiptap/nodes";
 import { EditorContent } from "@tiptap/vue-3";
-import { TextSelection } from "@tiptap/pm/state";
 import { onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { PasteHtmlOrPlainText } from "@/lib/views/editable-outline/functionalities/paste-html";
-import { FocusedBlockIdTracker } from "@/lib/views/editable-outline/functionalities/focused-block-id-tracker";
 
 const props = defineProps<{
   app: App;

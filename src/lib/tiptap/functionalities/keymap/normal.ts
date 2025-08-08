@@ -1,12 +1,7 @@
-import {
-  Editor as TiptapEditor,
-  Extension,
-  type KeyboardShortcutCommand,
-} from "@tiptap/vue-3";
 import { chainCommands, toggleMark } from "@tiptap/pm/commands";
-import { findCurrListItem } from "../../../common/utils";
-import type { EditorState, Command } from "@tiptap/pm/state";
 import { keymap } from "@tiptap/pm/keymap";
+import type { Command, EditorState } from "@tiptap/pm/state";
+import { Extension } from "@tiptap/vue-3";
 import {
   addToBlockClipboard,
   backspaceAfterCharBeforeExpandedFile,
@@ -34,10 +29,11 @@ import {
   toggleFocusedFoldState,
   toSearchBlock,
   undoCommand,
-} from "../../commands";
+} from "../../../app-views/editable-outline/commands";
+import { findCurrListItem } from "../../utils";
 
 export const NormalKeymap = Extension.create({
-  name: "normal-keymap",
+  name: "normalKeymap",
   addProseMirrorPlugins() {
     const { editor } = this;
     const schema = editor.schema;

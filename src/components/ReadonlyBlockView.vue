@@ -22,7 +22,7 @@ import {
 } from "vue";
 import type { BlockNode } from "@/lib/common/types";
 import type { App } from "@/lib/app/app";
-import { ReadonlyBlockView } from "@/lib/views/read-only-block/read-only-block";
+import { ReadonlyBlockView } from "@/lib/app-views/read-only-block/read-only-block";
 import { EditorContent } from "@tiptap/vue-3";
 import { cn } from "@/lib/common/tailwindcss";
 import { getTextContent } from "@/lib/app/index/text-content";

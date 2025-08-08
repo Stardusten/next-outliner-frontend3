@@ -95,7 +95,7 @@ import {
 } from "./ui/context-menu";
 import type { BlockId } from "@/lib/common/types";
 import type { Editor } from "@tiptap/core";
-import { recursiveDeleteBlock } from "@/lib/views/editable-outline/commands";
+import { recursiveDeleteBlock } from "@/lib/app-views/editable-outline/commands";
 import Markdown from "./icons/Markdown.vue";
 import Html from "./icons/Html.vue";
 import { toMarkdown } from "@/lib/common/markdown";

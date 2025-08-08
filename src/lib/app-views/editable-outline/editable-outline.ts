@@ -4,7 +4,13 @@ import { getRootBlockIds } from "@/lib/app/block-manage";
 import { withTx } from "@/lib/app/tx";
 import type { BlockId, SelectionInfo } from "@/lib/common/types";
 import type { RepoConfig } from "@/lib/repo/schema";
-import { schemaExts } from "@/lib/schema/schema";
+import { schemaExts } from "@/lib/tiptap/schema";
+import {
+  contentNodeToStrAndType,
+  findCurrListItem,
+  findListItemAtPos,
+  getAbsPos,
+} from "@/lib/tiptap/utils";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { TextSelection, Transaction, type Command } from "@tiptap/pm/state";
 import { Editor as TiptapEditor, type AnyExtension } from "@tiptap/vue-3";
@@ -12,13 +18,7 @@ import type { Emitter } from "mitt";
 import mitt from "mitt";
 import { nanoid } from "nanoid";
 import { shallowRef, type ComputedRef, type ShallowRef } from "vue";
-import {
-  findCurrListItem,
-  findListItemAtPos,
-  getAbsPos,
-} from "../common/utils";
-import { contentNodeToStrAndType } from "../../schema/utils";
-import type { AppView, AppViewId } from "../view";
+import type { AppView, AppViewId } from "../types";
 import { renderOutline } from "./renderers/basic-outline";
 import { incrementalUpdate } from "./renderers/patchers";
 
@@ -44,7 +44,7 @@ export type CompletionStatus = {
   isTag?: boolean;
 };
 
-export type TiptapEditorViewOptions = {
+export type EditableOutlineViewOptions = {
   id: AppViewId;
   rootBlockIds: BlockId[];
   renderer: (editor: EditableOutlineView) => ProseMirrorNode;
@@ -65,8 +65,8 @@ const renderers = {
 };
 
 function withDefaults(
-  params: Partial<TiptapEditorViewOptions>
-): TiptapEditorViewOptions {
+  params: Partial<EditableOutlineViewOptions>
+): EditableOutlineViewOptions {
   return {
     id: params.id ?? nanoid(),
     rootBlockIds: params.rootBlockIds ?? [],
@@ -95,7 +95,7 @@ export class EditableOutlineView implements AppView<EditableOutlineViewEvents> {
   repoConfig: ComputedRef<RepoConfig | null>;
   focusedBlockId: ShallowRef<BlockId | null>;
 
-  constructor(app: App, params: Partial<TiptapEditorViewOptions> = {}) {
+  constructor(app: App, params: Partial<EditableOutlineViewOptions> = {}) {
     const options = withDefaults(params);
     this.id = options.id;
     this.app = app;
@@ -445,6 +445,7 @@ export class EditableOutlineView implements AppView<EditableOutlineViewEvents> {
         updatedIds.add(blockId);
 
         const newData = contentNodeToStrAndType(listItem.node.firstChild!);
+        console.log(newData);
         withTx(this.app, (tx) => {
           tx.updateBlock(blockId, newData);
           tx.setOrigin("localEditorContent" + this.id);

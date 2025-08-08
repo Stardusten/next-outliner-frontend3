@@ -1,6 +1,6 @@
 import { AsyncTaskQueue } from "../common/taskQueue";
 import type { BlockDataInner, BlockId, SelectionInfo } from "../common/types";
-import { EditableOutlineView } from "../views/editable-outline/editable-outline";
+import { EditableOutlineView } from "../app-views/editable-outline/editable-outline";
 import type { App } from "./app";
 import { getLastFocusedAppView } from "./views";
 

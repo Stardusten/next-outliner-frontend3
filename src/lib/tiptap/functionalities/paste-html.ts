@@ -10,11 +10,10 @@ import {
 } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { nanoid } from "nanoid";
-import { contentNodeToStrAndType } from "../../../schema/utils";
-import { isEmptyListItem } from "../commands";
-import { findCurrListItem } from "../../common/utils";
+import { isEmptyListItem } from "../../app-views/editable-outline/commands";
+import { contentNodeToStrAndType, findCurrListItem } from "../utils";
 
-const PASTE_HTML_OR_PLAIN_TEXT_NAME = "paste-html-or-plain-text";
+const PASTE_HTML_OR_PLAIN_TEXT_NAME = "pasteHtmlOrPlainText";
 
 type Block = {
   id: string;

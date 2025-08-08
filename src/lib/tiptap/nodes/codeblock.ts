@@ -1,4 +1,6 @@
+import CodeblockView from "@/components/node-views/CodeblockView.vue";
 import { mergeAttributes, Node } from "@tiptap/core";
+import { VueNodeViewRenderer } from "@tiptap/vue-3";
 
 export const Codeblock = Node.create({
   name: "codeblock",
@@ -19,6 +21,9 @@ export const Codeblock = Node.create({
       }),
       ["code", 0],
     ];
+  },
+  addNodeView() {
+    return VueNodeViewRenderer(CodeblockView);
   },
   parseHTML() {
     return [

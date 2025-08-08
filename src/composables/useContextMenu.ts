@@ -1,61 +1,87 @@
 import type { Component } from "vue";
 import { ref } from "vue";
 
-// 菜单项类型
-export interface MenuItem {
-  type: "item";
-  label: string;
+/*
+ * 更健壮且易用的上下文菜单实现。
+ * =====================================================
+ * 设计目标：
+ * 1. 只暴露必要的可写状态；内部状态只读化，减少误操作。
+ * 2. 改进类型定义，使得各类菜单项属性互斥、无歧义。
+ * 3. 提供统一的 open / close API，支持以鼠标事件或坐标形式打开。
+ */
+
+// ----------------------- 类型定义 -----------------------
+
+// 基础属性（除 divider 外都会有）
+interface BaseMenuEntry {
+  label?: string;
   icon?: Component;
-  action: () => void;
-  danger?: boolean; // 是否为危险操作
-  disabled?: boolean; // 是否禁用
+  danger?: boolean;
+  disabled?: boolean;
 }
 
-// 分割线类型
-export interface MenuDivider {
+// 可执行项
+export interface ActionMenuItem extends BaseMenuEntry {
+  type: "item";
+  action: () => void;
+}
+
+// 分隔线
+export interface DividerMenuItem {
   type: "divider";
 }
 
-// 子菜单类型
-export interface MenuSubMenu {
+// 子菜单
+export interface SubMenuItem extends BaseMenuEntry {
   type: "submenu";
-  label: string;
-  icon?: Component;
-  children: MenuItemDef[]; // 子菜单项
-  danger?: boolean; // 是否为危险操作
-  disabled?: boolean; // 是否禁用
+  children: MenuItem[];
 }
 
-// 菜单项或分割线
-export type MenuItemDef = MenuItem | MenuDivider | MenuSubMenu;
+export type MenuItem = ActionMenuItem | DividerMenuItem | SubMenuItem;
 
-const visible = ref(false);
+// ----------------------- 状态 -----------------------
+
+const isOpen = ref(false);
 const position = ref<{ x: number; y: number } | null>(null);
-const items = ref<MenuItemDef[]>([]);
+const items = ref<MenuItem[]>([]);
+
+// ----------------------- API -----------------------
+
+// 传入鼠标事件或坐标打开菜单
+function open(
+  evOrPos: MouseEvent | { x: number; y: number },
+  _items: MenuItem[]
+) {
+  let coords: { x: number; y: number };
+
+  if ("clientX" in evOrPos) {
+    coords = { x: evOrPos.clientX, y: evOrPos.clientY };
+    // 防止浏览器默认右键菜单
+    (evOrPos as MouseEvent).preventDefault?.();
+  } else {
+    coords = evOrPos;
+  }
+
+  position.value = coords;
+  items.value = _items;
+  isOpen.value = true;
+}
+
+function close() {
+  isOpen.value = false;
+  position.value = null;
+  items.value = [];
+}
 
 export const useContextMenu = () => {
-  // 显示上下文菜单
-  const show = (x: number, y: number, _items: MenuItemDef[]) => {
-    position.value = { x, y };
-    items.value = _items;
-    visible.value = true;
-  };
-
-  // 隐藏上下文菜单
-  const hide = () => {
-    visible.value = false;
-    position.value = null;
-    items.value = [];
-  };
-
   return {
     // 状态
-    visible,
+    isOpen,
     position,
     items,
 
-    // 方法
-    show,
-    hide,
+    // 操作
+    open,
+    close,
   };
 };

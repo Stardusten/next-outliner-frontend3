@@ -1,4 +1,6 @@
+import SearchView from "@/components/node-views/SearchView.vue";
 import { mergeAttributes, Node } from "@tiptap/core";
+import { VueNodeViewRenderer } from "@tiptap/vue-3";
 
 export const Search = Node.create({
   name: "search",
@@ -23,15 +25,18 @@ export const Search = Node.create({
       },
     ];
   },
-  renderHTML({ HTMLAttributes }) {
-    return [
-      "div",
-      mergeAttributes(HTMLAttributes, {
-        class: "search",
-        "data-query": HTMLAttributes.query,
-        "data-invalid": HTMLAttributes.invalid,
-      }),
-      0,
-    ];
+  // renderHTML({ HTMLAttributes }) {
+  //   return [
+  //     "div",
+  //     mergeAttributes(HTMLAttributes, {
+  //       class: "search",
+  //       "data-query": HTMLAttributes.query,
+  //       "data-invalid": HTMLAttributes.invalid,
+  //     }),
+  //     0,
+  //   ];
+  // },
+  addNodeView() {
+    return VueNodeViewRenderer(SearchView);
   },
 });

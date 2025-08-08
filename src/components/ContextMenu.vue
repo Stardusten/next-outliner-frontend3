@@ -1,8 +1,8 @@
 <template>
-  <DropdownMenu v-model:open="visible">
+  <DropdownMenu v-model:open="isOpen">
     <DropdownMenuTrigger class="hidden"></DropdownMenuTrigger>
     <DropdownMenuContent
-      class="block-contextmenu-content w-[250px] overflow-y-auto max-h-[var(--reka-dropdown-menu-content-available-height)]"
+      class="block-contextmenu-content w-[200px] overflow-y-auto max-h-[var(--reka-dropdown-menu-content-available-height)]"
     >
       <ContextMenuItemRenderer
         v-for="(item, index) in items"
@@ -23,7 +23,7 @@ import {
 } from "./ui/dropdown-menu";
 import { nextTick, watch } from "vue";
 
-const { visible, position, items } = useContextMenu();
+const { isOpen, position, items } = useContextMenu();
 
 watch(position, async () => {
   await nextTick();

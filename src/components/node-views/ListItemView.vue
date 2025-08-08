@@ -164,7 +164,7 @@ import {
   toggleFocusedFoldState,
   updateCodeblockLang,
   updateSearchQuery,
-} from "@/lib/views/editable-outline/commands";
+} from "@/lib/app-views/editable-outline/commands";
 import { TextSelection } from "@tiptap/pm/state";
 import { NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import { Copy, Pencil, RefreshCcw, Settings2 } from "lucide-vue-next";
@@ -179,7 +179,7 @@ import FoldBtn from "../icons/FoldBtn.vue";
 import { NodeViewWrapper } from "./NodeViewWrapper";
 import Search from "../icons/Search.vue";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
-import { languages } from "@/lib/views/common/functionalities/highlight-codeblock";
+import { languages } from "@/lib/tiptap/functionalities/highlight-codeblock";
 
 const { node, editor, getPos } = defineProps(nodeViewProps);
 const { t } = useI18n();

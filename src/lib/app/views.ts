@@ -1,4 +1,4 @@
-import type { AppView, AppViewId } from "../views/view";
+import type { AppView, AppViewId } from "../app-views/types";
 import type { App, EditorId } from "./app";
 
 export function initAppViews(app: App) {

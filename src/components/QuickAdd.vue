@@ -48,12 +48,12 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import type { App } from "@/lib/app/app";
 import { withTx } from "@/lib/app/tx";
-import { contentNodeToStr, contentNodeToStrAndType } from "@/lib/schema/utils";
+import { contentNodeToStr, contentNodeToStrAndType } from "@/lib/tiptap/utils";
 import type { BlockId } from "@/lib/common/types";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
 import { toast } from "vue-sonner";
-import { EditableOutlineView } from "@/lib/views/editable-outline/editable-outline";
+import { EditableOutlineView } from "@/lib/app-views/editable-outline/editable-outline";
 import { registerAppView } from "@/lib/app/views";
 
 const { app } = defineProps<{

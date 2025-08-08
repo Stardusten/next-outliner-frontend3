@@ -47,7 +47,6 @@ export const zhCN_messages = {
     tagCounterTooltip: "{n} 个块打了此标签",
     refreshSearch: "重新搜索",
     bulletTooltip: "右键打开块菜单",
-    copyCode: "复制代码块",
   },
   editSearchQueryPopup: {
     queryLabel: "编辑查询表达式",
@@ -72,6 +71,10 @@ export const zhCN_messages = {
     blockAlreadyExists: "块剪贴板中已经存在块 “{content}”，忽略",
     blockPasted: "块 “{content}” 粘贴成功",
     blocksPasted: "{n} 个块粘贴成功",
+  },
+  codeblock: {
+    copyCode: "复制代码块",
+    copied: "代码块已复制到剪贴板",
   },
   quickadd: {
     tooltip: "快速添加",

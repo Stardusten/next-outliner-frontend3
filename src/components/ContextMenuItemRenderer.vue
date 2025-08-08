@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import type { MenuItemDef, MenuItem } from "@/composables/useContextMenu";
+import type { MenuItem, ActionMenuItem } from "@/composables/useContextMenu";
 import { useContextMenu } from "@/composables";
 import {
   DropdownMenuItem,
@@ -46,13 +46,17 @@ import {
 // eslint-disable-next-line vue/define-macros-order
 defineOptions({ name: "ContextMenuItemRenderer" });
 
-const props = defineProps<{ item: MenuItemDef }>();
+const props = defineProps<{ item: MenuItem }>();
 
-const { hide } = useContextMenu();
+const { close } = useContextMenu();
 
 function handleClick(menuItem: MenuItem) {
-  if (menuItem.disabled) return;
-  menuItem.action?.();
-  hide();
+  if (menuItem.type !== "item") return;
+
+  const actionItem = menuItem as ActionMenuItem;
+  if (actionItem.disabled) return;
+
+  actionItem.action?.();
+  close();
 }
 </script>
