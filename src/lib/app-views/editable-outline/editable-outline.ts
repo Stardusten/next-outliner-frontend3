@@ -445,7 +445,7 @@ export class EditableOutlineView implements AppView<EditableOutlineViewEvents> {
         updatedIds.add(blockId);
 
         const newData = contentNodeToStrAndType(listItem.node.firstChild!);
-        console.log(newData);
+        // console.log(newData);
         withTx(this.app, (tx) => {
           tx.updateBlock(blockId, newData);
           tx.setOrigin("localEditorContent" + this.id);

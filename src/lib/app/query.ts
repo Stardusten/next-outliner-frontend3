@@ -1,22 +1,20 @@
 import type { BlockId } from "../common/types";
 import type { App } from "./app";
-import { searchBlocks } from "./index/fulltext";
-import { getInRefs, getInTags } from "./index/in-refs";
 
 export function execQuery(app: App, query: string): BlockId[] | Error {
   const hasRefTo = (blockId: BlockId) => {
-    const res = getInRefs(app, blockId);
+    const res = app.getInRefs(blockId);
     return [...res.value];
   };
 
   const hasTagTo = (blockId: BlockId) => {
-    const res = getInTags(app, blockId);
+    const res = app.getInTags(blockId);
     return [...res.value];
   };
 
   const hasRefOrTagTo = (blockId: BlockId) => {
-    const res1 = getInRefs(app, blockId);
-    const res2 = getInTags(app, blockId);
+    const res1 = app.getInRefs(blockId);
+    const res2 = app.getInTags(blockId);
     return [...res1.value, ...res2.value];
   };
 
@@ -25,7 +23,7 @@ export function execQuery(app: App, query: string): BlockId[] | Error {
   };
 
   const fuzzyMatch = (query: string, limit?: number) => {
-    const res = searchBlocks(app, query, limit);
+    const res = app.searchBlocks(query, limit);
     return res;
   };
 

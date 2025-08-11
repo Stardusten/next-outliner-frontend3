@@ -72,6 +72,7 @@ import { markExtensions } from "@/lib/tiptap/marks";
 import { nodeExtensions } from "@/lib/tiptap/nodes";
 import { EditorContent } from "@tiptap/vue-3";
 import { onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { Gapcursor } from "@tiptap/extensions";
 
 const props = defineProps<{
   app: App;
@@ -114,6 +115,7 @@ onMounted(() => {
       ToCodeblock,
       PasteHtmlOrPlainText,
       FocusedBlockIdTracker,
+      Gapcursor,
     ],
   });
   registerAppView(app, mainEditorView.value);

@@ -3,20 +3,57 @@
     <NodeViewContent as="div" class="flex-0-0-auto pr-[4px]" />
 
     <div class="flex gap-1 items-center">
+      <span
+        v-if="node.attrs.status != null"
+        :class="{
+          'text-destructive': node.attrs.status === 'invalid',
+          'text-muted-foreground': typeof node.attrs.status === 'number',
+        }"
+      >
+        {{
+          node.attrs.status === "invalid"
+            ? $t("searchBlock.invalidQuery")
+            : $t("searchBlock.nResults", { n: node.attrs.status })
+        }}
+      </span>
+
       <!-- 编辑搜索查询 -->
       <EditSearchQueryPopup
-        :init-query="node.attrs.query ?? ''"
-        :on-submit="handleQueryUpdate"
+        :editor="editor"
+        :node="node"
+        :getBlockId="getBlockId"
       >
-        <Button variant="secondary" size="2xs-icon">
+        <Button
+          variant="secondary"
+          size="2xs-icon"
+          class="opacity-50 hover:opacity-100 transition-opacity"
+        >
           <Pencil class="size-[12px]" />
         </Button>
       </EditSearchQueryPopup>
 
+      <SearchViewOptionsPopup
+        :editor="editor"
+        :searchNode="node"
+        :getBlockId="getBlockId"
+      >
+        <Button
+          variant="secondary"
+          size="2xs-icon"
+          class="opacity-50 hover:opacity-100 transition-opacity"
+        >
+          <Settings class="size-[12px]" />
+        </Button>
+      </SearchViewOptionsPopup>
+
       <!-- 刷新搜索结果 -->
       <Tooltip>
         <TooltipTrigger as-child>
-          <Button variant="secondary" size="2xs-icon">
+          <Button
+            variant="secondary"
+            size="2xs-icon"
+            class="opacity-50 hover:opacity-100 transition-opacity"
+          >
             <RefreshCcw class="size-[12px]" />
           </Button>
         </TooltipTrigger>
@@ -40,13 +77,20 @@ import { NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import { NodeViewWrapper } from "./NodeViewWrapper";
 import EditSearchQueryPopup from "../EditSearchQueryPopup.vue";
 import { Button } from "../ui/button";
-import { Pencil, RefreshCcw } from "lucide-vue-next";
+import { Pencil, RefreshCcw, Settings } from "lucide-vue-next";
 import { TextSelection } from "@tiptap/pm/state";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import SearchViewOptionsPopup from "../SearchViewOptionsPopup.vue";
+import type { BlockId } from "@/lib/common/types";
 
 const { node, getPos, editor } = defineProps(nodeViewProps);
 
-const handleQueryUpdate = (query: string) => {};
+const getBlockId = () => {
+  const pos = getPos();
+  if (pos === undefined) return null;
+  const $pos = editor.view.state.doc.resolve(pos);
+  return $pos.parent.attrs.blockId as BlockId | null;
+};
 
 const handleClickPad = () => {
   const pos = getPos();

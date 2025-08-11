@@ -1,24 +1,18 @@
 import { useAttachment } from "@/composables";
 import { useBlockClipboard } from "@/composables/useBlockClipboard";
+import type { TagAttrs } from "@/lib/tiptap/nodes/tag";
+import { findCurrListItem, getSelectedListItemInfo } from "@/lib/tiptap/utils";
 import { i18n } from "@/main";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { Node, Schema } from "@tiptap/pm/model";
 import { NodeSelection, TextSelection, type Command } from "@tiptap/pm/state";
 import { toast } from "vue-sonner";
 import type { AttachmentTaskInfo } from "../../app/attachment/storage";
-import {
-  getBlockData,
-  getBlockNode,
-  getRootBlockNodes,
-} from "../../app/block-manage";
-import { getTextContent } from "../../app/index/text-content";
-import { withTx } from "../../app/tx";
-import type { BlockDataInner, BlockId } from "../../common/types";
+import type { BlockDataInner, BlockId, BlockNode } from "../../common/types";
 import { Codeblock } from "../../tiptap/nodes/codeblock";
 import { File, getFileDisplayMode, getFileType } from "../../tiptap/nodes/file";
 import { ListItem } from "../../tiptap/nodes/list-item";
-import { Search } from "../../tiptap/nodes/search";
-import { findCurrListItem, getSelectedListItemInfo } from "@/lib/tiptap/utils";
+import { Search, type SearchAttrs } from "../../tiptap/nodes/search";
 import {
   buildBlockRefStr,
   contentNodeToStr,
@@ -50,7 +44,7 @@ export function isEmptyBlock(
 export function promoteSelected(editor: TiptapEditor): Command {
   return function (state, dispatch) {
     const { appView: appview } = editor;
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       const { start, end, cross } = getSelectedListItemInfo(state);
       if (!start || !end || cross) return;
 
@@ -79,7 +73,7 @@ export function promoteSelected(editor: TiptapEditor): Command {
 export function demoteSelected(editor: TiptapEditor): Command {
   return function (state, dispatch) {
     const { appView: appview } = editor;
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       if (!appview.tiptap) return;
       const { start, end, cross } = getSelectedListItemInfo(state);
       if (!start || !end || cross) return;
@@ -116,7 +110,7 @@ export function splitListItem(editor: TiptapEditor): Command {
     const { node: listItem } = currListItem;
     const currBlockId = listItem.attrs.blockId as BlockId;
 
-    const currentBlockNode = getBlockNode(appview.app, currBlockId);
+    const currentBlockNode = appview.app.getBlockNode(currBlockId);
     if (!currentBlockNode) return false;
 
     const paragraphNode = listItem.firstChild;
@@ -126,7 +120,7 @@ export function splitListItem(editor: TiptapEditor): Command {
 
     const splitPos = $from.parentOffset;
     if (splitPos === 0) {
-      withTx(appview.app, (tx) => {
+      appview.app.withTx((tx) => {
         // 在开头分割：当前块上方创建空的新块，保持当前块内容不变
         const newContent = contentNodeToStr(schema.nodes.paragraph.create());
         const newBlockId = tx.createBlockBefore(currBlockId, {
@@ -143,7 +137,7 @@ export function splitListItem(editor: TiptapEditor): Command {
         tx.setOrigin("localEditorStructural");
       });
     } else {
-      withTx(appview.app, (tx) => {
+      appview.app.withTx((tx) => {
         // 在中间或末尾分割：更新当前块为分割前内容，新块为分割后内容
         const beforeContent = paragraphNode.cut(0, splitPos);
         const afterContent = paragraphNode.cut(splitPos);
@@ -189,7 +183,7 @@ export function deleteEmptyListItem(
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-    const currentBlockNode = getBlockNode(appview.app, blockId);
+    const currentBlockNode = appview.app.getBlockNode(blockId);
     if (!currentBlockNode) return false;
     const children = currentBlockNode.children() ?? [];
 
@@ -238,13 +232,14 @@ export function deleteEmptyListItem(
         const prevListItem = state.doc.nodeAt(prevListItemPos);
         if (prevListItem) {
           const prevBlockId = prevListItem.attrs.blockId as BlockId;
-          const prevBlockData = getBlockData(appview.app, prevBlockId);
+          const prevBlockData = appview.app.getBlockData(prevBlockId);
           if (prevBlockData) {
-            const content = getTextContent(appview.app, prevBlockId);
+            const prevBlockNodeJson = JSON.parse(prevBlockData.content);
+            const prevBlockNode = state.schema.nodeFromJSON(prevBlockNodeJson);
             focusTarget = {
               viewId: appview.id,
               blockId: prevBlockId,
-              anchor: content.length,
+              anchor: prevBlockNode.nodeSize,
             };
           }
         }
@@ -256,7 +251,7 @@ export function deleteEmptyListItem(
 
     if (!dispatch) return true;
 
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       tx.deleteBlock(blockId);
       tx.setSelection(focusTarget);
       tx.setOrigin("localEditorStructural");
@@ -340,7 +335,7 @@ export function updateSearchQuery(
 
     if (!dispatch) return true;
 
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       const blockData = tx.getBlockData(targetBlockId);
       if (!blockData) return;
       const nodeJson = JSON.parse(blockData.content);
@@ -381,11 +376,11 @@ export function toggleFocusedFoldState(
 
     if (!dispatch) return true;
 
-    const currentBlockData = getBlockData(appview.app, targetBlockId);
+    const currentBlockData = appview.app.getBlockData(targetBlockId);
     if (!currentBlockData || targetState === currentBlockData.folded)
       return true;
 
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       tx.updateBlock(targetBlockId, {
         folded: targetState ?? !currentBlockData.folded,
       });
@@ -425,14 +420,14 @@ export function moveBlockUp(editor: TiptapEditor): Command {
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-    const blockNode = getBlockNode(appview.app, blockId);
+    const blockNode = appview.app.getBlockNode(blockId);
     if (!blockNode) return false;
     const index = blockNode.index()!;
     if (index === 0) return false; // 已经是第一个块
 
     if (!dispatch) return true;
 
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       const parentId = tx.getParentId(blockId)!;
       tx.moveBlock(blockId, parentId, index - 1);
       tx.setOrigin("localEditorStructural");
@@ -450,7 +445,7 @@ export function moveBlockDown(editor: TiptapEditor): Command {
 
     const blockId = listItemInfo.node.attrs.blockId as BlockId;
     if (!blockId) return false;
-    const blockNode = getBlockNode(appview.app, blockId);
+    const blockNode = appview.app.getBlockNode(blockId);
     if (!blockNode) return false;
     const index = blockNode.index()!;
     const parentNode = blockNode.parent()!;
@@ -458,7 +453,7 @@ export function moveBlockDown(editor: TiptapEditor): Command {
 
     if (!dispatch) return true;
 
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       const parentId = tx.getParentId(blockId)!;
       tx.moveBlock(blockId, parentId, index + 1);
       tx.setOrigin("localEditorStructural");
@@ -486,10 +481,10 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
     const currentBlockId = currentListItem.attrs.blockId as BlockId;
     if (!currentBlockId) return false;
 
-    const currentBlockNode = getBlockNode(appview.app, currentBlockId);
+    const currentBlockNode = appview.app.getBlockNode(currentBlockId);
     if (!currentBlockNode) return false;
 
-    const currentBlockData = getBlockData(appview.app, currentBlockId);
+    const currentBlockData = appview.app.getBlockData(currentBlockId);
     if (!currentBlockData) return false;
 
     // 找到前一个可以合并的块
@@ -497,7 +492,7 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
 
     const siblings =
       parentBlockNode == null
-        ? getRootBlockNodes(appview.app)
+        ? appview.app.getRootBlockNodes()
         : parentBlockNode.children();
     if (!siblings) return false;
 
@@ -512,7 +507,7 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
     // 找到前一个兄弟块（同级别）
     const prevBlockNode = siblings[currentIndex - 1];
     const prevBlockId = prevBlockNode.id;
-    const prevBlockData = getBlockData(appview.app, prevBlockId);
+    const prevBlockData = appview.app.getBlockData(prevBlockId);
     if (!prevBlockData) return false;
 
     // 只能合并同类型的文本块
@@ -537,7 +532,7 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
       }
     } catch (error) {
       // 如果解析失败，创建包含纯文本的段落
-      const prevTextContent = getTextContent(appview.app, prevBlockId);
+      const prevTextContent = appview.app.getTextContent(prevBlockId);
       prevParagraphNode = schema.nodes.paragraph.create(
         null,
         prevTextContent ? [schema.text(prevTextContent)] : []
@@ -548,7 +543,7 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
     const prevContentSize = prevParagraphNode.content.size;
     if (prevContentSize === 0) {
       // 前一个块为空，删除前一个块，保留当前块
-      withTx(appview.app, (tx) => {
+      appview.app.withTx((tx) => {
         // 1. 删除前一个块
         tx.deleteBlock(prevBlockId);
         // 2. 设置光标位置到当前块开头
@@ -584,7 +579,7 @@ export function mergeWithPreviousBlock(editor: TiptapEditor): Command {
       // 计算光标在合并后的位置（在原前一个块内容的末尾）
       const mergePoint = prevContentSize;
 
-      withTx(appview.app, (tx) => {
+      appview.app.withTx((tx) => {
         // 1. 更新前一个块的内容为合并后的内容
         tx.updateBlock(prevBlockId, { content: mergedSerialized });
         // 2. 删除当前块
@@ -1127,17 +1122,35 @@ export function changeFileDisplayMode(
   };
 }
 
-export function toSearchBlock(editor: TiptapEditor, query?: string): Command {
+export function convertToSearchBlock(
+  editor: TiptapEditor,
+  query?: string,
+  blockId?: BlockId
+): Command {
   return function (state, dispatch) {
-    const currListItem = findCurrListItem(state);
-    if (!currListItem) return false;
+    const app = editor.appView.app;
 
-    const type = currListItem.node?.attrs.type;
+    let targetBlockNode: BlockNode | null = null;
+    if (blockId) {
+      targetBlockNode = app.getBlockNode(blockId);
+    } else {
+      const listItemInfo = findCurrListItem(state);
+      if (!listItemInfo) return false;
+      const targetBlockId = listItemInfo.node.attrs.blockId as BlockId;
+      targetBlockNode = app.getBlockNode(targetBlockId);
+    }
+    if (!targetBlockNode) return false;
+    const targetBlockId = targetBlockNode.id;
+    const targetBlockData = targetBlockNode.data.toJSON() as BlockDataInner;
+
+    // 已经是搜索块了
+    const type = targetBlockData.type;
     if (type === "search") {
       const msg = i18n.global.t("commands.toSearchBlock.alreadySearchBlock");
       toast.warning(msg);
       return false;
     }
+    // 不是文本块，不能转为搜索块
     if (type !== "text") {
       const msg = i18n.global.t(
         "commands.toSearchBlock.onlyTextBlockCanBeSearchBlock"
@@ -1146,11 +1159,8 @@ export function toSearchBlock(editor: TiptapEditor, query?: string): Command {
       return false;
     }
 
-    const blockId = currListItem.node.attrs.blockId;
-    const blockNode = getBlockNode(editor.appView.app, blockId);
-    if (!blockNode) return false;
-
-    const children = blockNode.children() ?? [];
+    // 搜索块不能有子块
+    const children = targetBlockNode.children() ?? [];
     if (children.length > 0) {
       const msg = i18n.global.t(
         "commands.toSearchBlock.searchBlockCannotHaveChildren"
@@ -1159,11 +1169,13 @@ export function toSearchBlock(editor: TiptapEditor, query?: string): Command {
       return false;
     }
 
-    const pnode = currListItem.node.firstChild;
+    const pnodeJson = JSON.stringify(targetBlockData.content);
+    const pnode = state.schema.nodeFromJSON(pnodeJson);
     if (!pnode) return false;
     const snode = state.schema.nodes.search.create({ query }, pnode.content);
-    withTx(editor.appView.app, (tx) => {
-      tx.updateBlock(blockId, {
+
+    app.withTx((tx) => {
+      tx.updateBlock(targetBlockId, {
         type: "search",
         content: JSON.stringify(snode.toJSON()),
         folded: false,
@@ -1171,7 +1183,7 @@ export function toSearchBlock(editor: TiptapEditor, query?: string): Command {
       tx.setOrigin("localEditorStructural");
       tx.setSelection({
         viewId: editor.appView.id,
-        blockId,
+        blockId: targetBlockId,
         anchor: 0,
         head: 0,
         scrollIntoView: true,
@@ -1187,7 +1199,7 @@ export function recursiveDeleteBlock(
 ): Command {
   return function () {
     const { appView: appview } = editor;
-    withTx(appview.app, (tx) => {
+    appview.app.withTx((tx) => {
       const descendants = tx.getDescendants(blockId);
       console.log(descendants);
       for (let i = descendants.length - 1; i >= 0; i--) {
@@ -1238,7 +1250,7 @@ export function moveBlockTo(
 
     if (!dispatch) return true;
 
-    withTx(editor.appView.app, (tx) => {
+    editor.appView.app.withTx((tx) => {
       tx.moveBlock(tgtId, parent, index);
       tx.setOrigin("localEditorStructural");
     });
@@ -1259,7 +1271,7 @@ export function moveBlocksTo(
   return function (state, dispatch) {
     if (!dispatch) return true;
 
-    withTx(editor.appView.app, (tx) => {
+    editor.appView.app.withTx((tx) => {
       for (let i = blockIds.length - 1; i >= 0; i--) {
         tx.moveBlock(blockIds[i], parent, index);
       }
@@ -1324,7 +1336,7 @@ export function updateCodeblockLang(
       if (!tgtId) return false;
     }
 
-    const tgtBlockData = getBlockData(editor.appView.app, tgtId);
+    const tgtBlockData = editor.appView.app.getBlockData(tgtId);
     if (tgtBlockData == null || tgtBlockData.type !== "code") return false;
 
     if (!dispatch) return true;
@@ -1340,8 +1352,154 @@ export function updateCodeblockLang(
       oldNode.marks
     );
 
-    withTx(editor.appView.app, (tx) => {
+    editor.appView.app.withTx((tx) => {
       tx.updateBlock(tgtId, { content: contentNodeToStr(newNode) });
+      tx.setOrigin("localEditorStructural");
+    });
+    return true;
+  };
+}
+
+export function convertToTagBlock(
+  editor: TiptapEditor,
+  blockId?: BlockId
+): Command {
+  return function (state, dispatch) {
+    const app = editor.appView.app;
+
+    let targetBlockNode: BlockNode | null = null;
+    if (blockId) {
+      targetBlockNode = app.getBlockNode(blockId);
+    } else {
+      const listItemInfo = findCurrListItem(state);
+      if (!listItemInfo) return false;
+      const targetBlockId = listItemInfo.node.attrs.blockId as BlockId;
+      targetBlockNode = app.getBlockNode(targetBlockId);
+    }
+    if (!targetBlockNode) return false;
+    const targetBlockId = targetBlockNode.id;
+    const targetBlockData = targetBlockNode.data.toJSON() as BlockDataInner;
+
+    // 已经是标签块了
+    const type = targetBlockData.type;
+    if (type === "tag") {
+      const msg = i18n.global.t("commands.convertToTagBlock.alreadyTagBlock");
+      toast.warning(msg);
+      return false;
+    }
+    // 不是文本块，不能转为标签块
+    if (type !== "text") {
+      const msg = i18n.global.t(
+        "commands.convertToTagBlock.onlyTextBlockCanBeTagBlock"
+      );
+      toast.warning(msg);
+      return false;
+    }
+
+    // 标签块不能有子块
+    const children = targetBlockNode.children() ?? [];
+    if (children.length > 0) {
+      const msg = i18n.global.t(
+        "commands.convertToTagBlock.tagBlockCannotHaveChildren"
+      );
+      toast.warning(msg);
+      return false;
+    }
+
+    const pnodeJson = JSON.parse(targetBlockData.content);
+    const pnode = state.schema.nodeFromJSON(pnodeJson);
+    if (!pnode) return false;
+    const tnode = state.schema.nodes.tag.create({}, pnode.content);
+
+    app.withTx((tx) => {
+      tx.updateBlock(targetBlockId, {
+        type: "tag",
+        content: JSON.stringify(tnode.toJSON()),
+        folded: false,
+      });
+      tx.setOrigin("localEditorStructural");
+      tx.setSelection({
+        viewId: editor.appView.id,
+        blockId: targetBlockId,
+        anchor: 0,
+        head: 0,
+        scrollIntoView: true,
+      });
+    });
+    return true;
+  };
+}
+
+export function updateTagBlockAttrs(
+  editor: TiptapEditor,
+  blockId: BlockId | undefined,
+  patch: Partial<TagAttrs>
+): Command {
+  return function (state, dispatch) {
+    let tgtId = blockId;
+    if (!tgtId) {
+      const listItemInfo = findCurrListItem(state);
+      if (!listItemInfo) return false;
+
+      tgtId = listItemInfo.node.attrs.blockId as BlockId;
+      if (!tgtId) return false;
+    }
+
+    const tgtBlockData = editor.appView.app.getBlockData(tgtId);
+    if (tgtBlockData == null || tgtBlockData.type !== "tag") return false;
+
+    if (!dispatch) return true;
+
+    const json = JSON.parse(tgtBlockData.content);
+    const oldNode = editor.schema.nodeFromJSON(json);
+    const newNode = editor.schema.nodes.tag.create(
+      {
+        ...oldNode.attrs,
+        ...patch,
+      },
+      oldNode.content
+    );
+
+    editor.appView.app.withTx((tx) => {
+      tx.updateBlock(tgtId, { content: JSON.stringify(newNode.toJSON()) });
+      tx.setOrigin("localEditorStructural");
+    });
+    return true;
+  };
+}
+
+export function updateSarchBlockAttrs(
+  editor: TiptapEditor,
+  blockId: BlockId | undefined,
+  patch: Partial<SearchAttrs>
+): Command {
+  return function (state, dispatch) {
+    let tgtId = blockId;
+    if (!tgtId) {
+      const listItemInfo = findCurrListItem(state);
+      if (!listItemInfo) return false;
+
+      tgtId = listItemInfo.node.attrs.blockId as BlockId;
+      if (!tgtId) return false;
+    }
+
+    const tgtBlockData = editor.appView.app.getBlockData(tgtId);
+    if (tgtBlockData == null || tgtBlockData.type !== "search") return false;
+
+    if (!dispatch) return true;
+
+    const json = JSON.parse(tgtBlockData.content);
+    const oldNode = editor.schema.nodeFromJSON(json);
+    const newNode = editor.schema.nodes.search.create(
+      {
+        ...oldNode.attrs,
+        ...patch,
+      },
+      oldNode.content
+    );
+
+    editor.appView.app.withTx((tx) => {
+      tx.updateBlock(tgtId, { content: JSON.stringify(newNode.toJSON()) });
       tx.setOrigin("localEditorStructural");
     });
     return true;

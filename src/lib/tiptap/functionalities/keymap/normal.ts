@@ -27,7 +27,7 @@ import {
   selectCurrentListItem,
   splitListItem,
   toggleFocusedFoldState,
-  toSearchBlock,
+  convertToSearchBlock,
   undoCommand,
 } from "../../../app-views/editable-outline/commands";
 import { findCurrListItem } from "../../utils";
@@ -126,7 +126,7 @@ export const NormalKeymap = Extension.create({
         }),
         "Mod-z": undoCommand(editor),
         "Mod-Shift-z": redoCommand(editor),
-        "Mod-e": toSearchBlock(editor),
+        "Mod-e": convertToSearchBlock(editor),
         "Mod-Shift-x": addToBlockClipboard(editor),
       }),
     ];

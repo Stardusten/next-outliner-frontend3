@@ -1,27 +1,99 @@
 import type { Frontiers } from "loro-crdt";
-import type { App } from "./app";
 import type {
   BlockData,
   BlockDataInner,
   BlockId,
   BlockNode,
 } from "../common/types";
+import type { AppStep2 } from "./app";
+import { shallowRef, type ShallowRef } from "vue";
 
-export function getRootBlockNodes(app: App) {
+type ReactiveBlockData = ShallowRef<BlockDataInner | null>;
+
+export function initBlockManageApis(app: AppStep2) {
+  const ret = Object.assign(app, {
+    reactiveBlockDataMap: new Map<BlockId, ReactiveBlockData>(),
+    getRootBlockNodes: () => app.tree.roots(),
+    getRootBlockIds: () => app.tree.roots().map((node) => node.id),
+    getBlockNode: (id: BlockId, allowDeleted = false, vv?: Frontiers) =>
+      getBlockNode(app, id, allowDeleted, vv),
+    getBlockPath: (blockId: BlockId) => getBlockPath(app, blockId),
+    getBlockDataMap: (id: BlockId, allowDeleted = false, vv?: Frontiers) =>
+      getBlockDataMap(app, id, allowDeleted, vv),
+    getBlockData: (id: BlockId, allowDeleted = false, vv?: Frontiers) =>
+      getBlockData(app, id, allowDeleted, vv),
+    getAllNodes: (withDeleted = false) => getAllNodes(app, withDeleted),
+    getReactiveBlockData: (id: BlockId) => getReactiveBlockData(ret, id),
+    disposeReactiveBlockData: (id: BlockId) =>
+      disposeReactiveBlockData(ret, id),
+  });
+
+  app.on("tx-committed", (e) => {
+    for (const op of e.executedOps) {
+      if (op.type === "block:delete") {
+        const blockDataRef = ret.reactiveBlockDataMap.get(op.blockId);
+        if (blockDataRef) blockDataRef.value = null;
+      } else if (op.type === "block:update") {
+        const blockDataRef = ret.reactiveBlockDataMap.get(op.blockId);
+        if (blockDataRef) blockDataRef.value = op.newData;
+      }
+    }
+  });
+
+  return ret;
+}
+
+type AppWithBlockManageApis = AppStep2 & {
+  reactiveBlockDataMap: Map<BlockId, ReactiveBlockData>;
+  getBlockData: (
+    id: BlockId,
+    allowDeleted?: boolean,
+    vv?: Frontiers
+  ) => BlockDataInner | null;
+};
+
+function getReactiveBlockData(app: AppWithBlockManageApis, id: BlockId) {
+  let blockDataRef = app.reactiveBlockDataMap.get(id);
+  if (!blockDataRef) {
+    const data = app.getBlockData(id);
+    blockDataRef = shallowRef(data);
+    app.reactiveBlockDataMap.set(id, blockDataRef);
+  }
+  return blockDataRef;
+}
+
+function disposeReactiveBlockData(app: AppWithBlockManageApis, id: BlockId) {
+  const blockDataRef = app.reactiveBlockDataMap.get(id);
+  if (blockDataRef) {
+    app.reactiveBlockDataMap.delete(id);
+    blockDataRef.value = null;
+  }
+}
+
+/**
+ * @deprecated
+ * 请改用 `app.getRootBlockNodes()`
+ */
+export function getRootBlockNodes(app: AppStep2) {
   return app.tree.roots();
 }
 
-export function getRootBlockIds(app: App) {
+/**
+ * @deprecated
+ * 请改用 `app.getRootBlockIds()`
+ */
+export function getRootBlockIds(app: AppStep2) {
   return app.tree.roots().map((node) => node.id);
 }
 
 /**
+ * @deprecated
  * 根据 ID 获取块节点
  * @param id 块 ID
  * @param allowDeleted 是否允许获取已删除的块
  */
 export function getBlockNode(
-  app: App,
+  app: AppStep2,
   id: BlockId,
   allowDeleted = false,
   vv?: Frontiers
@@ -49,7 +121,13 @@ export function getBlockNode(
  * 数组顺序是从根块开始，到目标块结束。如果块不存在则返回 null。
  * 例如: [rootId, parent2Id, parent1Id, blockId]
  */
-export function getBlockPath(app: App, blockId: BlockId): BlockId[] | null {
+/**
+ * @deprecated 请改用 `app.getBlockPath(blockId)`
+ */
+export function getBlockPath(
+  app: AppStep2,
+  blockId: BlockId
+): BlockId[] | null {
   const targetNode = getBlockNode(app, blockId);
   if (!targetNode) return null;
 
@@ -65,8 +143,11 @@ export function getBlockPath(app: App, blockId: BlockId): BlockId[] | null {
   return path;
 }
 
+/**
+ * @deprecated 请改用 `app.getBlockDataMap(id, allowDeleted?, vv?)`
+ */
 export function getBlockDataMap(
-  app: App,
+  app: AppStep2,
   id: BlockId,
   allowDeleted = false,
   vv?: Frontiers
@@ -76,8 +157,11 @@ export function getBlockDataMap(
   return node.data as BlockData;
 }
 
+/**
+ * @deprecated 请改用 `app.getBlockData(id, allowDeleted?, vv?)`
+ */
 export function getBlockData(
-  app: App,
+  app: AppStep2,
   id: BlockId,
   allowDeleted = false,
   vv?: Frontiers
@@ -87,6 +171,9 @@ export function getBlockData(
   return node.data.toJSON() as BlockDataInner;
 }
 
-export function getAllNodes(app: App, withDeleted = false): BlockNode[] {
+/**
+ * @deprecated 请改用 `app.getAllNodes(withDeleted?)`
+ */
+export function getAllNodes(app: AppStep2, withDeleted = false): BlockNode[] {
   return app.tree.getNodes({ withDeleted });
 }

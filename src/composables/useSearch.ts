@@ -3,7 +3,6 @@ import { searchBlocksWithScore } from "@/lib/app/index/fulltext";
 import type { App } from "@/lib/app/app";
 import type { BlockNode } from "@/lib/common/types";
 import { getBlockNode } from "@/lib/app/block-manage";
-import { getTextContent } from "@/lib/app/index/text-content";
 import { getLastFocusedAppView } from "@/lib/app/views";
 import { EditableOutlineView } from "@/lib/app-views/editable-outline/editable-outline";
 
@@ -31,7 +30,7 @@ export function useSearch(app: App) {
     for (const { id, score } of searchResultsWithScore) {
       const blockNode = getBlockNode(app, id);
       if (blockNode) {
-        const textContent = getTextContent(app, id);
+        const textContent = app.getTextContent(id, true); // 搜索时需要包含标签
         if (textContent && textContent.trim().length > 0) {
           results.push({ block: blockNode, score });
         }

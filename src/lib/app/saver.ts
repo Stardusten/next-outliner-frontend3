@@ -1,5 +1,5 @@
 import type { BlocksVersion } from "../common/types";
-import type { App } from "./app";
+import type { AppStep7 } from "./app";
 import { DebouncedTimer } from "@/lib/common/debounced";
 
 const saveDelay = 500; // 500ms
@@ -9,31 +9,47 @@ const saveMaxDelay = 5000; // 最长 5s
  * 初始化保存器，负责将 App 中的修改持久化到 storage
  * 所有保存相关的时序、防抖、错误重试逻辑都集中在这里。
  */
-export function initSaver(app: App) {
-  app.lastSave = app.doc.version();
-  app.hasUnsavedChanges = false;
-  app.saveTimer = new DebouncedTimer(saveDelay, saveMaxDelay);
-  app.saveDelay = saveDelay;
-  app.saveMaxDelay = saveMaxDelay;
+export function initSaver(app: AppStep7) {
+  const ret = Object.assign(app, {
+    lastSave: app.doc.version(),
+    hasUnsavedChanges: false,
+    saveTimer: new DebouncedTimer(saveDelay, saveMaxDelay),
+    saveDelay,
+    saveMaxDelay,
+    forceSave: () => forceSave(ret),
+    stopSaver: () => stopSaver(ret),
+  });
 
   // 当文档事务提交时触发防抖保存
   app.on("tx-committed", () => {
-    app.hasUnsavedChanges = true;
-    scheduleSave(app);
+    ret.hasUnsavedChanges = true;
+    scheduleSave(ret);
   });
+
+  return ret;
 }
+
+type AppWithSaver = AppStep7 & {
+  lastSave: BlocksVersion;
+  hasUnsavedChanges: boolean;
+  saveTimer: DebouncedTimer;
+  saveDelay: number;
+  saveMaxDelay: number;
+};
 
 /**
  * 手动触发一次保存
+ * @deprecated
  */
-export function forceSave(app: App): void {
+export function forceSave(app: AppWithSaver): void {
   app.saveTimer.flush();
 }
 
 /**
  * 停止保存器，保证最后一次保存成功
+ * @deprecated
  */
-export function stopSaver(app: App): void {
+export function stopSaver(app: AppWithSaver): void {
   app.saveTimer.cancel();
   save(app);
 }
@@ -41,14 +57,14 @@ export function stopSaver(app: App): void {
 /**
  * 调度保存
  */
-function scheduleSave(app: App): void {
+function scheduleSave(app: AppWithSaver): void {
   app.saveTimer.trigger(() => save(app));
 }
 
 /**
  * 真正的保存逻辑
  */
-function save(app: App): void {
+function save(app: AppWithSaver): void {
   if (!app.hasUnsavedChanges) return;
 
   try {

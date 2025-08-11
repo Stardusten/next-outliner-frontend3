@@ -1,10 +1,8 @@
 // @ts-ignore
 import Document from "@/../node_modules/flexsearch/dist/module/document";
-import { calcMatchScore, hybridTokenize } from "./tokenize";
 import type { BlockId, BlockNode } from "@/lib/common/types";
-import type { App } from "../app";
-import { getAllNodes, getBlockNode } from "../block-manage";
-import { getTextContent } from "./text-content";
+import type { AppStep5 } from "../app";
+import { calcMatchScore, hybridTokenize } from "./tokenize";
 
 export type FullTextIndexConfig = {
   /** 是否忽略注音符号 */
@@ -14,14 +12,14 @@ export type FullTextIndexConfig = {
 /**
  * 初始化全文索引
  */
-export function initFullTextIndex(app: App, config?: FullTextIndexConfig) {
-  app.dirtySet = new Set();
-  app.fulltextConfig = {
+export function initFullTextIndex(app: AppStep5, config?: FullTextIndexConfig) {
+  const dirtySet = new Set<BlockId>();
+  const fulltextConfig = {
     ignoreDiacritics: config?.ignoreDiacritics ?? true,
   };
 
   // 初始化 flexsearch 实例
-  app.flexsearch = new Document({
+  const flexsearch = new Document({
     document: {
       id: "id",
       index: "textContent",
@@ -29,16 +27,26 @@ export function initFullTextIndex(app: App, config?: FullTextIndexConfig) {
     },
     encode: (str: string) => {
       const tokens = hybridTokenize(str, {
-        removeDiacritics: app.fulltextConfig.ignoreDiacritics,
+        removeDiacritics: fulltextConfig.ignoreDiacritics,
       });
       return tokens;
     },
   });
 
+  const ret = Object.assign(app, {
+    dirtySet,
+    fulltextConfig,
+    flexsearch,
+    searchBlocks: (query: string, limit: number = 200) =>
+      searchBlocks(ret, query, limit),
+    searchBlocksWithScore: (query: string, limit: number = 200) =>
+      searchBlocksWithScore(ret, query, limit),
+  });
+
   // 先初始化索引
-  for (const blockNode of getAllNodes(app)) {
+  for (const blockNode of ret.getAllNodes()) {
     const blockId = blockNode.id;
-    updateIndexOfBlock(app, blockId, blockNode);
+    updateIndexOfBlock(ret, blockId, blockNode);
   }
 
   // 监听事务提交事件
@@ -48,26 +56,35 @@ export function initFullTextIndex(app: App, config?: FullTextIndexConfig) {
       switch (change.type) {
         case "block:create":
           blockId = change.blockId;
-          app.dirtySet.add(blockId);
+          dirtySet.add(blockId);
           break;
         case "block:update":
           blockId = change.blockId;
-          app.dirtySet.add(blockId);
+          dirtySet.add(blockId);
           break;
         case "block:delete":
           blockId = change.blockId;
-          app.dirtySet.add(blockId);
+          dirtySet.add(blockId);
           break;
       }
     }
   });
+
+  return ret;
 }
+
+type AppWithFulltextIndex = AppStep5 & {
+  dirtySet: Set<BlockId>;
+  fulltextConfig: FullTextIndexConfig;
+  flexsearch: any;
+};
 
 /**
  * 搜索块，返回块 ID 数组
+ * @deprecated
  */
 export function searchBlocks(
-  app: App,
+  app: AppWithFulltextIndex,
   query: string,
   limit: number = 200
 ): BlockId[] {
@@ -96,9 +113,10 @@ export function searchBlocks(
 
 /**
  * 搜索块，返回带分数的结果
+ * @deprecated
  */
 export function searchBlocksWithScore(
-  app: App,
+  app: AppWithFulltextIndex,
   query: string,
   limit: number = 200
 ): { id: BlockId; score: number }[] {
@@ -129,7 +147,7 @@ export function searchBlocksWithScore(
  * 更新单个块的索引
  */
 function updateIndexOfBlock(
-  app: App,
+  app: AppWithFulltextIndex,
   blockId: BlockId,
   block: BlockNode | null
 ) {
@@ -142,7 +160,8 @@ function updateIndexOfBlock(
       app.flexsearch.remove(blockId);
     }
     // 然后添加最新的索引项
-    const textContent = getTextContent(app, blockId);
+    // 全文索引时需要添加标签
+    const textContent = app.getTextContent(blockId, true);
     app.flexsearch.add(blockId, {
       id: blockId,
       textContent,
@@ -153,12 +172,12 @@ function updateIndexOfBlock(
 /**
  * 更新所有脏块的索引
  */
-function updateIndexOfAllDirtyBlocks(app: App) {
+function updateIndexOfAllDirtyBlocks(app: AppWithFulltextIndex) {
   // 没有要更新的块
   if (app.dirtySet.size === 0) return;
 
   for (const blockId of app.dirtySet) {
-    const block = getBlockNode(app, blockId);
+    const block = app.getBlockNode(blockId);
     updateIndexOfBlock(app, blockId, block);
   }
   // 清空 dirtySet

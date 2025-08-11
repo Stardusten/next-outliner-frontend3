@@ -6,7 +6,7 @@ export type BlockNode = LoroTreeNode;
 
 export type BlocksVersion = VersionVector;
 
-export type BlockType = "text" | "code" | "search";
+export type BlockType = "text" | "code" | "search" | "tag";
 
 export type BlockDataInner = {
   folded: boolean;

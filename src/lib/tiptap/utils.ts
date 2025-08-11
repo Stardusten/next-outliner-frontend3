@@ -33,7 +33,9 @@ export function contentNodeToStrAndType(node: ProseMirrorNode): {
   const paragraph = detachedSchema.nodes.paragraph;
   const codeblock = detachedSchema.nodes.codeblock;
   const search = detachedSchema.nodes.search;
+  const tag = detachedSchema.nodes.tag;
 
+  // xxx
   const type =
     node.type.name === paragraph.name
       ? "text"
@@ -41,7 +43,9 @@ export function contentNodeToStrAndType(node: ProseMirrorNode): {
         ? "code"
         : node.type.name === search.name
           ? "search"
-          : "text";
+          : node.type.name === tag.name
+            ? "tag"
+            : "text";
   const content = contentNodeToStr(node);
   return { type, content };
 }

@@ -2,6 +2,11 @@ import SearchView from "@/components/node-views/SearchView.vue";
 import { mergeAttributes, Node } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
 
+export type SearchAttrs = {
+  query: string;
+  showPath: boolean;
+};
+
 export const Search = Node.create({
   name: "search",
   group: "block",
@@ -9,6 +14,8 @@ export const Search = Node.create({
   addAttributes() {
     return {
       query: {},
+      // 搜索的结果块是否显示路径
+      showPath: { default: false },
       // undefined - 折叠的查询
       // "invalid" - 查询错误
       // number - 查询结果条数
@@ -25,17 +32,9 @@ export const Search = Node.create({
       },
     ];
   },
-  // renderHTML({ HTMLAttributes }) {
-  //   return [
-  //     "div",
-  //     mergeAttributes(HTMLAttributes, {
-  //       class: "search",
-  //       "data-query": HTMLAttributes.query,
-  //       "data-invalid": HTMLAttributes.invalid,
-  //     }),
-  //     0,
-  //   ];
-  // },
+  renderHTML({ HTMLAttributes }) {
+    return ["div", 0];
+  },
   addNodeView() {
     return VueNodeViewRenderer(SearchView);
   },

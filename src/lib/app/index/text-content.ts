@@ -1,13 +1,32 @@
 import type { BlockId } from "@/lib/common/types";
-import type { App } from "../app";
-import { getBlockData } from "../block-manage";
-import { getInRefs } from "./in-refs";
-import type { Ref } from "vue";
+import type { Ref, ShallowRef } from "vue";
 import { shallowRef } from "vue";
+import type { AppStep4 } from "../app";
 
-export function initTextContent(app: App) {
-  app.textContentCache = new Map();
-  app.textContentObs = new Map();
+type TextContentCacheItem = readonly [string, string];
+type TextContentReactiveCacheItem = readonly [
+  ShallowRef<string>,
+  ShallowRef<string>,
+];
+
+export function initTextContent(app: AppStep4) {
+  const textContentCache = new Map<BlockId, TextContentCacheItem>();
+  const textContentObs = new Map<BlockId, TextContentReactiveCacheItem>();
+
+  const ret = Object.assign(app, {
+    textContentCache,
+    textContentObs,
+    invalidateTextContent: (blockId?: BlockId) =>
+      invalidateTextContent(ret, blockId),
+    getTextContent: (id: BlockId, withTag?: boolean) => {
+      if (withTag) return getTextContentImpl(ret, id)[0];
+      else return getTextContentImpl(ret, id)[1];
+    },
+    getTextContentReactive: (id: BlockId, withTag?: boolean) => {
+      if (withTag) return getTextContentReactive(ret, id, true);
+      else return getTextContentReactive(ret, id, false);
+    },
+  });
 
   /**
    * 注册一个监听器，当一个块内容更新时
@@ -18,47 +37,67 @@ export function initTextContent(app: App) {
     for (const change of e.executedOps) {
       if (change.type === "block:update") {
         // 触发文本内容缓存失效
-        invalidateTextContent(app, change.blockId);
+        ret.invalidateTextContent(change.blockId);
         // 更新对应 ref
-        const obs = getTextContentReactive(app, change.blockId);
-        obs.value = getTextContent(app, change.blockId);
+        const obs = ret.getTextContentReactive(change.blockId);
+        obs.value = ret.getTextContent(change.blockId);
       }
     }
   });
+
+  return ret;
 }
 
-/**
- * 获取块的文本内容，会解析块引用并处理循环引用。
- * 如果无法获得文本内容，则返回块ID
- */
-export function getTextContent(
-  app: App,
+type AppWithTextContent = AppStep4 & {
+  textContentCache: Map<BlockId, TextContentCacheItem>;
+  textContentObs: Map<BlockId, TextContentReactiveCacheItem>;
+};
+
+function getTextContentImpl(
+  app: AppWithTextContent,
   id: BlockId,
   visited?: Set<BlockId>
-): string {
+): TextContentCacheItem {
   // 用于记录已访问的块，避免循环引用
   visited ??= new Set<BlockId>();
   loadTextContentToCache(app, id, visited);
-  return app.textContentCache.get(id) ?? id;
+  const res = app.textContentCache.get(id);
+  if (!res) return [id, id]; // 如果缓存中没有，则返回块ID
+  return res;
 }
 
+/**
+ * @deprecated
+ */
 export function getTextContentReactive(
-  app: App,
-  blockId: BlockId
+  app: AppWithTextContent,
+  blockId: BlockId,
+  withTag?: boolean
 ): Ref<string> {
   const obs = app.textContentObs.get(blockId);
-  if (obs) return obs;
+  if (obs) return withTag ? obs[0] : obs[1];
   else {
-    const obsNew = shallowRef(getTextContent(app, blockId));
+    const [contentWithTag, contentWithoutTag] = getTextContentImpl(
+      app,
+      blockId
+    );
+    const obsNew = [
+      shallowRef(contentWithTag),
+      shallowRef(contentWithoutTag),
+    ] as const;
     app.textContentObs.set(blockId, obsNew);
-    return obsNew;
+    return withTag ? obsNew[0] : obsNew[1];
   }
 }
 
 /**
  * 缓存失效方法，用于触发文本内容缓存失效
+ * @deprecated
  */
-export function invalidateTextContent(app: App, blockId?: BlockId): void {
+export function invalidateTextContent(
+  app: AppWithTextContent,
+  blockId?: BlockId
+): void {
   invalidateTextContentCache(app, blockId);
 }
 
@@ -66,9 +105,12 @@ export function invalidateTextContent(app: App, blockId?: BlockId): void {
  * 让一个块的文本内容缓存失效，注意这同时会递归地
  * 所有引用了这个块的块的文本内容缓存失效
  */
-function invalidateTextContentCache(app: App, blockId?: BlockId): void {
+function invalidateTextContentCache(
+  app: AppWithTextContent,
+  blockId?: BlockId
+): void {
   if (blockId) {
-    const inRefs = getInRefs(app, blockId);
+    const inRefs = app.getInRefs(blockId);
     for (const ref of inRefs.value) {
       invalidateTextContentCache(app, ref); // 递归
     }
@@ -79,7 +121,7 @@ function invalidateTextContentCache(app: App, blockId?: BlockId): void {
 }
 
 function loadTextContentToCache(
-  app: App,
+  app: AppWithTextContent,
   blockId: BlockId,
   visited: Set<BlockId>
 ): void {
@@ -88,31 +130,40 @@ function loadTextContentToCache(
 
   const schema = app.detachedSchema;
   const blockRefType = schema.nodes.blockRef.name;
-  const codeblockType = schema.nodes.codeblock.name;
 
   if (app.textContentCache.has(blockId)) return;
 
-  const blockData = getBlockData(app, blockId);
+  const blockData = app.getBlockData(blockId);
   if (!blockData) return;
 
-  let textContent = "";
-  if (blockData.type === "text" || blockData.type === "code") {
-    const nodeJson = JSON.parse(blockData.content);
-    const node = schema.nodeFromJSON(nodeJson);
+  const nodeJson = JSON.parse(blockData.content);
+  const node = schema.nodeFromJSON(nodeJson);
 
-    const arr: string[] = [];
-    node.content.descendants((currNode) => {
-      if (currNode.isText) arr.push(currNode.text ?? "");
-      else if (currNode.type.name === blockRefType) {
-        const blockId = currNode.attrs.blockId;
-        const content = getTextContent(app, blockId, visited);
-        arr.push(content);
-      } else if (currNode.type.name === codeblockType) {
-        arr.push(currNode.textContent);
+  const arrWithTag: string[] = [];
+  const arrWithoutTag: string[] = [];
+  node.content.descendants((currNode) => {
+    if (currNode.isText) {
+      const text = currNode.text ?? "";
+      arrWithTag.push(text);
+      arrWithoutTag.push(text);
+    } else if (currNode.type.name === blockRefType) {
+      const blockId = currNode.attrs.blockId;
+      const [contentWithTag, contentWithoutTag] = getTextContentImpl(
+        app,
+        blockId,
+        visited
+      );
+      if (currNode.attrs.isTag) {
+        arrWithTag.push("#" + contentWithTag);
+      } else {
+        arrWithoutTag.push("[[" + contentWithTag + "]]");
+        arrWithoutTag.push(contentWithoutTag);
       }
-    });
-    textContent = arr.join("");
-  }
+    }
+  });
 
-  app.textContentCache.set(blockId, textContent);
+  app.textContentCache.set(blockId, [
+    arrWithTag.join("").trim(),
+    arrWithoutTag.join("").trim(),
+  ]);
 }

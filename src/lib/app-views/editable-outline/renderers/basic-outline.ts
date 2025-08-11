@@ -38,6 +38,14 @@ export function renderBlock(params: {
         overrideAttrs,
         rootOnly,
       });
+    case "tag":
+      return renderTagBlock({
+        editor,
+        blockNode,
+        level,
+        overrideAttrs,
+        rootOnly,
+      });
     default:
       throw new Error(`unexpected block type. got "${blockData.type}"`);
   }
@@ -219,7 +227,10 @@ function renderSearchBlock(params: {
           editor,
           blockNode,
           level: level + 1,
-          overrideAttrs: { isSearchResultRoot: true },
+          overrideAttrs: {
+            isSearchResultRoot: true,
+            showPath: searchNode.attrs.showPath,
+          },
         });
         result.push(...rendered);
       }
@@ -227,6 +238,46 @@ function renderSearchBlock(params: {
   }
 
   return result;
+}
+
+function renderTagBlock(params: {
+  editor: EditableOutlineView;
+  blockNode: BlockNode;
+  blockData?: BlockDataInner;
+  level: number;
+  overrideAttrs?: Record<string, any>;
+  rootOnly?: boolean;
+}): Node[] {
+  let { editor, blockNode, blockData, level, overrideAttrs, rootOnly } = params;
+  if (!editor.tiptap) throw new Error("tiptap no init");
+  const schema = editor.tiptap.schema;
+  blockData = blockData ?? (blockNode.data.toJSON() as BlockDataInner);
+
+  if (blockData.type !== "tag")
+    throw new Error(
+      `unexpected block type. expect "tag", got "${blockData.type}"`
+    );
+
+  const children = blockNode.children();
+  const hasChildren = children != null && children.length > 0;
+
+  if (hasChildren) throw new Error("tag block should not have children");
+
+  const json = JSON.parse(blockData.content);
+  const listItemType = schema.nodes.listItem;
+  const tagNode = schema.nodeFromJSON(json);
+  const listItemNode = listItemType.create(
+    {
+      level,
+      blockId: blockNode.id,
+      folded: blockData.folded,
+      hasChildren,
+      type: "tag",
+      ...overrideAttrs,
+    },
+    tagNode
+  );
+  return [listItemNode];
 }
 
 export function renderOutline(editor: EditableOutlineView): Node {

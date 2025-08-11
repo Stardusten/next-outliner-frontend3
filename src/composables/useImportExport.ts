@@ -171,6 +171,7 @@ export function useImportExport(app: App) {
     const paragraphType = schema.nodes.paragraph;
     const codeblockType = schema.nodes.codeblock;
     const searchType = schema.nodes.search;
+    const tagType = schema.nodes.tag;
 
     const recur = (fragment: Fragment) => {
       const result: Node[] = [];
@@ -224,6 +225,14 @@ export function useImportExport(app: App) {
         recur(node.content)
       );
       return JSON.stringify(search.toJSON());
+    } else if (type === "tag") {
+      const tag = tagType.create(
+        {
+          ...node.attrs,
+        },
+        recur(node.content)
+      );
+      return JSON.stringify(tag.toJSON());
     } else throw new Error("不支持的块类型");
   };
 

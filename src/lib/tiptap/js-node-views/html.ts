@@ -4,7 +4,7 @@ export function html(params: {
   styles?: Record<string, string>;
   dataset?: Record<string, string>;
   attrs?: Record<string, string>;
-  children?: Node[];
+  children?: (Node | undefined)[];
 }) {
   const { tag, classes, styles, dataset, attrs, children } = params;
   const el = document.createElement(tag);
@@ -16,6 +16,6 @@ export function html(params: {
   }
   if (dataset) Object.assign(el.dataset, dataset);
   if (attrs) Object.assign(el, attrs);
-  if (children) el.append(...children);
+  if (children) el.append(...children.filter((c) => c !== undefined));
   return el;
 }

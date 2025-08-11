@@ -18,6 +18,8 @@ export const ListItem = Node.create({
       hasChildren: { default: false },
       // 类型
       type: { default: null },
+      // 是否显示块路径
+      showPath: { default: false },
       // 是否是搜索结果的根节点
       isSearchResultRoot: { default: false },
     };

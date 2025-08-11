@@ -6,7 +6,11 @@ import { html } from "../html";
 import { getDotDiv } from "./dot";
 import { getTriangleDiv } from "./triangle";
 import { type NodeView } from "@tiptap/pm/view";
-import { toggleFocusedFoldState } from "@/lib/app-views/editable-outline/commands";
+import {
+  convertToSearchBlock,
+  convertToTagBlock,
+  toggleFocusedFoldState,
+} from "@/lib/app-views/editable-outline/commands";
 import { getInRefs, getInTags } from "@/lib/app/index/in-refs";
 import { watch, type WatchHandle } from "vue";
 import { useContextMenu } from "@/composables";
@@ -18,6 +22,9 @@ import {
   Scissors,
   Text,
   Trash,
+  Repeat,
+  Tag,
+  Search,
 } from "lucide-vue-next";
 import { i18n } from "@/main";
 import Markdown from "@/components/icons/Markdown.vue";
@@ -25,6 +32,10 @@ import Html from "@/components/icons/Html.vue";
 import { toMarkdown } from "@/lib/common/markdown";
 import { clipboard } from "@/lib/common/clipboard";
 import { recursiveDeleteBlock } from "@/lib/app-views/editable-outline/commands";
+import { getHashtagDiv } from "./hashtag";
+import { getSearchDiv } from "./search";
+import type { BlockId } from "@/lib/common/types";
+import { toast } from "vue-sonner";
 
 class ListItemNodeView implements NodeView {
   dom: HTMLElement;
@@ -35,6 +46,8 @@ class ListItemNodeView implements NodeView {
   constructor(props: NodeViewRendererProps) {
     this.props = props;
     const { node } = props;
+    const isText = node.attrs.type === "text";
+    const showPath = node.attrs.showPath === true;
 
     const contentEl = html({
       tag: "div",
@@ -44,7 +57,12 @@ class ListItemNodeView implements NodeView {
     const foldBtnEl = getTriangleDiv("fold-btn");
     foldBtnEl.addEventListener("click", this.handleClickFoldBtn.bind(this));
 
-    const bulletEl = getDotDiv("bullet");
+    const bulletEl =
+      node.attrs.type === "tag"
+        ? getHashtagDiv("bullet")
+        : node.attrs.type === "search"
+          ? getSearchDiv("bullet")
+          : getDotDiv("bullet");
     bulletEl.addEventListener("click", this.handleClickBullet.bind(this));
     bulletEl.addEventListener(
       "contextmenu",
@@ -55,12 +73,33 @@ class ListItemNodeView implements NodeView {
       tag: "div",
       classes: ["list-item-left"],
       children: [foldBtnEl, bulletEl],
+      attrs: { contentEditable: "false" },
     });
 
-    const refCounterEl = html({
-      tag: "div",
-      classes: ["ref-counter"],
-    });
+    const refCounterEl = isText
+      ? html({
+          tag: "div",
+          classes: ["ref-counter"],
+          attrs: { contentEditable: "false" },
+        })
+      : undefined;
+
+    let pathEl: HTMLElement | undefined;
+    if (showPath) {
+      const app = props.editor.appView.app;
+      const path = app.getBlockPath(node.attrs.blockId);
+      if (path != null && path.length > 0) {
+        const text = path
+          .map((blockId) => app.getTextContent(blockId))
+          .join(" / ");
+        pathEl = html({
+          tag: "div",
+          classes: ["path"],
+          children: [document.createTextNode(text)],
+          attrs: { contentEditable: "false" },
+        });
+      }
+    }
 
     const containerEl = html({
       tag: "div",
@@ -71,19 +110,24 @@ class ListItemNodeView implements NodeView {
         node.attrs.hasChildren ? "has-children" : "",
         node.attrs.isSearchResultRoot ? "is-search-result-root" : "",
         node.attrs.type,
+        showPath ? "show-path" : "",
         `level-${node.attrs.level}`,
       ],
       dataset: {
         blockId: node.attrs.blockId,
       },
-      children: [leftEl, contentEl, refCounterEl],
+      // 仅当是文本块时，才显示引用计数器
+      // 因为：
+      // - 搜索块和代码块不应该被引用，不需要引用计数器
+      // - 标签块布局和文本块不同，如果在这里渲染引用计数器会产生错乱，因此放到 TagView 里渲染
+      children: [leftEl, contentEl, refCounterEl, pathEl],
     });
 
     this.dom = containerEl;
     this.contentDOM = contentEl;
 
     // 放在这里绑定，否则 this.dom 还没赋值
-    this.bindRefCounter(refCounterEl);
+    refCounterEl && this.bindRefCounter(refCounterEl);
   }
 
   destroy() {
@@ -131,7 +175,7 @@ class ListItemNodeView implements NodeView {
     const contextmenu = useContextMenu();
     const { t } = i18n.global;
     const { editor, node } = this.props;
-    const blockId = node.attrs.blockId as string;
+    const blockId = node.attrs.blockId as BlockId;
 
     contextmenu.open(ev, [
       {
@@ -143,7 +187,11 @@ class ListItemNodeView implements NodeView {
             type: "item",
             icon: Markdown,
             label: t("blockContextMenu.copyAsMarkdown"),
-            action: () => {},
+            action: () => {
+              const markdown = toMarkdown(editor.appView.app, [blockId]);
+              clipboard.writeText(markdown);
+              toast.success(t("blockContextMenu.copiedMarkdownToClipboard"));
+            },
           },
           {
             type: "item",
@@ -187,6 +235,33 @@ class ListItemNodeView implements NodeView {
             icon: Text,
             label: t("blockContextMenu.pasteAsPureTextAutoSplit"),
             action: () => {},
+          },
+        ],
+      },
+      {
+        type: "submenu",
+        icon: Repeat,
+        label: t("blockContextMenu.convertTo"),
+        children: [
+          {
+            type: "item",
+            icon: Tag,
+            label: t("blockContextMenu.convertToTag"),
+            action: () => {
+              const blockId = node.attrs.blockId;
+              const cmd = convertToTagBlock(editor, blockId);
+              editor.appView.execCommand(cmd, true);
+            },
+          },
+          {
+            type: "item",
+            icon: Search,
+            label: t("blockContextMenu.convertToSearch"),
+            action: () => {
+              const blockId = node.attrs.blockId;
+              const cmd = convertToSearchBlock(editor, undefined, blockId);
+              editor.appView.execCommand(cmd, true);
+            },
           },
         ],
       },

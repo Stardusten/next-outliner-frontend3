@@ -6,6 +6,7 @@ import { LineBreak } from "./line-break";
 import { ListItem } from "./list-item";
 import { Paragraph } from "./paragraph";
 import { Search } from "./search";
+import { Tag } from "./tag";
 import { Text } from "./text";
 
 export const nodeExtensions = [
@@ -18,4 +19,5 @@ export const nodeExtensions = [
   Paragraph,
   Search,
   Text,
+  Tag,
 ];

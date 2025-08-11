@@ -3,7 +3,6 @@ import type { App } from "@/lib/app/app";
 import type { BlockDataInner, BlockNode } from "@/lib/common/types";
 import { searchBlocks } from "@/lib/app/index/fulltext";
 import { getAllNodes, getBlockNode } from "@/lib/app/block-manage";
-import { getTextContent } from "@/lib/app/index/text-content";
 import { Paragraph } from "@/lib/tiptap/nodes/paragraph";
 import { BlockRef } from "@/lib/tiptap/nodes/block-ref";
 import {
@@ -112,14 +111,17 @@ export function useBlockRefCompletion(app: App) {
       for (const blockId of searchResults) {
         const blockNode = getBlockNode(app, blockId);
         if (blockNode) {
-          if (blockNode.data.get("type") !== "text") continue;
-          const textContent = getTextContent(app, blockId);
+          const type = blockNode.data.get("type");
+          // code 和 search 块不参与补全
+          if (type !== "text" && type !== "tag") continue;
+          // XXX 如果这里不包含引用，那下面只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种 的逻辑就可以删了
+          const textContent = app.getTextContent(blockId);
           if (textContent && textContent.trim().length > 0) {
             // 当前块永远不会成为候选
             if (focusedBlockId && blockNode.id === focusedBlockId) continue;
-            // 只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种
-            // 因为这会与其原身混淆
-            if (isSingleRefBlock(app.detachedSchema, blockNode)) continue;
+            // // 只包含一个块引用的块不会成为候选，比如 “[[小说]]” 这种
+            // // 因为这会与其原身混淆
+            // if (isSingleRefBlock(app.detachedSchema, blockNode)) continue;
             blocks.push(blockNode);
           }
         }
@@ -130,7 +132,7 @@ export function useBlockRefCompletion(app: App) {
       for (const blockNode of getAllNodes(app)) {
         if (count >= 10) return false; // 最多显示10个
 
-        const textContent = getTextContent(app, blockNode.id);
+        const textContent = app.getTextContent(blockNode.id);
         if (textContent && textContent.trim().length > 0) {
           blocks.push(blockNode);
           count++;

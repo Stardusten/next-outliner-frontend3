@@ -63,10 +63,15 @@ import {
 } from "@/components/ui/tooltip";
 import { ref, watch } from "vue";
 import { Label } from "./ui/label";
+import type { Editor as TiptapEditor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { updateSarchBlockAttrs } from "@/lib/app-views/editable-outline/commands";
+import type { BlockId } from "@/lib/common/types";
 
 const props = defineProps<{
-  initQuery?: string;
-  onSubmit: (query: string) => void;
+  editor: TiptapEditor;
+  node: ProseMirrorNode;
+  getBlockId: () => BlockId | null;
 }>();
 
 const queryText = ref("");
@@ -74,12 +79,18 @@ const open = ref(false);
 
 watch(open, (isOpen) => {
   if (isOpen) {
-    queryText.value = props.initQuery || "";
+    queryText.value = props.node.attrs.query ?? "";
   }
 });
 
 const handleSubmit = () => {
-  props.onSubmit(queryText.value);
+  const { editor, node, getBlockId } = props;
+  const blockId = getBlockId();
+  if (!blockId) return;
+  const cmd = updateSarchBlockAttrs(editor, blockId, {
+    query: queryText.value,
+  });
+  editor.appView.execCommand(cmd, true);
   open.value = false;
 };
 </script>

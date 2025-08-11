@@ -1,8 +1,7 @@
+import { EditableOutlineView } from "../app-views/editable-outline/editable-outline";
 import { AsyncTaskQueue } from "../common/taskQueue";
 import type { BlockDataInner, BlockId, SelectionInfo } from "../common/types";
-import { EditableOutlineView } from "../app-views/editable-outline/editable-outline";
-import type { App } from "./app";
-import { getLastFocusedAppView } from "./views";
+import type { AppStep10 } from "./app";
 
 export type TxExecutedOperation =
   | {
@@ -96,11 +95,20 @@ export type TxObj = {
   createBlockBefore: (baseId: BlockId, data: BlockDataInner) => BlockId;
 };
 
+type AppWithTx = AppStep10 & {
+  txQueue: AsyncTaskQueue;
+};
+
 /**
  * 初始化事务管理器
  */
-export function initTransactionManager(app: App) {
-  app.txQueue = new AsyncTaskQueue();
+export function initTransactionManager(app: AppStep10) {
+  const txQueue = new AsyncTaskQueue();
+  const ret = Object.assign(app, {
+    txQueue,
+    withTx: (fn: (tx: TxObj) => void) => withTx(ret, fn),
+  });
+  return ret;
 }
 
 let tempIdCounter = 0;
@@ -162,7 +170,7 @@ function addUpdateOpToTx(
 }
 
 function createBlockAfterToTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   baseId: BlockId,
   data: BlockDataInner
@@ -173,7 +181,7 @@ function createBlockAfterToTx(
 }
 
 function createBlockBeforeToTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   baseId: BlockId,
   data: BlockDataInner
@@ -184,7 +192,7 @@ function createBlockBeforeToTx(
 }
 
 function execTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   idMapping: Record<BlockId, BlockId>
 ) {
@@ -193,7 +201,7 @@ function execTx(
   tx.status = "pending";
 
   // 如果没有指定 beforeSelection，则记录当前选区到 meta.beforeSelection
-  const editor = getLastFocusedAppView(app);
+  const editor = app.getLastFocusedAppView();
   const sel =
     editor instanceof EditableOutlineView ? editor.getSelectionInfo() : null;
 
@@ -329,11 +337,7 @@ function execTx(
   }
 }
 
-export function getBlockDataFromTx(
-  app: App,
-  tx: Transaction,
-  blockId: BlockId
-) {
+function getBlockDataFromTx(app: AppWithTx, tx: Transaction, blockId: BlockId) {
   const blockNode = app.tree.getNodeByID(blockId) ?? null;
   let blockData = blockNode?.data.toJSON() as BlockDataInner | null;
   for (const op of tx.ops) {
@@ -357,7 +361,7 @@ export function getBlockDataFromTx(
   return blockData;
 }
 
-export function getParentIdFromTx(app: App, tx: Transaction, blockId: BlockId) {
+function getParentIdFromTx(app: AppWithTx, tx: Transaction, blockId: BlockId) {
   const blockNode = app.tree.getNodeByID(blockId) ?? null;
   let parentId = blockNode?.parent()?.id ?? null;
   for (const op of tx.ops) {
@@ -378,11 +382,7 @@ export function getParentIdFromTx(app: App, tx: Transaction, blockId: BlockId) {
   return parentId;
 }
 
-export function getBlockPathFromTx(
-  app: App,
-  tx: Transaction,
-  blockId: BlockId
-) {
+function getBlockPathFromTx(app: AppWithTx, tx: Transaction, blockId: BlockId) {
   const path: BlockId[] = [blockId];
   let curr = getParentIdFromTx(app, tx, blockId);
 
@@ -394,8 +394,11 @@ export function getBlockPathFromTx(
   return path;
 }
 
+/**
+ * @deprecated
+ */
 export function getChildrenIdsFromTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   blockId: BlockId | null
 ) {
@@ -443,7 +446,7 @@ export function getChildrenIdsFromTx(
 }
 
 export function getDescendantsFromTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   blockId: BlockId
 ) {
@@ -461,7 +464,7 @@ export function getDescendantsFromTx(
 }
 
 function getIndexFromTx(
-  app: App,
+  app: AppWithTx,
   tx: Transaction,
   blockId: BlockId
 ): number | null {
@@ -476,7 +479,10 @@ function getIndexFromTx(
   return idx === -1 ? null : idx;
 }
 
-export async function withTx(app: App, fn: (tx: TxObj) => void) {
+/**
+ * @deprecated
+ */
+export async function withTx(app: AppWithTx, fn: (tx: TxObj) => void) {
   const idMapping: Record<BlockId, BlockId> = {};
   await app.txQueue.queueTaskAndWait(() => {
     const txObj = createTxObj(app);
@@ -486,7 +492,7 @@ export async function withTx(app: App, fn: (tx: TxObj) => void) {
   return { idMapping };
 }
 
-function createTxObj(app: App): TxObj & { _tx: Transaction } {
+function createTxObj(app: AppWithTx): TxObj & { _tx: Transaction } {
   const tx: Transaction = {
     ops: [],
     executedOps: [],

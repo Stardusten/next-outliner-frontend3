@@ -1,15 +1,13 @@
-import type { App } from "@/lib/app/app";
-import type { BlockId, BlockNode } from "@/lib/common/types";
-import { computed } from "vue";
-import { useLocalStorage } from "./useLocalStorage";
-import type { RepoConfig } from "@/lib/repo/schema";
-import { getBlockNode } from "@/lib/app/block-manage";
-import { getTextContent } from "@/lib/app/index/text-content";
-import { useMainEditorRoots } from "./useMainEditorRoots";
 import type {
   EditableOutlineView,
   EditableOutlineViewEvents,
 } from "@/lib/app-views/editable-outline/editable-outline";
+import type { App } from "@/lib/app/app";
+import { getBlockNode } from "@/lib/app/block-manage";
+import type { BlockId, BlockNode } from "@/lib/common/types";
+import type { RepoConfig } from "@/lib/repo/schema";
+import { computed } from "vue";
+import { useMainEditorRoots } from "./useMainEditorRoots";
 
 const ROOT_BLOCKS_KEY = "pm-editor-root-blocks";
 
@@ -39,7 +37,7 @@ export function useBreadcrumb(app: App, repoConfig: RepoConfig) {
           const block = getBlockNode(app, blockId);
           if (block) {
             const title =
-              getTextContent(app, blockId) || `块 ${blockId.slice(0, 8)}`;
+              app.getTextContent(blockId) || `块 ${blockId.slice(0, 8)}`;
             items.push({ blockId, title });
           }
         });

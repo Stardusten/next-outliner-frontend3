@@ -3,7 +3,7 @@
     <ContextMenuTrigger as-child>
       <slot />
     </ContextMenuTrigger>
-    <ContextMenuContent class="w-[200px]">
+    <ContextMenuContent class="w-[200px]" contenteditable="false">
       <ContextMenuItem>
         <AtSign />
         {{ $t("blockRefContextMenu.editAlias") }}

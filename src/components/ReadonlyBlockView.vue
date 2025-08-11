@@ -25,7 +25,6 @@ import type { App } from "@/lib/app/app";
 import { ReadonlyBlockView } from "@/lib/app-views/read-only-block/read-only-block";
 import { EditorContent } from "@tiptap/vue-3";
 import { cn } from "@/lib/common/tailwindcss";
-import { getTextContent } from "@/lib/app/index/text-content";
 
 const props = defineProps<{
   block: BlockNode;
@@ -43,7 +42,7 @@ const path = computed(() => {
   const res: string[] = [];
   let curr = props.block.parent();
   while (curr) {
-    const text = getTextContent(props.app, curr.id);
+    const text = props.app.getTextContent(curr.id, true);
     if (text) res.push(text);
     curr = curr.parent();
   }

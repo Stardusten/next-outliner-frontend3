@@ -1,6 +1,5 @@
 import type { App } from "@/lib/app/app";
 import { getBlockNode } from "@/lib/app/block-manage";
-import { getTextContent } from "@/lib/app/index/text-content";
 import { getLastFocusedAppView } from "@/lib/app/views";
 import { type BlockId, type BlockNode } from "@/lib/common/types";
 import {
@@ -29,7 +28,7 @@ export function useBlockClipboard(app: App) {
 
   // 添加块到剪贴板
   const addBlock = (blockId: BlockId) => {
-    const text = getTextContent(app, blockId);
+    const text = app.getTextContent(blockId);
     if (!blockCutted.value.includes(blockId)) {
       blockCutted.value.push(blockId);
       toast.success(t("clipboardPopup.blockCutted", { content: text ?? "" }));
@@ -85,7 +84,7 @@ export function useBlockClipboard(app: App) {
     appView.execCommand(cmd, true);
     removeBlock(blockId);
 
-    const text = getTextContent(app, blockId);
+    const text = app.getTextContent(blockId);
     toast.success(t("clipboardPopup.blockPasted", { content: text ?? "" }));
   };
 
