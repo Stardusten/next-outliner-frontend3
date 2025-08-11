@@ -56,20 +56,19 @@ const tagColor = computed(() => {
 });
 
 const tagColorClasses = computed(() => {
-  // tana 风格的胶囊：轻背景 + 可读前景 + 细边框
   const base = "px-1.5 py-[1px] rounded-md ";
   const map: Record<string, string> = {
-    magenta: `${base} bg-fuchsia-600/20 text-fuchsia-300`,
-    orange: `${base} bg-orange-600/20 text-orange-300`,
-    amber: `${base} bg-amber-600/20 text-amber-300`,
-    yellow: `${base} bg-yellow-600/20 text-yellow-300`,
-    lime: `${base} bg-lime-600/20 text-lime-300`,
-    green: `${base} bg-emerald-600/20 text-emerald-300`,
-    teal: `${base} bg-teal-600/20 text-teal-300`,
-    blue: `${base} bg-blue-600/20 text-blue-300`,
-    indigo: `${base} bg-indigo-600/20 text-indigo-300`,
-    violet: `${base} bg-violet-600/20 text-violet-300`,
-    pink: `${base} bg-pink-600/20 text-pink-300`,
+    magenta: `${base} bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-600/20 dark:text-fuchsia-300`,
+    orange: `${base} bg-orange-50 text-orange-600 dark:bg-orange-600/20 dark:text-orange-300`,
+    amber: `${base} bg-amber-50 text-amber-600 dark:bg-amber-600/20 dark:text-amber-300`,
+    yellow: `${base} bg-yellow-50 text-yellow-600 dark:bg-yellow-600/20 dark:text-yellow-300`,
+    lime: `${base} bg-lime-50 text-lime-600 dark:bg-lime-600/20 dark:text-lime-300`,
+    green: `${base} bg-emerald-50 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-300`,
+    teal: `${base} bg-teal-50 text-teal-600 dark:bg-teal-600/20 dark:text-teal-300`,
+    blue: `${base} bg-blue-50 text-blue-600 dark:bg-blue-600/20 dark:text-blue-300`,
+    indigo: `${base} bg-indigo-50 text-indigo-600 dark:bg-indigo-600/20 dark:text-indigo-300`,
+    violet: `${base} bg-violet-50 text-violet-600 dark:bg-violet-600/20 dark:text-violet-300`,
+    pink: `${base} bg-pink-50 text-pink-600 dark:bg-pink-600/20 dark:text-pink-300`,
   };
   const color = tagColor.value || "blue";
   return map[color] ?? map.blue;
